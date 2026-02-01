@@ -7,6 +7,10 @@ while true; do
     date
     echo "Checking for updates..."
     
+    # Reset local changes to ensure clean pull
+    git reset --hard HEAD
+    git clean -fd
+    
     # Pull latest changes
     git pull origin main
     
