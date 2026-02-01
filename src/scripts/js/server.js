@@ -15,6 +15,16 @@ const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI;
 
+console.log("--- DEBUG ENV ---");
+console.log("CLIENT_ID Type:", typeof CLIENT_ID);
+console.log("CLIENT_ID Length:", CLIENT_ID ? CLIENT_ID.length : 0);
+console.log("REDIRECT_URI:", REDIRECT_URI);
+console.log("-----------------");
+
+if (!CLIENT_ID || CLIENT_ID === "your_client_id_here") {
+    console.error("❌ ERROR: DISCORD_CLIENT_ID is missing or default! Check your .env file.");
+}
+
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
