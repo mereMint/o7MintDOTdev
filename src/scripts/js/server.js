@@ -438,6 +438,8 @@ app.post('/api/achievements/unlock', async (req, res) => {
 
 // GET /api/user/:username/achievements
 // Query: ?game=game_id (optional, to filter by game)
+// GET /api/user/:username/achievements
+// Query: ?game=game_id (optional, to filter by game)
 app.get('/api/user/:username/achievements', async (req, res) => {
     const { username } = req.params;
     const { game } = req.query;
@@ -447,13 +449,15 @@ app.get('/api/user/:username/achievements', async (req, res) => {
         if (game) {
             unlocks = unlocks.filter(a => a.game_id === game);
         }
-        return res.json(unlocks);
+        // Mock rarity
+        const results = unlocks.map(u => ({ ...u, rarity: 100 }));
+        return res.json(results);
     }
 
     let conn;
     try {
         conn = await pool.getConnection();
-        let query = "SELECT achievement_id, unlocked_at FROM user_achievements WHERE username = ?";
+        let query = "SELECT achievement_id, game_id, unlocked_at FROM user_achievements WHERE username = ?";
         let params = [username];
 
         if (game) {
@@ -461,8 +465,31 @@ app.get('/api/user/:username/achievements', async (req, res) => {
             params.push(game);
         }
 
-        const rows = await conn.query(query, params);
-        res.json(rows);
+        const userUnlocks = await conn.query(query, params);
+
+        // Calculate Rarity for each unlock
+        const results = await Promise.all(userUnlocks.map(async (u) => {
+            // 1. Total players for this game (Baseline: Scored at least once)
+            // If no scores, fallback to user_achievements count? Scores is safer for "Active Players".
+            const totalRes = await conn.query("SELECT COUNT(DISTINCT username) as count FROM scores WHERE game_id = ?", [u.game_id]);
+            let totalPlayers = Number(totalRes[0]?.count) || 0;
+
+            // If totalPlayers is 0 (e.g. game has no scores but has achievements? Unlikely but possible), avoid divide by zero.
+            if (totalPlayers === 0) totalPlayers = 1;
+
+            // 2. Global Unlocks for this achievement
+            const unlockRes = await conn.query("SELECT COUNT(DISTINCT username) as count FROM user_achievements WHERE game_id = ? AND achievement_id = ?", [u.game_id, u.achievement_id]);
+            const unlockedCount = Number(unlockRes[0]?.count) || 0;
+
+            const rarity = (unlockedCount / totalPlayers) * 100;
+
+            return {
+                ...u,
+                rarity: Math.round(rarity) // Integer percentage
+            };
+        }));
+
+        res.json(results);
 
     } catch (err) {
         console.error("Fetch Achievements Error:", err);
