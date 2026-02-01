@@ -101,8 +101,49 @@ async function loadProfileStats() {
     container.innerHTML = 'Loading stats...';
 
     try {
-        const res = await fetch(`/api/user/${user.username}/stats`);
-        const stats = await res.json();
+        // Parallel Fetch: Stats and Achievements
+        const [statsRes, achRes] = await Promise.all([
+            fetch(`/api/user/${user.username}/stats`),
+            fetch(`/api/user/${user.username}/achievements`)
+        ]);
+
+        const stats = await statsRes.json();
+        const achievements = await achRes.json(); // Returns array of { achievement_id, unlocked_at, game_id } (implied from schema)
+
+        // For display, we might want Game Names.
+        // But the API for achievements might only give IDs.
+        // We can look up game names from `allGames` if available, or just list IDs.
+        // Update: /api/user/:user/achievements returns rows from user_achievements table.
+        // Assuming it has game_id.
+
+        let achievementsHtml = '';
+        if (achievements.length > 0) {
+            achievementsHtml = `
+                <div style="width: 100%; margin-top: 20px;">
+                    <h3 style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px; color: #1DCD9F;">Achievements (${achievements.length})</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 10px;">
+                        ${achievements.map(a => {
+                // Find game info if possible
+                const game = allGames.find(g => g.id === a.game_id);
+                // Find achievement detail if available (complex without extra API calls, simplified here)
+                // We'll rely on a tooltip or simple display.
+                // Since we don't have full achievement data (images/titles) here without fetching every game's data,
+                // we'll show a generic icon or the ID as title.
+                // IMPROVEMENT: Fetch full game data cache?
+                // For now, simple box.
+                return `
+                                <div style="background: #222; padding: 5px; border-radius: 5px; text-align: center; font-size: 0.7rem; color: #aaa;" title="${a.game_id}: ${a.achievement_id}">
+                                    <div style="font-size: 1.2rem;">🏆</div>
+                                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${a.achievement_id}</div>
+                                </div>
+                            `;
+            }).join('')}
+                    </div>
+                </div>
+            `;
+        } else {
+            achievementsHtml = '<div style="margin-top: 20px; color: #555;">No achievements yet.</div>';
+        }
 
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 20px;">
@@ -128,6 +169,8 @@ async function loadProfileStats() {
                     <div style="font-size: 1.2rem; color: #1DCD9F;">${stats.best_score}</div>
                 </div>
             </div>
+
+            ${achievementsHtml}
         `;
     } catch (err) {
         console.error("Stats Error", err);

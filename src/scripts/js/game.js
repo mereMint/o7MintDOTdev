@@ -55,34 +55,62 @@ async function loadGameDetails() {
             // Initial Hero
             updateHeroImage(0);
 
-            // Feature Toggles
-            const features = game.features || {}; // Default empty
-            const showLeaderboard = features.leaderboard !== false; // Default true
-            const showAchievements = features.achievements !== false; // Default true (if data exists)
+            // Feature Toggles (Normalize)
+            const settings = game.settings || {};
 
-            // Toggle Leaderboard
+            // Leaderboard Logic
             const lbContainer = document.getElementById('leaderboard-container');
             const mainContainer = document.getElementById('game-detail-container');
 
+            let showLeaderboard = false;
+            let currentBoard = { key: 'main', title: 'Leaderboard' };
+
+            if (settings.leaderboard) {
+                showLeaderboard = true;
+                if (typeof settings.leaderboard === 'object') {
+                    currentBoard = {
+                        key: settings.leaderboard.key || 'main',
+                        title: settings.leaderboard.title || 'Leaderboard'
+                    };
+                }
+            }
+
             if (showLeaderboard) {
-                if (lbContainer) lbContainer.style.display = 'flex';
-                // Reset to grid
+                if (lbContainer) {
+                    lbContainer.style.display = 'flex';
+                    // Set Title
+                    lbContainer.querySelector('h3').innerText = currentBoard.title;
+                }
                 if (mainContainer) mainContainer.style.gridTemplateColumns = '3fr 1fr';
-                loadScores(); // Only load if enabled
+                loadScores(currentBoard.key);
             } else {
                 if (lbContainer) lbContainer.style.display = 'none';
-                // Full width if no leaderboard
                 if (mainContainer) mainContainer.style.gridTemplateColumns = '1fr';
             }
 
-            // Render Achievements
+            // Render Achievements (Moved OUTSIDE game-play-area for separate box look)
+            // We need to inject a new container sibling to game-play-area if it doesn't exist?
+            // BETTER: Use existing #achievements-section but style it to look like a separate box.
+            // But HTML structure has it inside #game-play-area.
+            // Move it out dynamically.
             const achSection = document.getElementById('achievements-section');
-            if (showAchievements && game.achievements && game.achievements.length > 0) {
+            const gameArea = document.getElementById('game-play-area');
+
+            // Move to be a sibling of gameArea if currently a child
+            if (achSection && achSection.parentNode === gameArea) {
+                gameArea.parentNode.insertBefore(achSection, gameArea.nextSibling);
+                // Reset styles to look like a separate box (match .score-sidebar or .game-description)
+                achSection.style.marginTop = '20px';
+                achSection.style.border = '2px solid #222';
+                achSection.style.borderRadius = '10px';
+                achSection.style.background = '#000'; // Match aesthetic
+            }
+
+            if (settings.achievements !== false && game.achievements && game.achievements.length > 0) {
                 achSection.style.display = 'block';
                 const achList = document.getElementById('achievements-list');
                 achList.innerHTML = '';
 
-                // Fetch User Unlocks
                 let unlockedIds = [];
                 const storedUser = localStorage.getItem('discord_user');
                 if (storedUser) {
@@ -100,14 +128,10 @@ async function loadGameDetails() {
                     const div = document.createElement('div');
                     div.className = 'achievement-card';
 
-                    // ID resolution: use explicit 'id' or fallback to 'title'
                     const achId = ach.id || ach.title;
                     const isUnlocked = unlockedIds.includes(achId);
-
-                    // Image path: relative to game folder
                     const iconPath = ach.image ? `../../src/games/${gameId}/${ach.image}` : '../../src/assets/icon_placeholder.png';
 
-                    // Styling for state
                     if (isUnlocked) {
                         div.style.borderColor = '#1DCD9F';
                         div.style.opacity = '1';
@@ -186,11 +210,11 @@ function scrollGallery(direction) {
     updateHeroImage(newIndex);
 }
 
-async function loadScores() {
+async function loadScores(boardKey = 'main') {
     const list = document.getElementById('score-list');
     try {
-        // Fetch Top 10
-        const res = await fetch(`/api/scores?game=${gameId}&limit=10`);
+        // Fetch Top 10 with board key
+        const res = await fetch(`/api/scores?game=${gameId}&board=${boardKey}&limit=10`);
         if (!res.ok) {
             console.warn(`Scores API returned status: ${res.status}`);
             if (res.status === 404) {
@@ -237,7 +261,7 @@ async function loadScores() {
 
         // If User not in Top 10, fetch their rank
         if (currentUser && !userInTop) {
-            fetchUserRank(currentUser, list);
+            fetchUserRank(currentUser, list, boardKey);
         }
 
     } catch (err) {
@@ -246,11 +270,9 @@ async function loadScores() {
     }
 }
 
-
-
-async function fetchUserRank(username, listElement) {
+async function fetchUserRank(username, listElement, boardKey = 'main') {
     try {
-        const res = await fetch(`/api/scores/rank?game=${gameId}&username=${username}`);
+        const res = await fetch(`/api/scores/rank?game=${gameId}&username=${username}&board=${boardKey}`);
         const data = await res.json();
 
         if (data.rank && data.score !== null) {
@@ -286,7 +308,7 @@ async function submitManualScore() {
     submitScore(name, score);
 }
 
-async function submitScore(username, score) {
+async function submitScore(username, score, boardId = 'main') {
     try {
         const res = await fetch('/api/score', {
             method: 'POST',
@@ -294,18 +316,61 @@ async function submitScore(username, score) {
             body: JSON.stringify({
                 game_id: gameId,
                 username: username,
-                score: score
+                score: score,
+                board_id: boardId
             })
         });
 
         if (res.ok) {
-            loadScores(); // Refresh
+            loadScores(boardId); // Refresh
         } else {
             alert("Failed to save score");
         }
     } catch (err) {
         console.error(err);
     }
+}
+
+// Save System API
+async function saveGame(username, slotId, label, data) {
+    try {
+        const res = await fetch('/api/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                game_id: gameId,
+                username,
+                slot_id: slotId,
+                label,
+                data
+            })
+        });
+        const result = await res.json();
+        // Notify game
+        const frame = document.getElementById('game-frame');
+        if (frame && frame.contentWindow) frame.contentWindow.postMessage({ type: 'SAVE_COMPLETE', success: result.success }, '*');
+    } catch (err) { console.error(err); }
+}
+
+async function loadGameSaves(username) {
+    try {
+        const res = await fetch(`/api/saves?game=${gameId}&username=${username}`);
+        const saves = await res.json();
+        // Notify game
+        const frame = document.getElementById('game-frame');
+        if (frame && frame.contentWindow) frame.contentWindow.postMessage({ type: 'LOAD_SAVES_COMPLETE', saves }, '*');
+    } catch (err) { console.error(err); }
+}
+
+async function deleteGameSave(username, slotId) {
+    try {
+        await fetch('/api/save', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_id: gameId, username, slot_id: slotId })
+        });
+        loadGameSaves(username); // Refresh list
+    } catch (err) { console.error(err); }
 }
 
 // Utility
@@ -319,13 +384,24 @@ window.addEventListener('message', (event) => {
     const data = event.data;
     if (!data) return;
 
+    const storedUser = localStorage.getItem('discord_user');
+    const username = storedUser ? JSON.parse(storedUser).username : "Anonymous";
+
     if (data.type === 'SUBMIT_SCORE') {
-        submitScore(data.username, data.score);
+        const board = data.board_id || 'main'; // Allow game to specify board
+        submitScore(data.username || username, data.score, board);
     }
     else if (data.type === 'UNLOCK_ACHIEVEMENT') {
-        const storedUser = localStorage.getItem('discord_user');
-        const username = storedUser ? JSON.parse(storedUser).username : "Anonymous";
         unlockAchievement(username, data.achievement_id);
+    }
+    else if (data.type === 'SAVE_GAME') {
+        saveGame(username, data.slot_id, data.label, data.payload);
+    }
+    else if (data.type === 'LOAD_SAVES') {
+        loadGameSaves(username);
+    }
+    else if (data.type === 'DELETE_SAVE') {
+        deleteGameSave(username, data.slot_id);
     }
 });
 

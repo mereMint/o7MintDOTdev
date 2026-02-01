@@ -194,17 +194,28 @@
 
                 // Build Table
                 const headers = Object.keys(rows[0]);
+                const idCol = headers[0]; // Assume first column is PK (id)
+
                 let html = '<table><thead><tr>';
+                html += '<th>Actions</th>'; // New Actions column
                 headers.forEach(h => html += `<th>${h}</th>`);
                 html += '</tr></thead><tbody>';
 
                 rows.forEach(row => {
                     html += '<tr>';
+                    // Delete Button
+                    const idVal = row[idCol];
+                    html += `<td>
+                        <button onclick="deleteRow('${tableName}', '${idVal}')" style="background:#ff4444; color:white; border:none; padding:5px 10px; cursor:pointer;">Del</button>
+                    </td>`;
+
                     headers.forEach(h => {
                         let val = row[h];
                         // Format timestamps
                         if (typeof val === 'string' && val.includes('T') && val.endsWith('Z')) {
                             val = new Date(val).toLocaleString();
+                        } else if (typeof val === 'object' && val !== null) {
+                            val = JSON.stringify(val).substring(0, 50) + '...';
                         }
                         html += `<td>${val}</td>`;
                     });
@@ -217,6 +228,24 @@
             } catch (err) {
                 console.error(err);
                 view.innerHTML = '<span style="color:red">Error loading data</span>';
+            }
+        }
+
+        async function deleteRow(table, id) {
+            if (!confirm(`Are you sure you want to delete ID ${id} from ${table}?`)) return;
+
+            try {
+                const res = await fetch(`/api/admin/data/${table}/${id}`, { method: "DELETE" });
+                if (res.ok) {
+                    // Reload table
+                    const currentBtn = document.querySelector('.table-btn.active');
+                    if (currentBtn) loadTable(table, currentBtn);
+                } else {
+                    const err = await res.json();
+                    alert("Delete failed: " + (err.error || "Unknown error"));
+                }
+            } catch (e) {
+                alert("Delete failed");
             }
         }
 

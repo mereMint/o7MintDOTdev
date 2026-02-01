@@ -4,7 +4,10 @@
     "genre": "Puzzle",
     "settings": {
         "achievements": true,
-        "leaderboard": true,
+        "leaderboard": {
+            "key": "main",
+            "title": "High Score"
+        },
         "phone": true
     },
     "images": [

@@ -22,7 +22,9 @@ curl -sL https://raw.githubusercontent.com/mereMint/o7MintDOTdev/main/src/script
 This script will:
 1. Install necessary dependencies (Node.js, Git, MariaDB).
 2. Clone the repository to `~/MintDEV`.
-3. Set up the database.
+3. Set up the database:
+   - Create the database `mintdev_db`.
+   - Run `src/sql/schema.sql` to create the required tables (`posts`, `scores`, `user_achievements`, `saved_games`).
 4. Install Node.js dependencies.
 
 ## Maintenance

@@ -56,7 +56,25 @@ The Hub automatically scans the `src/games/` directory. To add a game:
 
 ## 📡 API Reference
 
+
 ### 🏆 Leaderboards & Scores
+
+#### **Simple Leaderboard**
+Default configuration in `data.json`:
+```json
+"settings": { "leaderboard": true }
+```
+
+#### **Flexible Leaderboard (Custom Title/Board)**
+To use a custom title or separate board (e.g., "Best Streak"):
+```json
+"settings": {
+    "leaderboard": {
+        "key": "streak_mode",
+        "title": "Best Streak"
+    }
+}
+```
 
 #### **Submit a Score**
 *   **Via API**: `POST /api/score`
@@ -65,9 +83,53 @@ The Hub automatically scans the `src/games/` directory. To add a game:
     window.parent.postMessage({
         type: 'SUBMIT_SCORE',
         username: 'PlayerName',
-        score: 1500
+        score: 1500,
+        board_id: 'streak_mode' // Optional: defaults to 'main'
     }, '*');
     ```
+
+### 💾 Save System (New!)
+
+MintDEV now supports a generic Save/Load system for Story Games, Visual Novels, etc.
+
+#### **Save Game**
+Send a message to save specific data (JSON object):
+```javascript
+window.parent.postMessage({
+    type: 'SAVE_GAME',
+    slot_id: 'slot_1',          // Unique slot ID (e.g., 'auto', 'slot_1')
+    label: 'Chapter 1: The End', // User-friendly label
+    payload: {                  // Any JSON data
+        chapter: 1,
+        health: 100,
+        inventory: ['sword', 'potion']
+    }
+}, '*');
+```
+*   **Note**: `SAVE_COMPLETE` message will be sent back on success.
+
+#### **Load Saves**
+Request all saves for the current user/game:
+```javascript
+window.parent.postMessage({ type: 'LOAD_SAVES' }, '*');
+```
+*   **Response**: The Hub will reply with:
+    ```javascript
+    {
+        type: 'LOAD_SAVES_COMPLETE',
+        saves: [
+            { save_id: '...', slot_id: 'slot_1', label: '...', data: {...}, updated_at: '...' }
+        ]
+    }
+    ```
+
+#### **Delete Save**
+```javascript
+window.parent.postMessage({
+    type: 'DELETE_SAVE',
+    slot_id: 'slot_1'
+}, '*');
+```
 
 ### 🏅 Achievements
 
