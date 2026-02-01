@@ -1,5 +1,19 @@
+@font-face {
+    font-family: 'Kola';
+    src: url('../assets/fonts/Kola-Regular.woff2') format('woff2'),
+        url('../assets/fonts/Kola-Regular.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
 body {
     background-color: #000000;
     color: #ffffff;
     font-family: 'Courier New', monospace;
+}
+
+h1,
+h2,
+h3 {
+    font-family: 'Kola', sans-serif;
 }
