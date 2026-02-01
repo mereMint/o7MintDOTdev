@@ -483,6 +483,69 @@ app.get('/api/user/:username/stats', async (req, res) => {
     } finally {
         if (conn) conn.release();
     }
+
+});
+
+// --- Admin Endpoints (Localhost Only) ---
+
+const adminMiddleware = (req, res, next) => {
+    // 1. Check Cloudflare Header (Tunnel)
+    if (req.headers['cf-ray'] || req.headers['x-forwarded-for']) {
+        console.warn(`[Security] Blocked Admin access from Tunnel/External: ${req.ip}`);
+        return res.status(403).send("Forbidden: Localhost Only");
+    }
+
+    // 2. Check IP (IPv4 and IPv6 localhost)
+    const ip = req.ip || req.connection.remoteAddress;
+    const isLocal = ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1';
+
+    if (!isLocal) {
+        console.warn(`[Security] Blocked Admin access from IP: ${ip}`);
+        return res.status(403).send("Forbidden: Localhost Only");
+    }
+
+    next();
+};
+
+app.get('/api/admin/tables', adminMiddleware, async (req, res) => {
+    if (useInMemory) return res.json([{ name: "Memory Mode (No Tables)" }]);
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const rows = await conn.query("SHOW TABLES");
+        // Convert to simple array of names
+        const tables = rows.map(r => Object.values(r)[0]);
+        res.json(tables);
+    } catch (err) {
+        console.error("Admin Tables Error:", err);
+        res.status(500).json({ error: "DB Error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+app.get('/api/admin/data/:table', adminMiddleware, async (req, res) => {
+    if (useInMemory) return res.json([]);
+
+    const tableName = req.params.table;
+    // Basic sanitization: only allow alphanumeric + underscore
+    if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
+        return res.status(400).json({ error: "Invalid table name" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        // Limit 100 for safety
+        const rows = await conn.query(`SELECT * FROM ${tableName} ORDER BY 1 DESC LIMIT 100`);
+        res.json(rows);
+    } catch (err) {
+        console.error(`Admin Query Error (${tableName}):`, err);
+        res.status(500).json({ error: "Query Error" });
+    } finally {
+        if (conn) conn.release();
+    }
 });
 
 // Start Server

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MintDEV Admin</title>
+    <link rel="stylesheet" href="../styles/main.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            /* Override main.css centering */
+            display: block;
+            padding: 20px;
+            max-width: 100%;
+            text-align: left;
+        }
+
+        #admin-container {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 20px;
+            height: 90vh;
+        }
+
+        #sidebar {
+            border-right: 1px solid #333;
+            padding-right: 20px;
+        }
+
+        .table-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 5px;
+            background: #222;
+            border: 1px solid #333;
+            color: #ccc;
+            cursor: pointer;
+            text-align: left;
+            font-family: inherit;
+        }
+
+        .table-btn:hover,
+        .table-btn.active {
+            background: #1DCD9F;
+            color: #000;
+        }
+
+        #content-area {
+            overflow: auto;
+            background: #111;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th,
+        td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background: #222;
+            color: #1DCD9F;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:nth-child(even) {
+            background: #161616;
+        }
+
+        #status-bar {
+            margin-bottom: 10px;
+            color: #888;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2 style="color: #1DCD9F;">🔒 Local DB Admin</h2>
+    <div id="status-bar">Checking connection...</div>
+
+    <div id="admin-container">
+        <div id="sidebar">
+            <h3>Tables</h3>
+            <div id="table-list">Loading...</div>
+        </div>
+        <div id="content-area">
+            <h3 id="current-table-name">Select a table</h3>
+            <div id="data-view"></div>
+        </div>
+    </div>
+
+    <script>
+        // Security Warning
+        if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            document.body.innerHTML = '<h1 style="color:red; text-align:center;">⛔ FORBIDDEN<br>Admin is Localhost Only</h1>';
+            throw new Error("Forbidden");
+        }
+
+        async function init() {
+            try {
+                const res = await fetch('/api/admin/tables');
+                if (res.status === 403) {
+                    document.getElementById('status-bar').innerText = "⛔ Access Denied (Not Localhost)";
+                    return;
+                }
+                const tables = await res.json();
+
+                const list = document.getElementById('table-list');
+                list.innerHTML = '';
+
+                tables.forEach(t => {
+                    const btn = document.createElement('button');
+                    btn.className = 'table-btn';
+                    btn.innerText = t;
+                    btn.onclick = () => loadTable(t, btn);
+                    list.appendChild(btn);
+                });
+
+                document.getElementById('status-bar').innerText = "✅ Connected to Local DB";
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('status-bar').innerText = "❌ Connection Failed";
+            }
+        }
+
+        async function loadTable(tableName, btn) {
+            // Highlight
+            document.querySelectorAll('.table-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            document.getElementById('current-table-name').innerText = `Table: ${tableName}`;
+            const view = document.getElementById('data-view');
+            view.innerHTML = 'Loading data...';
+
+            try {
+                const res = await fetch(`/api/admin/data/${tableName}`);
+                const rows = await res.json();
+
+                if (rows.length === 0) {
+                    view.innerHTML = '<i>Table is empty</i>';
+                    return;
+                }
+
+                // Build Table
+                const headers = Object.keys(rows[0]);
+                let html = '<table><thead><tr>';
+                headers.forEach(h => html += `<th>${h}</th>`);
+                html += '</tr></thead><tbody>';
+
+                rows.forEach(row => {
+                    html += '<tr>';
+                    headers.forEach(h => {
+                        let val = row[h];
+                        // Format timestamps
+                        if (typeof val === 'string' && val.includes('T') && val.endsWith('Z')) {
+                            val = new Date(val).toLocaleString();
+                        }
+                        html += `<td>${val}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+
+                view.innerHTML = html;
+
+            } catch (err) {
+                console.error(err);
+                view.innerHTML = '<span style="color:red">Error loading data</span>';
+            }
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
