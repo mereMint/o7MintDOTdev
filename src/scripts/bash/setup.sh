@@ -12,13 +12,36 @@ pkg update -y
 apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade
 
 # Install Dependencies
+# Install Dependencies
 echo "Installing dependencies..."
-pkg install nodejs git mariadb -y
+pkg install nodejs git mariadb termux-api golang -y
 
-# Check if Cloudflared is installed (Termux might need specific steps, this is a placeholder generic install)
+# Install Cloudflared (Build from source for Termux)
 if ! command -v cloudflared &> /dev/null; then
-    echo "Cloudflared not found. Please install Cloudflared manually or via a separate script for your architecture."
-    # Note: Cloudflared install on Android/Termux can vary. 
+    echo "Cloudflared not found. Building from source..."
+    
+    # Create temp build dir
+    BUILD_DIR=$(mktemp -d)
+    echo "Cloning Cloudflared to $BUILD_DIR..."
+    git clone https://github.com/cloudflare/cloudflared.git "$BUILD_DIR"
+    
+    # Build
+    echo "Building Cloudflared (this may take a while)..."
+    cd "$BUILD_DIR"
+    go build -o cloudflared -ldflags "-s -w" ./cmd/cloudflared
+    
+    # Install
+    echo "Installing binary..."
+    mv cloudflared $PREFIX/bin/
+    chmod +x $PREFIX/bin/cloudflared
+    
+    # Cleanup
+    cd "$HOME"
+    rm -rf "$BUILD_DIR"
+    
+    echo "Cloudflared installed successfully."
+else
+    echo "Cloudflared is already installed."
 fi
 
 # Clone/Pull Project
