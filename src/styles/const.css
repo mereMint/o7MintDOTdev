@@ -1,0 +1,7 @@
+img {
+    image-rendering: pixelated;
+    width: 10vw;
+    height: 2vh;
+    align-items: center;
+    justify-content: center;
+}
