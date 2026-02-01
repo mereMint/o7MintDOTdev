@@ -5,8 +5,11 @@
 echo "Starting MintDEV Setup..."
 
 # Update and Upgrade
+# Update and Upgrade (Non-interactive)
 echo "Updating system packages..."
-pkg update -y && pkg upgrade -y
+pkg update -y
+# Use apt-get directly with options to avoid prompts (confdef/confold keeps existing config)
+apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade
 
 # Install Dependencies
 echo "Installing dependencies..."
