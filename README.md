@@ -27,8 +27,8 @@ This script will:
 
 ## Maintenance
 
-To update the project and run migrations:
+To run the auto-updater (Session 3):
 
 ```bash
-bash maintenance.sh
+bash src/scripts/bash/run_autoupdate.sh
 ```
