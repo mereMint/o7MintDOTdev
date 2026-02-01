@@ -21,6 +21,8 @@ body {
     /* Ensure movement space */
     position: relative;
     overflow-x: hidden;
+    margin: 0;
+    /* Reset default margin for consistent header positioning */
 }
 
 

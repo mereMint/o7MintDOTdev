@@ -7,12 +7,11 @@ while true; do
     date
     echo "Checking for updates..."
     
-    # Reset local changes to ensure clean pull
-    git reset --hard HEAD
+    # Forcefully reset to remote state (Destructive but ensures sync)
+    echo "Resetting to match remote..."
+    git fetch --all
+    git reset --hard origin/main
     git clean -fd
-    
-    # Pull latest changes
-    git pull origin main
     
     # Update dependencies
     if [ -f "package.json" ]; then

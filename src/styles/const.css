@@ -1,7 +1,50 @@
+/* Centering Layout */
+body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    min-height: 100vh;
+    margin: 0;
+    /* Brighter background for visibility */
+    background-color: #1a1a1a !important;
+    position: relative;
+    /* Context for absolute children */
+}
+
+/* Pin Header to top */
+header {
+    position: absolute;
+    top: 0;
+    width: 100%;
+}
+
+#main-title {
+    margin-bottom: 1rem;
+}
+
+h1#txt {
+    /* Much larger header */
+    font-size: 8rem;
+    color: #1DCD9F;
+    margin: 0;
+    line-height: 1;
+}
+
 img {
     image-rendering: pixelated;
-    width: 10vw;
-    height: 2vh;
-    align-items: center;
+    max-width: 1000px;
+    width: 90%;
+    height: auto;
+    object-fit: contain;
+    /* Image ~1.5x relative visual weight */
+    margin-top: 20px;
+}
+
+#box {
+    display: flex;
+    flex-direction: column;
     justify-content: center;
+    align-items: center;
 }
