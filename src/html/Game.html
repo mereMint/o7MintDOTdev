@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Play Game - o7m.dev</title>
+    <link rel="stylesheet" href="../styles/generic.css?v=1">
+    <link rel="stylesheet" href="../styles/games.css?v=1">
+</head>
+
+<body>
+
+    <header>
+        <nav>
+            <ul>
+                <li><a href="../../index.html">Home</a></li>
+                <li><a href="GameHub.html">Games</a></li>
+                <li><a href="../../Links.html">Links</a></li>
+                <li><a href="../../Explain-TM.html">Explain-TM</a></li>
+                <li><a href="Post.html">Sh*tpost</a></li>
+                <li><a href="../../Art.html">Art</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <div id="game-detail-container">
+        <!-- Main Game Area -->
+        <div id="game-play-area" style="position: relative;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-bottom: 2px solid #222;">
+                <h1 id="game-title" style="margin: 0; font-size: 1.5rem;">Loading...</h1>
+                <button id="settings-btn" onclick="toggleSettings()"
+                    style="background: none; border: none; color: #888; cursor: pointer; font-size: 1.5rem;">⚙️</button>
+            </div>
+
+            <!-- Hero Section -->
+            <!-- Hero Section -->
+            <div id="game-hero"
+                style="display: flex; justify-content: center; align-items: center; background: #000; width: 100%; aspect-ratio: 16/9; overflow: hidden; margin-bottom: 20px; border-radius: 10px; border: 2px solid #333;">
+                <img id="game-poster" src="" alt="Game Logo" style="width: 100%; height: 100%; object-fit: contain;">
+            </div>
+
+            <!-- Gallery -->
+            <div id="gallery-wrapper"
+                style="padding: 10px 0; position: relative; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+                <button class="gallery-nav" onclick="scrollGallery(-1)"
+                    style="background: #222; color: #fff; border: 1px solid #333; cursor: pointer; padding: 15px; z-index: 10; border-radius: 50%; margin-right: 15px; font-weight: bold;">&#10094;</button>
+                <div id="game-gallery" class="gallery-container"
+                    style="display: flex; gap: 10px; overflow-x: auto; scroll-behavior: smooth; max-width: 80%;">
+                    <!-- Images injected here -->
+                    <div style="color: #555;">No images available</div>
+                </div>
+                <button class="gallery-nav" onclick="scrollGallery(1)"
+                    style="background: #222; color: #fff; border: 1px solid #333; cursor: pointer; padding: 15px; z-index: 10; border-radius: 50%; margin-left: 15px; font-weight: bold;">&#10095;</button>
+            </div>
+
+            <!-- Settings Modal -->
+            <div id="settings-modal"
+                style="display: none; position: absolute; top: 50px; right: 20px; background: #222; border: 2px solid #444; padding: 20px; border-radius: 10px; z-index: 100; width: 300px; box-shadow: 0 5px 20px rgba(0,0,0,0.5);">
+                <h3 style="color: #fff; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+                    Settings</h3>
+
+                <!-- Audio Section -->
+                <div style="margin-bottom: 20px;">
+                    <label style="color: #bbb; display: block; margin-bottom: 10px;">Master Volume</label>
+                    <input type="range" id="volume-slider" min="0" max="100" value="100"
+                        oninput="updateVolume(this.value)" style="width: 100%;">
+                </div>
+
+                <!-- Auth Section -->
+                <div id="auth-section">
+                    <button id="login-btn" onclick="loginDiscord()"
+                        style="width: 100%; background: #5865F2; color: white; border: none; padding: 10px; cursor: pointer; font-weight: bold; border-radius: 5px;">Login
+                        with Discord</button>
+                </div>
+            </div>
+
+            <!-- Action / Description Area -->
+            <div class="game-description" style="position: relative;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px;">
+                    <h3 style="margin: 0; color: #1DCD9F;">Description</h3>
+                    <button id="play-btn" onclick="launchGame()"
+                        style="background: #1DCD9F; color: #000; border: none; padding: 10px 30px; font-size: 1rem; font-weight: bold; border-radius: 5px; cursor: pointer; transition: transform 0.2s;">
+                        PLAY NOW
+                    </button>
+                </div>
+                <p id="game-desc" style="line-height: 1.6; color: #ddd;">...</p>
+            </div>
+        </div>
+
+        <!-- Sidebar (Scores) -->
+        <div class="score-sidebar">
+            <h3 style="color: #1DCD9F; border-bottom: 1px solid #333; padding-bottom: 10px;">Leaderboard</h3>
+            <ul id="score-list" class="score-list">
+                <li class="score-item" style="justify-content: center; color: #555;">Loading scores...</li>
+            </ul>
+
+        </div>
+    </div>
+
+    <script src="../scripts/js/game.js"></script>
+</body>
+
+</html>

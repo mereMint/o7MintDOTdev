@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game HUB - o7m.dev</title>
+    <link rel="stylesheet" href="../styles/generic.css?v=1">
+    <link rel="stylesheet" href="../styles/games.css?v=1">
+</head>
+
+<body>
+
+    <header>
+        <nav>
+            <ul>
+                <li><a href="../../index.html">Home</a></li>
+                <li><a href="GameHub.html">Games</a></li>
+                <li><a href="../../Links.html">Links</a></li>
+                <li><a href="../../Explain-TM.html">Explain-TM</a></li>
+                <li><a href="Post.html">Sh*tpost</a></li>
+                <li><a href="../../Art.html">Art</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <div id="hub-container">
+        <div id="hub-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h1 style="margin: 0;">Game Library</h1>
+                <div style="display: flex; gap: 15px;">
+                    <button onclick="toggleProfile()" title="Profile"
+                        style="background: none; border: none; color: #1DCD9F; cursor: pointer; font-size: 1.5rem;">👤</button>
+                    <button onclick="toggleSettings()" title="Settings"
+                        style="background: none; border: none; color: #888; cursor: pointer; font-size: 1.5rem;">⚙️</button>
+                </div>
+            </div>
+
+            <div class="search-bar">
+                <input type="text" id="game-search" placeholder="Search games...">
+            </div>
+
+            <!-- Settings Modal -->
+            <div id="settings-modal"
+                style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #222; border: 2px solid #444; padding: 20px; border-radius: 10px; z-index: 1000; width: 300px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+                    <h3 style="color: #fff; margin: 0;">Settings</h3>
+                    <button onclick="toggleSettings()"
+                        style="background: none; border: none; color: #888; cursor: pointer;">✕</button>
+                </div>
+
+                <!-- Global Audio -->
+                <div style="margin-bottom: 20px;">
+                    <label style="color: #bbb; display: block; margin-bottom: 10px;">Global Volume</label>
+                    <input type="range" id="volume-slider" min="0" max="100" value="100"
+                        oninput="updateGlobalVolume(this.value)" style="width: 100%;">
+                </div>
+
+                <!-- Auth Section -->
+                <div id="auth-section">
+                    <button id="login-btn" onclick="loginDiscord()"
+                        style="width: 100%; background: #5865F2; color: white; border: none; padding: 10px; cursor: pointer; font-weight: bold; border-radius: 5px;">Login
+                        with Discord</button>
+                </div>
+            </div>
+
+            <!-- Profile Modal -->
+            <div id="profile-modal"
+                style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #222; border: 2px solid #1DCD9F; padding: 20px; border-radius: 10px; z-index: 1000; width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+                    <h3 style="color: #1DCD9F; margin: 0;">Player Profile</h3>
+                    <button onclick="toggleProfile()"
+                        style="background: none; border: none; color: #888; cursor: pointer;">✕</button>
+                </div>
+
+                <div id="profile-content" style="text-align: center; color: #fff;">
+                    <p>Please login to see stats.</p>
+                </div>
+            </div>
+
+            <div id="game-lists">
+                <!-- Categories will be injected here -->
+                <div class="loading">Loading Games...</div>
+            </div>
+        </div>
+
+        <script src="../scripts/js/gamehub.js"></script>
+</body>
+
+</html>

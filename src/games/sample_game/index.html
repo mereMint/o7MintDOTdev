@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Sample Game</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: #fff;
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #volume-display,
+        #user-display {
+            position: absolute;
+            margin: 10px;
+            color: #1DCD9F;
+        }
+
+        #user-display {
+            top: 0;
+            left: 0;
+        }
+
+        #volume-display {
+            top: 0;
+            right: 0;
+        }
+
+        button {
+            background: #1DCD9F;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            margin: 10px;
+            border-radius: 5px;
+        }
+
+        button:hover {
+            background: #fff;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="user-display">Player: Loading...</div>
+    <div id="volume-display">Vol: Loading...</div>
+
+    <h1>Sample Game</h1>
+    <p>Click to generate a Random Score!</p>
+    <button onclick="score()">Get Points</button>
+    <button onclick="window.history.back()" style="background: #333; color: #ddd;">Back to Hub</button>
+
+    <script>
+        // Init - Read from LocalStorage (Shared Origin)
+        const storedUser = localStorage.getItem('discord_user');
+        const user = storedUser ? JSON.parse(storedUser) : { username: "Anonymous" };
+        document.getElementById('user-display').innerText = `Player: ${user.username}`;
+
+        const vol = localStorage.getItem('global_volume') || 100;
+        document.getElementById('volume-display').innerText = `Vol: ${vol}%`;
+
+        // Game Logic
+        async function score() {
+            const points = Math.floor(Math.random() * 1000);
+            const gameId = 'sample_game'; // Hardcoded for this sample
+
+            try {
+                // Direct API Call
+                const res = await fetch('/api/score', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        game_id: gameId,
+                        username: user.username,
+                        score: points
+                    })
+                });
+
+                if (res.ok) {
+                    alert(`Score ${points} submitted for ${user.username}!`);
+                } else {
+                    const err = await res.json();
+                    alert("Failed to submit: " + (err.error || "Unknown error"));
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Error connecting to server.");
+            }
+        }
+    </script>
+</body>
+
+</html>

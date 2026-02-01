@@ -27,9 +27,9 @@ async function runTypewriter() {
 
         // Blink Cursor while waiting
         for (let b = 0; b < 3; b++) {
-            await sleep(400);
+            await sleep(600);
             element.innerText = fullText.substring(0, 2); // Cursor off
-            await sleep(400);
+            await sleep(600);
             element.innerText = fullText.substring(0, 2) + "|"; // Cursor on
         }
 
@@ -52,9 +52,9 @@ async function runTypewriter() {
         // Blink cursor at the end
         for (let i = 0; i < 3; i++) {
             element.innerText = fullText + "|";
-            await sleep(400);
+            await sleep(600);
             element.innerText = fullText;
-            await sleep(400);
+            await sleep(600);
         }
 
         await sleep(3000);

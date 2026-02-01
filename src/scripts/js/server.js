@@ -4,9 +4,16 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config();
+const axios = require('axios');
 
 const app = express();
 const PORT = 8000;
+
+// Env Vars
+const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
+const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
+const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI;
 
 // Middleware
 app.use(cors());
@@ -45,8 +52,8 @@ pool.getConnection()
 
 // Load Bad Words
 let badWords = [];
-// Adjusted path: Go up two levels from src/scripts/js/ to src/ then to conigs/
-const nonowordsPath = path.join(__dirname, '../../conigs/nonowords.json');
+// Adjusted path: Go up two levels from src/scripts/js/ to src/ then to config/
+const nonowordsPath = path.join(__dirname, '../../config/nonowords.json');
 try {
     if (fs.existsSync(nonowordsPath)) {
         const data = fs.readFileSync(nonowordsPath, 'utf8');
@@ -137,6 +144,249 @@ app.post('/api/post', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Server error" });
+    }
+});
+
+// --- Game Hub APIs ---
+
+// GET /api/games - Scan for games
+app.get('/api/games', (req, res) => {
+    const gamesDir = path.join(__dirname, '../../games'); // Corrected path
+    if (!fs.existsSync(gamesDir)) {
+        return res.json([]);
+    }
+
+    try {
+        const games = fs.readdirSync(gamesDir).map(folder => {
+            const dataPath = path.join(gamesDir, folder, 'data.json');
+            if (fs.existsSync(dataPath)) {
+                try {
+                    const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+                    return {
+                        id: folder,
+                        name: data.name || folder,
+                        description: data.description || "",
+                        genre: data.genre || "Uncategorized",
+                        images: data.images || [], // Support for gallery images
+                        image: `/src/games/${folder}/logo.png`,
+                        url: `/src/games/${folder}/index.html`
+                    };
+                } catch (e) {
+                    return null;
+                }
+            }
+            return null;
+        }).filter(g => g !== null);
+
+        res.json(games);
+    } catch (err) {
+        console.error("Error scanning games:", err);
+        res.status(500).json({ error: "Failed to scan games" });
+    }
+});
+
+let memoryScores = [
+    { game_id: "sample_game", username: "DevMode", score: 9999, created_at: new Date() }
+];
+
+// GET /api/scores
+app.get('/api/scores', async (req, res) => {
+    // ... existing ...
+    const gameId = req.query.game;
+    if (!gameId) return res.status(400).json({ error: "Game ID required" });
+
+    const limit = parseInt(req.query.limit) || 10;
+
+    if (useInMemory) {
+        const scores = memoryScores
+            .filter(s => s.game_id === gameId)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, limit);
+        return res.json(scores);
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        // Ensure limit is strictly integer
+        const limitInt = parseInt(limit);
+        const rows = await conn.query("SELECT * FROM scores WHERE game_id = ? ORDER BY score DESC LIMIT ?", [gameId, limitInt]);
+        res.json(rows);
+    } catch (err) {
+        console.error("Database Error in GET /api/scores:", err);
+        // Returns 500 with error details for debugging
+        res.status(500).json({ error: "Database error: " + err.message });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/scores/rank - Get User's Best Rank
+app.get('/api/scores/rank', async (req, res) => {
+    const { game, username } = req.query;
+    if (!game || !username) return res.status(400).json({ error: "Game and Username required" });
+
+    if (useInMemory) {
+        // Find user's best score
+        const userScores = memoryScores.filter(s => s.game_id === game && s.username === username);
+        if (userScores.length === 0) return res.json({ rank: null, score: null });
+
+        const bestScore = Math.max(...userScores.map(s => s.score));
+
+        // Count scores higher than best
+        const higherScores = memoryScores.filter(s => s.game_id === game && s.score > bestScore).length;
+
+        return res.json({ rank: higherScores + 1, score: bestScore });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        // 1. Get Best Score
+        const bestRes = await conn.query("SELECT MAX(score) as best FROM scores WHERE game_id = ? AND username = ?", [game, username]);
+        const bestScore = bestRes[0]?.best;
+
+        if (bestScore === null || bestScore === undefined) {
+            return res.json({ rank: null, score: null });
+        }
+
+        // 2. Count Rank
+        const rankRes = await conn.query("SELECT COUNT(*) as rank FROM scores WHERE game_id = ? AND score > ?", [game, bestScore]);
+        const rank = Number(rankRes[0]?.rank) + 1;
+
+        res.json({ rank, score: bestScore });
+
+    } catch (err) {
+        console.error("Rank Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/score
+app.post('/api/score', async (req, res) => {
+    try {
+        const { game_id, username, score } = req.body;
+        if (!game_id || score === undefined) return res.status(400).json({ error: "Invalid data" });
+
+        const user = username || "Anonymous";
+
+        if (useInMemory) {
+            console.log(`[RAM] Score saved: ${user} - ${score} for ${game_id}`);
+            memoryScores.push({ game_id, username: user, score: parseInt(score), created_at: new Date() });
+            return res.json({ success: true, mode: "memory" });
+        }
+
+        let conn;
+        try {
+            conn = await pool.getConnection();
+            await conn.query("INSERT INTO scores (game_id, username, score) VALUES (?, ?, ?)", [game_id, user, score]);
+            res.json({ success: true });
+        } finally {
+            if (conn) conn.release();
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+// --- Auth Routes ---
+
+app.get('/api/auth/discord', (req, res) => {
+    const url = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify`;
+    res.redirect(url);
+});
+
+app.get('/api/auth/discord/callback', async (req, res) => {
+    const { code } = req.query;
+    if (!code) return res.status(400).send("No code provided");
+
+    try {
+        const formData = new URLSearchParams({
+            client_id: CLIENT_ID,
+            client_secret: CLIENT_SECRET,
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: REDIRECT_URI,
+        });
+
+        const tokenRes = await axios.post('https://discord.com/api/oauth2/token', formData, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        });
+
+        const { access_token } = tokenRes.data;
+
+        const userRes = await axios.get('https://discord.com/api/users/@me', {
+            headers: { Authorization: `Bearer ${access_token}` },
+        });
+
+        const { id, username, discriminator, avatar } = userRes.data;
+
+        // Simple "Session" via redirect params (for now)
+        // Redirect to GameHub with user info so frontend can save it
+        // Note: In production, use secure cookies/sessions!
+        res.redirect(`../../src/html/GameHub.html?login=success&username=${username}&discord_id=${id}&avatar=${avatar}`);
+
+    } catch (err) {
+        console.error("Auth Error:", err.response ? err.response.data : err.message);
+        res.status(500).send("Authentication Failed");
+    }
+});
+
+
+
+// GET /api/user/:username/stats
+app.get('/api/user/:username/stats', async (req, res) => {
+    const { username } = req.params;
+
+    if (useInMemory) {
+        const userScores = memoryScores.filter(s => s.username === username);
+        const uniqueGames = [...new Set(userScores.map(s => s.game_id))].length;
+        const totalScore = userScores.reduce((acc, s) => acc + s.score, 0);
+        const avgScore = userScores.length ? (totalScore / userScores.length).toFixed(0) : 0;
+        const bestScore = userScores.length ? Math.max(...userScores.map(s => s.score)) : 0;
+
+        return res.json({
+            username,
+            games_played: uniqueGames,
+            total_score: totalScore,
+            average_score: avgScore,
+            best_score: bestScore
+        });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        // Calculate stats
+        // Note: For 'games_played', we count unique game_ids for this user
+        // For 'best_score', we get the max score
+        const stats = await conn.query(`
+            SELECT 
+                COUNT(DISTINCT game_id) as games_played,
+                SUM(score) as total_score,
+                AVG(score) as average_score,
+                MAX(score) as best_score
+            FROM scores 
+            WHERE username = ?
+        `, [username]);
+
+        const data = stats[0] || {};
+        res.json({
+            username,
+            games_played: Number(data.games_played) || 0,
+            total_score: Number(data.total_score) || 0,
+            average_score: Math.round(data.average_score) || 0,
+            best_score: Number(data.best_score) || 0
+        });
+
+    } catch (err) {
+        console.error("Stats Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
     }
 });
 

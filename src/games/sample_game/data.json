@@ -1,0 +1,9 @@
+{
+    "name": "Sample Game",
+    "description": "A test game to verify the hub.",
+    "genre": "Puzzle",
+    "images": [
+        "logo.png",
+        "shot1.png"
+    ]
+}
