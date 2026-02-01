@@ -14,14 +14,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // For now, let's just infer paths and use the API to get metadata if possible, or just load static assets.
     // Simpler: Fetch all games and find ours to get the nice name/desc.    
     loadGameDetails();
+
+    // Auto-refresh when page is clicked or refocused (e.g. closing game, switching tabs)
+    window.addEventListener('focus', () => {
+        console.log("Page focused, refreshing details...");
+        loadGameDetails();
+    });
 });
 
 let gameImages = [];
 let currentHeroIndex = 0;
+let isLoadingDetails = false;
 
 async function loadGameDetails() {
+    if (isLoadingDetails) return; // Prevent concurrent loads
+    isLoadingDetails = true;
     try {
-        const res = await fetch('/api/games');
+        const res = await fetch(`/api/games?t=${Date.now()}`);
         const games = await res.json();
         const game = games.find(g => g.id === gameId);
 
@@ -61,6 +70,34 @@ async function loadGameDetails() {
             // Leaderboard Logic
             const lbContainer = document.getElementById('leaderboard-container');
             const mainContainer = document.getElementById('game-detail-container');
+
+            // Debug Logging for Duplicates
+            console.log("Loading Game Details. Achievements count:", game.achievements ? game.achievements.length : 0);
+
+            // Dev Mode: Reset Button (Injected into Sidebar if Dev)
+            const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            if (isDev && lbContainer && !document.getElementById('reset-progress-btn')) {
+                const btn = document.createElement('button');
+                btn.id = 'reset-progress-btn';
+                btn.innerText = "⚠️ Reset Progress";
+                btn.style.marginTop = "20px";
+                btn.style.width = "100%";
+                btn.style.background = "#444";
+                btn.style.color = "#ff5555";
+                btn.style.border = "1px dashed #ff5555";
+                btn.style.padding = "5px";
+                btn.style.cursor = "pointer";
+                btn.onclick = async () => {
+                    if (!confirm("Reset ALL achievements for this game?")) return;
+                    const storedUser = localStorage.getItem('discord_user');
+                    if (!storedUser) return alert("Not logged in");
+                    const user = JSON.parse(storedUser);
+
+                    await fetch(`/api/user/${user.username}/progress?game_id=${gameId}`, { method: 'DELETE' });
+                    location.reload();
+                };
+                lbContainer.appendChild(btn);
+            }
 
             let showLeaderboard = false;
             let currentBoard = { key: 'main', title: 'Leaderboard' };
@@ -138,27 +175,92 @@ async function loadGameDetails() {
                 }
 
                 game.achievements.forEach(ach => {
+                    const achId = ach.id || ach.title;
+                    const cardDomId = `ach-card-${achId.replace(/\s+/g, '-')}`;
+
+                    // Safety: Remove existing card if it exists (prevents duplicates)
+                    const existing = document.getElementById(cardDomId);
+                    if (existing) existing.remove();
+
                     const div = document.createElement('div');
                     div.className = 'achievement-card';
+                    div.id = cardDomId;
 
-                    const achId = ach.id || ach.title;
                     const isUnlocked = unlockedIds.includes(achId);
-                    const iconPath = ach.image ? `../../src/games/${gameId}/${ach.image}` : '../../src/assets/icon_placeholder.png';
+
+                    let iconPath = ach.image ? `../../src/games/${gameId}/${ach.image}` : '../../src/assets/icon_placeholder.png';
+                    let displayTitle = ach.title;
+                    let displayDesc = ach.description;
+                    let isSecret = false;
+                    const isHidden = ach.secret || ach.hidden; // Support both
+
+                    // Logic: If Locked AND (Secret OR Hidden) -> Apply Hiding
+                    if (!isUnlocked && isHidden) {
+                        isSecret = true;
+
+                        // Steam-Style Hiding:
+                        // Default view is "Hidden Achievement"
+                        displayTitle = "Hidden Achievement";
+                        displayDesc = "Details are hidden. (Click to reveal)";
+                        iconPath = '../assets/imgs/const.png'; // Generic Icon
+                    }
 
                     if (isUnlocked) {
                         div.style.borderColor = '#1DCD9F';
                         div.style.opacity = '1';
                     } else {
+                        // Locked Style
                         div.style.borderColor = '#333';
                         div.style.opacity = '0.5';
-                        div.style.filter = 'grayscale(100%)';
+
+                        if (isSecret) {
+                            // Secret Handlers
+                            div.style.cursor = 'pointer';
+                            div.title = "Click to reveal spoiler";
+                            div.className += ' spoiler-card'; // Marker class
+
+                            // Store real data
+                            div.dataset.hidden = 'true';
+                            div.dataset.realTitle = ach.title;
+                            div.dataset.realDesc = ach.description;
+                            div.dataset.realIcon = ach.image ? `../../src/games/${gameId}/${ach.image}` : '../../src/assets/icon_placeholder.png';
+
+                            div.onclick = function () {
+                                if (this.dataset.hidden === 'true') {
+                                    // Reveal Stage 1: Title + Blurred Icon, but keep Desc as ???
+                                    this.dataset.hidden = 'false';
+                                    this.querySelector('h4').innerText = this.dataset.realTitle;
+                                    this.querySelector('p').innerText = "???";
+
+                                    // Update Icon and blur it
+                                    const img = this.querySelector('.achievement-icon');
+                                    img.src = this.dataset.realIcon;
+                                    img.classList.add('spoiler-blur');
+
+                                    this.title = "Click to reveal description";
+                                } else {
+                                    // Reveal Stage 2: Full reveal
+                                    this.querySelector('p').innerText = this.dataset.realDesc;
+                                    const blurs = this.querySelectorAll('.spoiler-blur');
+                                    if (blurs.length > 0) {
+                                        blurs.forEach(el => el.classList.remove('spoiler-blur'));
+                                    }
+                                    this.style.opacity = '0.7';
+                                    this.title = "";
+                                    this.style.cursor = 'default';
+                                    this.onclick = null;
+                                }
+                            };
+                        } else {
+                            div.style.filter = 'grayscale(100%)';
+                        }
                     }
 
                     div.innerHTML = `
                         <img src="${iconPath}" class="achievement-icon" alt="Icon" onerror="this.style.display='none'">
                         <div class="achievement-info">
-                            <h4>${escapeHtml(ach.title)} ${isUnlocked ? '✅' : ''}</h4>
-                            <p>${escapeHtml(ach.description)}</p>
+                            <h4>${escapeHtml(displayTitle)} ${isUnlocked ? '✅' : ''}</h4>
+                            <p>${escapeHtml(displayDesc)}</p>
                         </div>
                     `;
                     achList.appendChild(div);
@@ -172,6 +274,8 @@ async function loadGameDetails() {
         }
     } catch (err) {
         console.error("Error loading details", err);
+    } finally {
+        isLoadingDetails = false;
     }
 }
 
@@ -226,8 +330,8 @@ function scrollGallery(direction) {
 async function loadScores(boardKey = 'main') {
     const list = document.getElementById('score-list');
     try {
-        // Fetch Top 10 with board key
-        const res = await fetch(`/api/scores?game=${gameId}&board=${boardKey}&limit=10`);
+        // Fetch Top 5 with board key (Shorter leaderboard)
+        const res = await fetch(`/api/scores?game=${gameId}&board=${boardKey}&limit=5`);
         if (!res.ok) {
             console.warn(`Scores API returned status: ${res.status}`);
             if (res.status === 404) {
@@ -265,8 +369,18 @@ async function loadScores(boardKey = 'main') {
             li.className = 'score-item';
             if (isMe) li.style.borderColor = '#1DCD9F'; // Highlight user
 
+            // Avatar Logic
+            let avatarImg = '../assets/imgs/const.png';
+            if (s.discord_id && s.avatar) {
+                avatarImg = `https://cdn.discordapp.com/avatars/${s.discord_id}/${s.avatar}.png`;
+            }
+
             li.innerHTML = `
-                <span><span class="score-itm-rank">#${index + 1}</span> ${escapeHtml(s.username)}</span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="score-itm-rank">#${index + 1}</span>
+                    <img src="${avatarImg}" style="width:24px; height:24px; border-radius:50%;" onerror="this.src='../assets/imgs/const.png'">
+                    <span>${escapeHtml(s.username)}</span>
+                </div>
                 <span>${s.score}</span>
             `;
             list.appendChild(li);

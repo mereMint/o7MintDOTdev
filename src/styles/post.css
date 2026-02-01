@@ -1,19 +1,18 @@
 /* Specific Styles for Post Page */
 body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    display: block;
 }
 
 #post-container {
     width: 90%;
     max-width: 600px;
-    margin-top: 50px;
+    margin: 50px auto;
 }
 
 .input-bubble {
-    background-color: #222222;
-    border-radius: 25px;
+    background-color: #1a1a1a;
+    border-radius: 10px;
+    border: 1px solid #333;
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -57,7 +56,7 @@ body {
     color: #000;
     border: none;
     padding: 10px 20px;
-    border-radius: 20px;
+    border-radius: 5px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 1.2rem;
     cursor: pointer;
@@ -78,8 +77,9 @@ body {
 }
 
 .post {
-    background-color: #222222;
-    border-radius: 20px;
+    background-color: #1a1a1a;
+    border-radius: 10px;
+    border: 1px solid #333;
     padding: 20px;
 }
 

@@ -28,13 +28,24 @@ body {
 
 
 
+header {
+    width: 100%;
+}
+
 nav {
     background-color: #222222;
     border-radius: 50px;
-    width: fit-content;
+    width: 90%;
+    /* Match container width percentage */
+    max-width: 1200px;
+    /* Match container max-width */
     margin: 20px auto;
     /* Centered at top */
     padding: 15px 40px;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    /* Center the links */
 }
 
 nav ul {

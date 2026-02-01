@@ -19,7 +19,9 @@
             "id": "first_win",
             "title": "First Win",
             "description": "Win your first game.",
-            "image": "logo.png"
+            "image": "logo.png",
+            "secret": true,
+            "points": 100
         }
     ]
 }

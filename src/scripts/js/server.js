@@ -15,15 +15,15 @@ const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI;
 
-console.log("--- DEBUG ENV ---");
-console.log("CLIENT_ID Type:", typeof CLIENT_ID);
-console.log("CLIENT_ID Length:", CLIENT_ID ? CLIENT_ID.length : 0);
-console.log("REDIRECT_URI:", REDIRECT_URI);
-console.log("-----------------");
+let authEnabled = true;
 
-if (!CLIENT_ID || CLIENT_ID === "your_client_id_here") {
-    console.error("❌ ERROR: DISCORD_CLIENT_ID is missing or default! Check your .env file.");
+if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI || CLIENT_ID === "your_client_id_here") {
+    console.warn("⚠️  Discord Auth credentials missing or default in .env");
+    console.warn("   Discord Login will be disabled. Using Dev Mode is recommended.");
+    authEnabled = false;
 }
+
+console.log(`Auth Enabled: ${authEnabled}`);
 
 // Middleware
 app.use(cors());
@@ -45,8 +45,59 @@ let memoryPosts = [];
 
 // Initialize Connection
 pool.getConnection()
-    .then(conn => {
+    .then(async conn => {
         console.log("✅ Database connected successfully.");
+
+        // Ensure Tables Exist
+        try {
+            await conn.query(`
+                CREATE TABLE IF NOT EXISTS users (
+                    username VARCHAR(255) PRIMARY KEY,
+                    discord_id VARCHAR(255),
+                    avatar VARCHAR(255),
+                    points INT DEFAULT 0,
+                    inventory JSON,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                )
+            `);
+            await conn.query(`
+                CREATE TABLE IF NOT EXISTS user_achievements (
+                    username VARCHAR(255),
+                    game_id VARCHAR(255),
+                    achievement_id VARCHAR(255),
+                    unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (username, game_id, achievement_id)
+                )
+            `);
+            // Ensure scores table exists (simple check)
+            await conn.query(`
+                CREATE TABLE IF NOT EXISTS scores (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    game_id VARCHAR(50),
+                    username VARCHAR(255),
+                    score INT,
+                    board_id VARCHAR(50) DEFAULT 'main',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+            console.log("✅ Tables verified/created.");
+
+            // Migrations: Ensure columns exist (for existing tables)
+            try {
+                // MariaDB 10.2+ supports IF NOT EXISTS in ADD COLUMN
+                await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS points INT DEFAULT 0");
+                await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS inventory JSON");
+                console.log("✅ Schema Migrations applied.");
+            } catch (migErr) {
+                // Fallback for older versions or if syntax fails: verify manually
+                console.warn("Migration warning (safe to ignore if columns exist):", migErr.message);
+            }
+
+        } catch (e) {
+            console.error("Table Init Error:", e);
+        }
+
         conn.release();
     })
     .catch(err => {
@@ -59,6 +110,17 @@ pool.getConnection()
             { id: 2, username: "Tester", content: "This post is running from RAM!", created_at: new Date() }
         );
     });
+
+// ...
+
+// Helper to get Game Data
+function getGameData(gameId) {
+    const p = path.join(__dirname, '../../games', gameId, 'data.json');
+    if (fs.existsSync(p)) {
+        try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { }
+    }
+    return null;
+}
 
 // Load Bad Words
 let badWords = [];
@@ -230,7 +292,15 @@ app.get('/api/scores', async (req, res) => {
         // but for this task we assume schema supports it or we'd need migration. 
         // For robustness, if column missing, it might error. Ideally we migrate.)
         // Using 'main' as default.
-        const rows = await conn.query("SELECT * FROM scores WHERE game_id = ? AND board_id = ? ORDER BY score DESC LIMIT ?", [gameId, boardId, limitInt]);
+        const rows = await conn.query(`
+            SELECT s.*, u.avatar, u.discord_id 
+            FROM scores s 
+            LEFT JOIN users u ON s.username = u.username 
+            WHERE s.game_id = ? AND s.board_id = ? 
+            ORDER BY s.score DESC 
+            LIMIT ?`,
+            [gameId, boardId, limitInt]
+        );
         res.json(rows);
     } catch (err) {
         // Fallback for missing column if schema isn't updated
@@ -418,14 +488,38 @@ app.post('/api/achievements/unlock', async (req, res) => {
         try {
             conn = await pool.getConnection();
             // Insert ignore ensures idempotency if using UNIQUE constraint
+            // 1. Insert Unlock
             const result = await conn.query(
                 "INSERT IGNORE INTO user_achievements (username, game_id, achievement_id) VALUES (?, ?, ?)",
                 [username, game_id, achievement_id]
             );
 
-            // Check if row was actually inserted (mariadb/mysql specific)
+            // Check if row was actually inserted
             const newUnlock = result.affectedRows > 0;
-            res.json({ success: true, new_unlock: newUnlock });
+
+            if (newUnlock) {
+                // 2. Calculate Points
+                let pointsAwarded = 0;
+                const gameData = getGameData(game_id);
+                if (gameData && gameData.achievements) {
+                    const achParams = gameData.achievements.find(a => a.id === achievement_id || a.title === achievement_id);
+                    if (achParams) {
+                        pointsAwarded = achParams.points || 10; // Default 10 points
+                    }
+                }
+
+                // 3. Award Points
+                if (pointsAwarded > 0) {
+                    await conn.query(
+                        "INSERT INTO users (username, points) VALUES (?, ?) ON DUPLICATE KEY UPDATE points = points + ?",
+                        [username, pointsAwarded, pointsAwarded]
+                    );
+                }
+
+                res.json({ success: true, new_unlock: true, points: pointsAwarded });
+            } else {
+                res.json({ success: true, new_unlock: false });
+            }
 
         } finally {
             if (conn) conn.release();
@@ -501,7 +595,14 @@ app.get('/api/user/:username/achievements', async (req, res) => {
 
 // --- Auth Routes ---
 
+// GET /api/auth/status
+app.get('/api/auth/status', (req, res) => {
+    res.json({ enabled: authEnabled });
+});
+
 app.get('/api/auth/discord', (req, res) => {
+    if (!authEnabled) return res.send("Discord Auth is not configured on this server. Use Dev Login on localhost.");
+
     const redirectUri = encodeURIComponent(REDIRECT_URI);
     const url = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&scope=identify`;
 
@@ -537,6 +638,22 @@ app.get('/api/auth/discord/callback', async (req, res) => {
         });
 
         const { id, username, discriminator, avatar } = userRes.data;
+
+        // Upsert User to DB
+        if (!useInMemory) {
+            let conn;
+            try {
+                conn = await pool.getConnection();
+                await conn.query(
+                    "INSERT INTO users (username, discord_id, avatar) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE discord_id = ?, avatar = ?",
+                    [username, id, avatar, id, avatar]
+                );
+            } catch (err) {
+                console.error("Failed to sync user to DB:", err);
+            } finally {
+                if (conn) conn.release();
+            }
+        }
 
         // Simple "Session" via redirect params (for now)
         // Redirect to GameHub with user info so frontend can save it
@@ -579,12 +696,14 @@ app.get('/api/user/:username/stats', async (req, res) => {
         // For 'best_score', we get the max score
         const stats = await conn.query(`
             SELECT 
-                COUNT(DISTINCT game_id) as games_played,
-                SUM(score) as total_score,
-                AVG(score) as average_score,
-                MAX(score) as best_score
-            FROM scores 
-            WHERE username = ?
+                COUNT(DISTINCT s.game_id) as games_played,
+                SUM(s.score) as total_score,
+                AVG(s.score) as average_score,
+                MAX(s.score) as best_score,
+                MAX(u.points) as points
+            FROM scores s
+            LEFT JOIN users u ON s.username = u.username
+            WHERE s.username = ?
         `, [username]);
 
         const data = stats[0] || {};
@@ -593,7 +712,8 @@ app.get('/api/user/:username/stats', async (req, res) => {
             games_played: Number(data.games_played) || 0,
             total_score: Number(data.total_score) || 0,
             average_score: Math.round(data.average_score) || 0,
-            best_score: Number(data.best_score) || 0
+            best_score: Number(data.best_score) || 0,
+            points: Number(data.points) || 0
         });
 
     } catch (err) {

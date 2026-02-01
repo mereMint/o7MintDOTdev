@@ -70,11 +70,62 @@ function checkAuthState() {
         if (authSection) {
             authSection.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px; color: #fff; margin-bottom: 10px;">
-                    <img src="https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png" style="width: 32px; height: 32px; border-radius: 50%;">
+                    <img src="https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png" 
+                         style="width: 32px; height: 32px; border-radius: 50%;"
+                         onerror="this.src='../assets/imgs/const.png'">
                     <span>${escapeHtml(user.username)}</span>
                 </div>
                 <button onclick="logout()" style="width: 100%; background: #333; color: #888; border: none; padding: 5px; cursor: pointer;">Logout</button>
             `;
+        }
+    } else {
+        // Not logged in. Check for Localhost/Dev environment
+        const loginBtn = document.getElementById('login-btn');
+        const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+        // Check if server has auth enabled
+        fetch('/api/auth/status')
+            .then(res => res.json())
+            .then(data => {
+                if (!data.enabled && loginBtn) {
+                    loginBtn.style.display = 'none';
+                    if (authSection && !document.getElementById('auth-disabled-msg')) {
+                        const msg = document.createElement('div');
+                        msg.id = 'auth-disabled-msg';
+                        msg.innerText = "Discord Auth Disabled";
+                        msg.style.color = "#777";
+                        msg.style.fontSize = "0.8rem";
+                        msg.style.marginBottom = "10px";
+                        msg.style.textAlign = "center";
+                        authSection.insertBefore(msg, loginBtn);
+                    }
+                }
+            })
+            .catch(err => console.log("Auth status check failed", err));
+
+        if (isDev && authSection) {
+            // Avoid duplicates
+            if (!document.getElementById('dev-login-btn')) {
+                const devBtn = document.createElement('button');
+                devBtn.id = 'dev-login-btn';
+                devBtn.innerText = "Dev Login";
+                devBtn.style.marginTop = "10px";
+                devBtn.style.width = "100%";
+                devBtn.style.background = "#444";
+                devBtn.style.color = "#1DCD9F";
+                devBtn.style.border = "1px dashed #1DCD9F";
+                devBtn.style.padding = "5px";
+                devBtn.style.cursor = "pointer";
+                devBtn.onclick = () => {
+                    localStorage.setItem('discord_user', JSON.stringify({
+                        username: 'DevUser',
+                        discord_id: '000000000000000000', // Fake ID
+                        avatar: '0' // triggers fallback
+                    }));
+                    location.reload();
+                };
+                authSection.appendChild(devBtn);
+            }
         }
     }
 }
@@ -147,7 +198,9 @@ async function loadProfileStats() {
 
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 20px;">
-                <img src="https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png" style="width: 80px; height: 80px; border-radius: 50%; border: 2px solid #1DCD9F;">
+                <img src="https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png" 
+                     style="width: 80px; height: 80px; border-radius: 50%; border: 2px solid #1DCD9F;"
+                     onerror="this.src='../assets/imgs/const.png'">
                 <h2 style="margin: 0;">${escapeHtml(user.username)}</h2>
             </div>
             
@@ -161,8 +214,8 @@ async function loadProfileStats() {
                     <div style="font-size: 1.2rem; color: #1DCD9F;">${stats.total_score}</div>
                 </div>
                 <div style="background: #111; padding: 10px; border-radius: 5px;">
-                    <div style="color: #888; font-size: 0.8rem;">Avg Score</div>
-                    <div style="font-size: 1.2rem; color: #1DCD9F;">${stats.average_score}</div>
+                    <div style="color: #888; font-size: 0.8rem;">Points</div>
+                    <div style="font-size: 1.2rem; color: #FFD700;">${stats.points || 0}</div>
                 </div>
                 <div style="background: #111; padding: 10px; border-radius: 5px;">
                     <div style="color: #888; font-size: 0.8rem;">Best Score</div>

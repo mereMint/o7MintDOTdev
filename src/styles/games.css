@@ -131,45 +131,50 @@
     background: #1a1a1a;
     border: 1px solid #333;
     border-radius: 8px;
-    padding: 10px;
+    padding: 8px;
+    /* Slightly more compact */
     display: flex;
-    gap: 15px;
+    gap: 10px;
     align-items: center;
 }
 
 .achievement-icon {
-    width: 50px;
-    height: 50px;
+    width: 40px;
+    /* Smaller icon */
+    height: 40px;
     border-radius: 5px;
     object-fit: cover;
     background: #222;
+    flex-shrink: 0;
 }
 
 .achievement-info h4 {
-    margin: 0 0 5px 0;
+    margin: 0 0 2px 0;
     color: #fff;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
 }
 
 .achievement-info p {
     margin: 0;
     color: #888;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    line-height: 1.2;
 }
 
 .score-list {
     list-style: none;
     padding: 0;
-    margin-top: 20px;
+    margin-top: 15px;
 }
 
 .score-item {
     display: flex;
     justify-content: space-between;
-    padding: 10px 0;
+    padding: 6px 0;
+    /* Compact rows */
     border-bottom: 1px solid #222;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 .score-itm-rank {
@@ -275,4 +280,37 @@
     vertical-align: middle;
     image-rendering: pixelated;
     margin-right: 5px;
+}
+
+/* Spoiler Effects */
+.spoiler-blur {
+    filter: blur(10px);
+    opacity: 0.6;
+    user-select: none;
+    transition: all 0.3s ease;
+    pointer-events: none;
+    /* Text shouldn't be selectable if blurred */
+}
+
+.achievement-card {
+    transition: transform 0.2s, box-shadow 0.2s, filter 0.3s;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #111;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
