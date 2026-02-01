@@ -201,7 +201,7 @@ function renderGames(games) {
 
             // Mobile Badge logic
             const isMobile = game.settings && (game.settings.phone === true || game.settings.phone === "true");
-            const mobileIcon = isMobile ? '<span title="Mobile Friendly">📱</span>' : '';
+            const mobileIcon = isMobile ? '<img src="../assets/imgs/const.png" class="pixel-icon" title="Mobile Friendly" alt="Mobile">' : '';
 
             card.innerHTML = `
                 ${imgHtml}

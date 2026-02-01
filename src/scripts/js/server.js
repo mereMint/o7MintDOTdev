@@ -429,7 +429,7 @@ app.get('/api/auth/discord/callback', async (req, res) => {
         // Simple "Session" via redirect params (for now)
         // Redirect to GameHub with user info so frontend can save it
         // Note: In production, use secure cookies/sessions!
-        res.redirect(`../../src/html/GameHub.html?login=success&username=${username}&discord_id=${id}&avatar=${avatar}`);
+        res.redirect(`/src/html/GameHub.html?login=success&username=${username}&discord_id=${id}&avatar=${avatar}`);
 
     } catch (err) {
         console.error("Auth Error:", err.response ? err.response.data : err.message);
