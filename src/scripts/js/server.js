@@ -390,7 +390,14 @@ app.get('/api/user/:username/achievements', async (req, res) => {
 // --- Auth Routes ---
 
 app.get('/api/auth/discord', (req, res) => {
-    const url = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify`;
+    const redirectUri = encodeURIComponent(REDIRECT_URI);
+    const url = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&scope=identify`;
+
+    console.log("--- DEBUG AUTH ---");
+    console.log("Configured REDIRECT_URI:", REDIRECT_URI);
+    console.log("Generated Auth URL:", url);
+    console.log("------------------");
+
     res.redirect(url);
 });
 

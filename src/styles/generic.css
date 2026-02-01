@@ -61,3 +61,26 @@ nav a:hover {
 ::-webkit-scrollbar {
     width: 0px;
 }
+
+/* Mobile Navigation */
+@media (max-width: 768px) {
+    nav {
+        width: 90%;
+        padding: 15px;
+        border-radius: 20px;
+    }
+
+    nav ul {
+        flex-direction: column;
+        /* Stack links vertically */
+        align-items: center;
+        gap: 15px;
+    }
+
+    nav a {
+        font-size: 1.1rem;
+        display: block;
+        /* Larger touch target */
+        padding: 5px;
+    }
+}

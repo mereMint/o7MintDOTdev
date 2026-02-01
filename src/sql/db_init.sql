@@ -18,6 +18,15 @@ CREATE TABLE IF NOT EXISTS posts (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Table: Scores
+CREATE TABLE IF NOT EXISTS scores (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    game_id VARCHAR(50) NOT NULL,
+    username VARCHAR(50) DEFAULT 'Anonymous',
+    score INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 
 -- Table: User Achievements
 CREATE TABLE IF NOT EXISTS user_achievements (
