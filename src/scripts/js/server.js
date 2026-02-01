@@ -292,6 +292,91 @@ app.post('/api/score', async (req, res) => {
     }
 });
 
+// --- Achievement Routes ---
+
+let memoryAchievements = [];
+
+// POST /api/achievements/unlock
+app.post('/api/achievements/unlock', async (req, res) => {
+    try {
+        const { game_id, username, achievement_id } = req.body;
+        if (!game_id || !username || !achievement_id) return res.status(400).json({ error: "Invalid data" });
+
+        if (useInMemory) {
+            // Check if already unlocked
+            const existing = memoryAchievements.find(a =>
+                a.username === username &&
+                a.game_id === game_id &&
+                a.achievement_id === achievement_id
+            );
+
+            if (existing) return res.json({ success: true, new_unlock: false });
+
+            memoryAchievements.push({
+                username, game_id, achievement_id, unlocked_at: new Date()
+            });
+            console.log(`[RAM] Achievement Unlocked: ${username} - ${achievement_id} (${game_id})`);
+            return res.json({ success: true, new_unlock: true });
+        }
+
+        let conn;
+        try {
+            conn = await pool.getConnection();
+            // Insert ignore ensures idempotency if using UNIQUE constraint
+            const result = await conn.query(
+                "INSERT IGNORE INTO user_achievements (username, game_id, achievement_id) VALUES (?, ?, ?)",
+                [username, game_id, achievement_id]
+            );
+
+            // Check if row was actually inserted (mariadb/mysql specific)
+            const newUnlock = result.affectedRows > 0;
+            res.json({ success: true, new_unlock: newUnlock });
+
+        } finally {
+            if (conn) conn.release();
+        }
+    } catch (err) {
+        console.error("Achievement Unlock Error:", err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+// GET /api/user/:username/achievements
+// Query: ?game=game_id (optional, to filter by game)
+app.get('/api/user/:username/achievements', async (req, res) => {
+    const { username } = req.params;
+    const { game } = req.query;
+
+    if (useInMemory) {
+        let unlocks = memoryAchievements.filter(a => a.username === username);
+        if (game) {
+            unlocks = unlocks.filter(a => a.game_id === game);
+        }
+        return res.json(unlocks);
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        let query = "SELECT achievement_id, unlocked_at FROM user_achievements WHERE username = ?";
+        let params = [username];
+
+        if (game) {
+            query += " AND game_id = ?";
+            params.push(game);
+        }
+
+        const rows = await conn.query(query, params);
+        res.json(rows);
+
+    } catch (err) {
+        console.error("Fetch Achievements Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
 // --- Auth Routes ---
 
 app.get('/api/auth/discord', (req, res) => {

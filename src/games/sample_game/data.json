@@ -2,8 +2,20 @@
     "name": "Sample Game",
     "description": "A test game to verify the hub.",
     "genre": "Puzzle",
+    "settings": {
+        "achievements": true,
+        "leaderboard": true
+    },
     "images": [
         "logo.png",
         "shot1.png"
+    ],
+    "achievements": [
+        {
+            "id": "first_win",
+            "title": "First Win",
+            "description": "Win your first game.",
+            "image": "logo.png"
+        }
     ]
 }

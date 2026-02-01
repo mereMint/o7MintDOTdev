@@ -11,9 +11,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load Game Details (Simulated scan or fetch from list)
     // Ideally we would have a specific API for one game details, but we can re-use the list or generic info
     // For now, let's just infer paths and use the API to get metadata if possible, or just load static assets.
+    // For now, let's just infer paths and use the API to get metadata if possible, or just load static assets.
     // Simpler: Fetch all games and find ours to get the nice name/desc.    
     loadGameDetails();
-    loadScores();
 });
 
 let gameImages = [];
@@ -54,6 +54,81 @@ async function loadGameDetails() {
 
             // Initial Hero
             updateHeroImage(0);
+
+            // Feature Toggles
+            const features = game.features || {}; // Default empty
+            const showLeaderboard = features.leaderboard !== false; // Default true
+            const showAchievements = features.achievements !== false; // Default true (if data exists)
+
+            // Toggle Leaderboard
+            const lbContainer = document.getElementById('leaderboard-container');
+            const mainContainer = document.getElementById('game-detail-container');
+
+            if (showLeaderboard) {
+                if (lbContainer) lbContainer.style.display = 'flex';
+                // Reset to grid
+                if (mainContainer) mainContainer.style.gridTemplateColumns = '3fr 1fr';
+                loadScores(); // Only load if enabled
+            } else {
+                if (lbContainer) lbContainer.style.display = 'none';
+                // Full width if no leaderboard
+                if (mainContainer) mainContainer.style.gridTemplateColumns = '1fr';
+            }
+
+            // Render Achievements
+            const achSection = document.getElementById('achievements-section');
+            if (showAchievements && game.achievements && game.achievements.length > 0) {
+                achSection.style.display = 'block';
+                const achList = document.getElementById('achievements-list');
+                achList.innerHTML = '';
+
+                // Fetch User Unlocks
+                let unlockedIds = [];
+                const storedUser = localStorage.getItem('discord_user');
+                if (storedUser) {
+                    try {
+                        const username = JSON.parse(storedUser).username;
+                        const res = await fetch(`/api/user/${username}/achievements?game=${gameId}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            unlockedIds = data.map(a => a.achievement_id);
+                        }
+                    } catch (e) { console.warn("Failed to fetch achievement status", e); }
+                }
+
+                game.achievements.forEach(ach => {
+                    const div = document.createElement('div');
+                    div.className = 'achievement-card';
+
+                    // ID resolution: use explicit 'id' or fallback to 'title'
+                    const achId = ach.id || ach.title;
+                    const isUnlocked = unlockedIds.includes(achId);
+
+                    // Image path: relative to game folder
+                    const iconPath = ach.image ? `../../src/games/${gameId}/${ach.image}` : '../../src/assets/icon_placeholder.png';
+
+                    // Styling for state
+                    if (isUnlocked) {
+                        div.style.borderColor = '#1DCD9F';
+                        div.style.opacity = '1';
+                    } else {
+                        div.style.borderColor = '#333';
+                        div.style.opacity = '0.5';
+                        div.style.filter = 'grayscale(100%)';
+                    }
+
+                    div.innerHTML = `
+                        <img src="${iconPath}" class="achievement-icon" alt="Icon" onerror="this.style.display='none'">
+                        <div class="achievement-info">
+                            <h4>${escapeHtml(ach.title)} ${isUnlocked ? '✅' : ''}</h4>
+                            <p>${escapeHtml(ach.description)}</p>
+                        </div>
+                    `;
+                    achList.appendChild(div);
+                });
+            } else {
+                achSection.style.display = 'none';
+            }
 
         } else {
             document.getElementById('game-title').innerText = "Game Not Found";
@@ -116,12 +191,21 @@ async function loadScores() {
     try {
         // Fetch Top 10
         const res = await fetch(`/api/scores?game=${gameId}&limit=10`);
+        if (!res.ok) {
+            console.warn(`Scores API returned status: ${res.status}`);
+            if (res.status === 404) {
+                list.innerHTML = '<li class="score-item" style="justify-content: center; color: #555;">No scores yet</li>';
+                return;
+            }
+            throw new Error(`API Error: ${res.status}`);
+        }
+
         const scores = await res.json();
 
         // Safety Check
         if (!Array.isArray(scores)) {
-            console.error("Invalid scores response:", scores);
-            list.innerHTML = '<li class="score-item" style="color: red;">Failed to load scores.</li>';
+            console.error("Invalid scores response (not an array):", scores);
+            list.innerHTML = '<li class="score-item" style="justify-content: center; color: #555;">No scores yet</li>';
             return;
         }
 
@@ -231,28 +315,52 @@ function escapeHtml(text) {
 }
 
 // Listen for messages from Iframe (Game)
+window.addEventListener('message', (event) => {
+    const data = event.data;
+    if (!data) return;
 
+    if (data.type === 'SUBMIT_SCORE') {
+        submitScore(data.username, data.score);
+    }
+    else if (data.type === 'UNLOCK_ACHIEVEMENT') {
+        const storedUser = localStorage.getItem('discord_user');
+        const username = storedUser ? JSON.parse(storedUser).username : "Anonymous";
+        unlockAchievement(username, data.achievement_id);
+    }
+});
+
+async function unlockAchievement(username, achievementId) {
+    if (!username || username === "Anonymous") {
+        console.warn("Cannot unlock achievement: not logged in.");
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/achievements/unlock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                game_id: gameId,
+                username: username,
+                achievement_id: achievementId
+            })
+        });
+
+        const data = await res.json();
+        if (data.success && data.new_unlock) {
+            // Maybe show a toast notification?
+            // alert(`Achievement Unlocked: ${achievementId}`);
+            // Refresh visual state
+            loadGameDetails();
+        }
+    } catch (err) {
+        console.error("Unlock Error:", err);
+    }
+}
 
 function loginDiscord() {
     window.location.href = '/api/auth/discord';
 }
-
-
-// Check Auth State on Load & Apply Global Settings
-document.addEventListener('DOMContentLoaded', () => {
-    // Auth Display not needed in sidebar anymore? 
-    // User requested "discord login... global for every game"
-    // So we don't need the login button here, just the ability to submit scores (which we have).
-    // But maybe we should show "Logged in as..." somewhere so they know?
-    // User implies the HUB has the settings/profile. Game page is for playing.
-
-    // Apply Global Volume
-    const vol = localStorage.getItem('global_volume') || 100;
-    setTimeout(() => {
-        updateVolume(vol); // Send to iframe once loaded
-        updateUserInGame(); // Send User Info
-    }, 1000); // Small delay for iframe load
-});
 
 function updateUserInGame() {
     const storedUser = localStorage.getItem('discord_user');

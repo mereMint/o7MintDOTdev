@@ -117,7 +117,39 @@
     background: #111;
     padding: 20px;
     border-radius: 10px;
-    height: fit-content;
+    /* height: fit-content; REMOVED to allow stretching */
+    display: flex;
+    flex-direction: column;
+}
+
+.achievement-card {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.achievement-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 5px;
+    object-fit: cover;
+    background: #222;
+}
+
+.achievement-info h4 {
+    margin: 0 0 5px 0;
+    color: #fff;
+    font-size: 0.95rem;
+}
+
+.achievement-info p {
+    margin: 0;
+    color: #888;
+    font-size: 0.8rem;
 }
 
 .score-list {

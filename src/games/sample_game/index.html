@@ -86,6 +86,15 @@
                         score: points
                     })
                 });
+                const achievementRes = await fetch('/api/achievements/unlock', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        game_id: gameId,
+                        username: user.username,
+                        achievement_id: 'first_win'
+                    })
+                });
 
                 if (res.ok) {
                     alert(`Score ${points} submitted for ${user.username}!`);

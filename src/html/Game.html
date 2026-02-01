@@ -68,10 +68,21 @@
                 </div>
                 <p id="game-desc" style="line-height: 1.6; color: #ddd;">...</p>
             </div>
+
+            <!-- Achievements Section -->
+            <div id="achievements-section"
+                style="display: none; padding: 20px; background: #111; border-top: 1px solid #222; border-radius: 0 0 10px 10px;">
+                <h3 style="color: #1DCD9F; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px;">
+                    Achievements</h3>
+                <div id="achievements-list"
+                    style="display: grid; gap: 15px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));">
+                    <!-- Injected via JS -->
+                </div>
+            </div>
         </div>
 
         <!-- Sidebar (Scores) -->
-        <div class="score-sidebar">
+        <div id="leaderboard-container" class="score-sidebar">
             <h3 style="color: #1DCD9F; border-bottom: 1px solid #333; padding-bottom: 10px;">Leaderboard</h3>
             <ul id="score-list" class="score-list">
                 <li class="score-item" style="justify-content: center; color: #555;">Loading scores...</li>
