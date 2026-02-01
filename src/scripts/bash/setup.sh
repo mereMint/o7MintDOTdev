@@ -18,9 +18,30 @@ if ! command -v cloudflared &> /dev/null; then
     # Note: Cloudflared install on Android/Termux can vary. 
 fi
 
-# Clone/Pull Project (Assuming this script is run from within the cloned repo or a bootstrap location)
-# If this is a bootstrap script, it should clone the repo.
-# If running inside repo, we skip cloning.
+# Clone/Pull Project
+if [ -d ".git" ]; then
+    echo "Already inside the repository."
+else
+    echo "Not in a git repository. Preparing to clone..."
+    # Ensure git is installed
+    if ! command -v git &> /dev/null; then
+        echo "Git not found. Installing..."
+        pkg install git -y
+    fi
+
+    TARGET_DIR="$HOME/MintDEV"
+    
+    if [ -d "$TARGET_DIR" ]; then
+        echo "Directory $TARGET_DIR already exists."
+        cd "$TARGET_DIR"
+        echo "Pulling latest changes..."
+        git pull origin main
+    else
+        echo "Cloning repository to $TARGET_DIR..."
+        git clone https://github.com/mereMint/o7MintDOTdev.git "$TARGET_DIR"
+        cd "$TARGET_DIR"
+    fi
+fi
 
 # Install NPM dependencies
 if [ -f "package.json" ]; then
