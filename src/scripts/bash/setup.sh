@@ -55,13 +55,14 @@ fi
 # Initialize Database
 echo "Initializing Database..."
 # Start MariaDB server if not running
+# Start MariaDB server if not running
 mkdir -p $PREFIX/var/lib/mysql
-mysqld_safe &
+mariadbd-safe &
 sleep 5 # Wait for DB to start
 
 # Run DB Init SQL
 if [ -f "src/sql/db_init.sql" ]; then
-    mysql -u $(whoami) < src/sql/db_init.sql
+    mariadb -u root < src/sql/db_init.sql
     echo "Database initialized."
 else
     echo "db_init.sql not found."
