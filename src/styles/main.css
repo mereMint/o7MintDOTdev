@@ -12,8 +12,23 @@ body {
     font-family: 'Courier New', monospace;
 }
 
-h1,
-h2,
-h3 {
+h1 {
     font-family: 'Kola', sans-serif;
+    /* Color inherited from body (white) */
+}
+
+#main-title {
+    display: flex;
+    justify-content: center;
+}
+
+#main-title h1 {
+    /* No border */
+    font-size: 10rem;
+    margin-top: 35vh;
+
+}
+
+::-webkit-scrollbar {
+    display: none;
 }
