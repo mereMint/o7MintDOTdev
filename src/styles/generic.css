@@ -1,0 +1,61 @@
+@font-face {
+    font-family: 'Kola';
+    src: url('../assets/fonts/Kola-Regular.woff2') format('woff2'),
+        url('../assets/fonts/Kola-Regular.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('../assets/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+}
+
+body {
+    background-color: #000000;
+    color: #169976;
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 200vh;
+    /* Ensure movement space */
+    position: relative;
+    overflow-x: hidden;
+}
+
+
+
+
+nav {
+    background-color: #222222;
+    border-radius: 50px;
+    width: fit-content;
+    margin: 20px auto;
+    /* Centered at top */
+    padding: 15px 40px;
+}
+
+nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    gap: 30px;
+}
+
+nav a {
+    color: #169976;
+    text-decoration: none;
+    font-size: 1.2rem;
+    font-family: inherit;
+    transition: color 0.3s;
+}
+
+nav a:hover {
+    color: #1DCD9F;
+    /* Match header color on hover */
+}
+
+::-webkit-scrollbar {
+    width: 0px;
+}

@@ -1,19 +1,6 @@
-@font-face {
-    font-family: 'Kola';
-    src: url('../assets/fonts/Kola-Regular.woff2') format('woff2'),
-        url('../assets/fonts/Kola-Regular.woff') format('woff');
-    font-weight: normal;
-    font-style: normal;
-}
-
-body {
-    background-color: #000000;
-    color: #ffffff;
-    font-family: 'Courier New', monospace;
-}
-
 h1 {
     font-family: 'Kola', sans-serif;
+    color: #1DCD9F;
     /* Color inherited from body (white) */
 }
 
@@ -29,6 +16,12 @@ h1 {
 
 }
 
-::-webkit-scrollbar {
-    display: none;
+#box {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 30vh;
+    text-align: center;
 }
+
+/* Custom Scrollbar */
