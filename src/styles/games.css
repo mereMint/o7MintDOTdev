@@ -196,9 +196,45 @@
 }
 
 
-/* Sidebar Inputs */
 .score-sidebar input,
 .score-sidebar button {
     box-sizing: border-box;
     /* Fixes width issue */
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    #hub-container {
+        width: 95%;
+        margin: 20px auto;
+    }
+
+    .search-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .search-bar input {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    #game-detail-container {
+        width: 95%;
+        margin: 10px auto;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    #game-play-area {
+        min-height: 300px;
+        /* Taller on phone? or standard aspect ratio? Keep flexible */
+    }
+
+    /* Adjust sidebar to sit naturally below */
+    .score-sidebar {
+        width: 100%;
+        box-sizing: border-box;
+    }
 }

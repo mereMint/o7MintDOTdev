@@ -24,4 +24,17 @@ h1 {
     text-align: center;
 }
 
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    #main-title h1 {
+        font-size: 4rem;
+        /* Reduced from 10rem */
+        margin-top: 20vh;
+    }
+
+    #box {
+        margin-top: 15vh;
+    }
+}
+
 /* Custom Scrollbar */

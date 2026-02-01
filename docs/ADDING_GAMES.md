@@ -31,7 +31,8 @@ The Hub automatically scans the `src/games/` directory. To add a game:
     {
         "settings": {
             "leaderboard": true,   // Default: true
-            "achievements": true   // Default: true
+            "achievements": true,  // Default: true
+            "phone": true          // Default: false (Adds mobile icon)
         },
         "achievements": [
             {

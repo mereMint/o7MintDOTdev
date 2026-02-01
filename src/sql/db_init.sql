@@ -17,8 +17,7 @@ CREATE TABLE IF NOT EXISTS posts (
     content VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+
 
 -- Table: User Achievements
 CREATE TABLE IF NOT EXISTS user_achievements (

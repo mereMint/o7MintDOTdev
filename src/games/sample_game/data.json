@@ -4,7 +4,8 @@
     "genre": "Puzzle",
     "settings": {
         "achievements": true,
-        "leaderboard": true
+        "leaderboard": true,
+        "phone": true
     },
     "images": [
         "logo.png",

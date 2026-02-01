@@ -100,3 +100,22 @@ body {
     font-size: 1.1rem;
     word-wrap: break-word;
 }
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    #post-container {
+        width: 95%;
+        margin-top: 20px;
+    }
+
+    .input-bubble {
+        padding: 15px;
+        margin-bottom: 30px;
+    }
+
+    .input-bubble button {
+        width: 100%;
+        /* Full width button on phone */
+        padding: 15px;
+    }
+}

@@ -199,11 +199,15 @@ function renderGames(games) {
 
             const fallbackHtml = `<div class="game-image" style="${game.image ? 'display:none' : ''}">${game.name}</div>`;
 
+            // Mobile Badge logic
+            const isMobile = game.settings && (game.settings.phone === true || game.settings.phone === "true");
+            const mobileIcon = isMobile ? '<span title="Mobile Friendly">📱</span>' : '';
+
             card.innerHTML = `
                 ${imgHtml}
                 ${fallbackHtml}
                 <div class="game-info">
-                    <div class="game-title">${game.name}</div>
+                    <div class="game-title">${mobileIcon} ${game.name}</div>
                     <div class="game-genre">${game.genre}</div>
                 </div>
             `;
