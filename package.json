@@ -1,0 +1,21 @@
+{
+    "name": "o7mint.dev",
+    "version": "1.0.0",
+    "description": "MintDEV",
+    "main": "index.html",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "start": "npx serve ."
+    },
+    "keywords": [
+        "hub",
+        "minigames",
+        "personal-website"
+    ],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {},
+    "devDependencies": {
+        "serve": "^14.2.1"
+    }
+}
