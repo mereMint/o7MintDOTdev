@@ -100,9 +100,10 @@
     border: 2px solid #222;
     border-radius: 10px;
     min-height: 200px;
-    /* Reduced from 500px */
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
+    /* Push content to edges */
 }
 
 /* iframe#game-frame removed */
@@ -117,9 +118,13 @@
     background: #111;
     padding: 20px;
     border-radius: 10px;
-    /* height: fit-content; REMOVED to allow stretching */
     display: flex;
     flex-direction: column;
+    height: 100%;
+    /* Ensure it fills the area */
+    max-width: 300px;
+    margin-left: auto;
+    /* Align to right if container is wider */
 }
 
 .achievement-card {
