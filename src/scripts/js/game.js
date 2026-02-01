@@ -96,14 +96,27 @@ async function loadGameDetails() {
             const achSection = document.getElementById('achievements-section');
             const gameArea = document.getElementById('game-play-area');
 
-            // Move to be a sibling of gameArea if currently a child
-            if (achSection && achSection.parentNode === gameArea) {
-                gameArea.parentNode.insertBefore(achSection, gameArea.nextSibling);
-                // Reset styles to look like a separate box (match .score-sidebar or .game-description)
-                achSection.style.marginTop = '20px';
-                achSection.style.border = '2px solid #222';
-                achSection.style.borderRadius = '10px';
-                achSection.style.background = '#000'; // Match aesthetic
+            // FIX: Ensure Achievements is INSIDE gameArea (at the bottom)
+            if (achSection && gameArea && achSection.parentNode !== gameArea) {
+                gameArea.appendChild(achSection);
+                achSection.style.marginTop = '0';
+                achSection.style.borderTop = '1px solid #222';
+                achSection.style.borderRadius = '0 0 10px 10px';
+                achSection.style.background = '#111';
+                achSection.style.width = 'auto'; // Reset width
+                achSection.style.borderLeft = 'none';
+                achSection.style.borderRight = 'none';
+                achSection.style.borderBottom = 'none';
+            } else if (achSection) {
+                // Ensure styles are correct even if already inside
+                achSection.style.marginTop = '0';
+                achSection.style.borderTop = '1px solid #222';
+                achSection.style.borderRadius = '0 0 10px 10px';
+                achSection.style.background = '#111';
+                achSection.style.width = 'auto';
+                achSection.style.borderLeft = 'none';
+                achSection.style.borderRight = 'none';
+                achSection.style.borderBottom = 'none';
             }
 
             if (settings.achievements !== false && game.achievements && game.achievements.length > 0) {
