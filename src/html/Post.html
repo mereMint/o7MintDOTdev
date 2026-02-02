@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sh*tpost - o7m.dev</title>
     <link rel="stylesheet" href="../styles/generic.css?v=26">
-    <link rel="stylesheet" href="../styles/post.css?v=24">
+    <link rel="stylesheet" href="../styles/post.css?v=25">
 </head>
 
 <body>
@@ -38,9 +38,18 @@
     </header>
 
     <div id="post-container">
-        <!-- Input Form -->
-        <div class="input-bubble">
-            <input type="text" id="username" placeholder="Username (optional)" maxlength="50">
+        <!-- Login Required Message -->
+        <div id="login-required" class="login-required" style="display: none;">
+            <p>You must be logged in to post.</p>
+            <a href="Profile.html" class="btn-login">Login to Post</a>
+        </div>
+
+        <!-- Input Form (only shown when logged in) -->
+        <div id="post-form" class="input-bubble" style="display: none;">
+            <div class="post-user-info">
+                <img id="current-user-avatar" src="../assets/imgs/const.png" alt="Avatar">
+                <span id="current-user-name">Username</span>
+            </div>
             <textarea id="content" placeholder="Write something..." maxlength="255"></textarea>
             <div id="char-count">0/255</div>
             <button onclick="submitPost()">POST</button>
@@ -53,7 +62,7 @@
         <div id="loading" style="text-align: center; display: none;">Loading...</div>
     </div>
 
-    <script src="../scripts/js/post.js"></script>
+    <script src="../scripts/js/post.js?v=25"></script>
 </body>
 
 </html>

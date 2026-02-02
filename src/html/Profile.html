@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="../styles/generic.css?v=26">
-    <link rel="stylesheet" href="../styles/const.css?v=24">
+    <link rel="stylesheet" href="../styles/profile.css?v=1">
     <title>Profile - o7m.dev</title>
 </head>
 
@@ -36,13 +36,205 @@
         </nav>
     </header>
 
-    <div id="top-wip-container">
-        <div id="main-title">
-            <h1 id="txt">Profile</h1>
+    <div id="profile-container">
+        <!-- Not Logged In State -->
+        <div id="login-prompt" style="display: none;">
+            <div class="login-box">
+                <h1>Profile</h1>
+                <p>Login to view your profile, stats, and achievements!</p>
+                <button onclick="loginDiscord()" class="btn-primary" id="discord-login-btn">
+                    <img src="../assets/imgs/const.png" alt="Discord" style="width: 20px; height: 20px; vertical-align: middle;">
+                    Login with Discord
+                </button>
+                <div id="dev-login-container"></div>
+            </div>
         </div>
-        <p style="color: #888; margin-top: 20px;">User profiles coming soon!</p>
-        <img src="../assets/imgs/const.png">
+
+        <!-- Profile View -->
+        <div id="profile-view" style="display: none;">
+            <!-- Profile Header -->
+            <div class="profile-header">
+                <div class="profile-avatar-container">
+                    <div id="decoration-overlay"></div>
+                    <img id="profile-avatar" src="../assets/imgs/const.png" alt="Avatar">
+                </div>
+                <div class="profile-info">
+                    <h1 id="profile-username">Username</h1>
+                    <span id="profile-role" class="role-badge">User</span>
+                    <p id="profile-bio" class="profile-bio">No bio set</p>
+                    <div class="profile-meta">
+                        <span id="last-online">Last online: --</span>
+                    </div>
+                </div>
+                <div class="profile-actions">
+                    <button onclick="showSettings()" class="btn-secondary">⚙️ Settings</button>
+                    <button onclick="showFriends()" class="btn-secondary">👥 Friends</button>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-games">0</div>
+                    <div class="stat-label">Games Played</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-score">0</div>
+                    <div class="stat-label">Total Score</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-achievements">0</div>
+                    <div class="stat-label">Achievements</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-points">0</div>
+                    <div class="stat-label">Points</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-posts">0</div>
+                    <div class="stat-label">Posts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-articles">0</div>
+                    <div class="stat-label">Articles</div>
+                </div>
+            </div>
+
+            <!-- Favorite Game -->
+            <div class="section-card" id="favorite-game-section">
+                <h2>⭐ Favorite Game</h2>
+                <div id="favorite-game-content">
+                    <p class="muted">No favorite game set</p>
+                </div>
+            </div>
+
+            <!-- Achievements -->
+            <div class="section-card">
+                <h2>🏆 Achievements</h2>
+                <div id="achievements-list" class="achievements-grid">
+                    <p class="muted">No achievements yet</p>
+                </div>
+            </div>
+
+            <!-- Decorations -->
+            <div class="section-card">
+                <h2>🎨 Profile Decorations</h2>
+                <div id="decorations-list" class="decorations-grid">
+                    <!-- Decorations will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>⚙️ Settings</h2>
+                    <button onclick="hideSettings()" class="close-btn">✕</button>
+                </div>
+                <div class="modal-body">
+                    <!-- Bio -->
+                    <div class="setting-group">
+                        <label>Bio</label>
+                        <textarea id="setting-bio" placeholder="Write something about yourself..." maxlength="500"></textarea>
+                        <small id="bio-char-count">0/500</small>
+                    </div>
+
+                    <!-- Favorite Game -->
+                    <div class="setting-group">
+                        <label>Favorite Game</label>
+                        <select id="setting-favorite-game">
+                            <option value="">Select a game...</option>
+                        </select>
+                    </div>
+
+                    <!-- Privacy Settings -->
+                    <div class="setting-group">
+                        <label>Privacy Settings</label>
+                        <div class="privacy-options">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="privacy-stats" checked>
+                                Show stats to others
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="privacy-achievements" checked>
+                                Show achievements to others
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="privacy-activity" checked>
+                                Show activity (posts, articles, last online)
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Volume -->
+                    <div class="setting-group">
+                        <label>Global Volume</label>
+                        <input type="range" id="setting-volume" min="0" max="100" value="100">
+                    </div>
+
+                    <!-- Discord Connection -->
+                    <div class="setting-group">
+                        <label>Connected Account</label>
+                        <div id="discord-connection" class="connection-info">
+                            <!-- Discord info will be shown here -->
+                        </div>
+                    </div>
+
+                    <div class="setting-actions">
+                        <button onclick="saveSettings()" class="btn-primary">Save Settings</button>
+                        <button onclick="logout()" class="btn-danger">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Friends Modal -->
+        <div id="friends-modal" class="modal" style="display: none;">
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h2>👥 Friends</h2>
+                    <button onclick="hideFriends()" class="close-btn">✕</button>
+                </div>
+                <div class="modal-body">
+                    <!-- Search Users -->
+                    <div class="search-box">
+                        <input type="text" id="user-search" placeholder="Search users...">
+                        <button onclick="searchUsers()">Search</button>
+                    </div>
+                    <div id="search-results" class="search-results"></div>
+
+                    <!-- Friend Requests -->
+                    <div class="friends-section">
+                        <h3>Friend Requests</h3>
+                        <div id="friend-requests" class="friends-list">
+                            <p class="muted">No pending requests</p>
+                        </div>
+                    </div>
+
+                    <!-- Friends List -->
+                    <div class="friends-section">
+                        <h3>Friends</h3>
+                        <div id="friends-list" class="friends-list">
+                            <p class="muted">No friends yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Moderator Panel (for mods/admins) -->
+        <div id="moderator-panel" style="display: none;">
+            <div class="section-card">
+                <h2>🛡️ Moderator Panel</h2>
+                <div id="pending-items">
+                    <p class="muted">Loading pending items...</p>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <script src="../scripts/js/profile.js?v=1"></script>
 </body>
 
 </html>

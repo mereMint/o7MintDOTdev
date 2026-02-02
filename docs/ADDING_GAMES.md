@@ -152,6 +152,7 @@ window.parent.postMessage({
 
 ### 👤 User Stats & Auth
 *   **Get Stats**: `GET /api/user/:username/stats`
+*   **Get Full Profile**: `GET /api/user/:username/full-profile`
 *   **Login**: The Hub handles authentication.
     *   The current user is sent to the game iframe via `postMessage` on load:
         ```javascript
@@ -164,8 +165,135 @@ window.parent.postMessage({
 
 ---
 
+## 🎮 Multiplayer API
+
+MintDEV provides a Multiplayer API for turn-based games, card games, quizzes, and more.
+
+### Session Management
+
+#### **Create a Session**
+```javascript
+// POST /api/multiplayer/session
+const response = await fetch('/api/multiplayer/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        game_id: 'my_card_game',
+        host_username: 'PlayerOne',
+        mode: 'against',        // 'against', 'party', or 'coop'
+        max_players: 2
+    })
+});
+const { session_id } = await response.json();
+```
+
+#### **Get Session Details**
+```javascript
+// GET /api/multiplayer/session/:sessionId
+const session = await fetch(`/api/multiplayer/session/${sessionId}`).then(r => r.json());
+// Returns: { session_id, game_id, host_username, mode, status, players: [...] }
+```
+
+### Game Invites
+
+#### **Send Game Invite**
+```javascript
+// POST /api/multiplayer/invite
+await fetch('/api/multiplayer/invite', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        session_id: 'session_123',
+        from_username: 'PlayerOne',
+        to_username: 'PlayerTwo'
+    })
+});
+```
+
+#### **Get Pending Invites**
+```javascript
+// GET /api/multiplayer/invites/:username
+const invites = await fetch(`/api/multiplayer/invites/${username}`).then(r => r.json());
+// Returns: [{ id, session_id, from_username, game_id, mode, created_at }]
+```
+
+#### **Respond to Invite**
+```javascript
+// POST /api/multiplayer/invite/respond
+await fetch('/api/multiplayer/invite/respond', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        invite_id: 123,
+        session_id: 'session_123',
+        username: 'PlayerTwo',
+        accept: true  // or false to decline
+    })
+});
+```
+
+### Game Actions (Turn-Based)
+
+#### **Send Game Action**
+Use this for turn-based games to send moves, choices, etc:
+```javascript
+// POST /api/multiplayer/session/:sessionId/action
+await fetch(`/api/multiplayer/session/${sessionId}/action`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        username: 'PlayerOne',
+        action_type: 'play_card',
+        action_data: { card_id: 'ace_spades', position: 2 }
+    })
+});
+// Returns: { success: true, current_data: { actions: [...], last_action: {...} } }
+```
+
+### Session Lifecycle
+
+#### **Start Session**
+```javascript
+// POST /api/multiplayer/session/:sessionId/start
+await fetch(`/api/multiplayer/session/${sessionId}/start`, { method: 'POST' });
+```
+
+#### **End Session**
+```javascript
+// POST /api/multiplayer/session/:sessionId/end
+await fetch(`/api/multiplayer/session/${sessionId}/end`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        winner: 'PlayerOne',
+        final_data: { scores: { PlayerOne: 100, PlayerTwo: 80 } }
+    })
+});
+```
+
+### Game Modes
+
+| Mode | Description |
+|------|-------------|
+| `against` | Competitive 1v1 or team vs team |
+| `party` | Multiple players in a party game |
+| `coop` | Cooperative multiplayer |
+
+### Polling for Updates
+
+For real-time updates, poll the session endpoint:
+```javascript
+setInterval(async () => {
+    const session = await fetch(`/api/multiplayer/session/${sessionId}`).then(r => r.json());
+    // Check session.current_data.last_action for new moves
+}, 2000);
+```
+
+---
+
 ## 🛑 Rules & Best Practices
 *   **No Profanity**: The server filters bad words in usernames and posts.
 *   **Images**: Keep game logos/screenshots optimized to avoid slow loading.
 *   **Pixel Art**: The site uses `image-rendering: pixelated` keying off class names, so your pixel art will look crisp!
+*   **Multiplayer**: Use polling intervals of 2-5 seconds to balance responsiveness and server load.
 

@@ -41,60 +41,13 @@
         <div id="hub-container">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h1 style="margin: 0;">Game Library</h1>
-                <div style="display: flex; gap: 15px; align-items: center;">
-                    <button onclick="toggleProfile()" title="Profile" class="pixel-btn icon-btn">
-                        <img src="../assets/imgs/const.png" alt="Profile">
-                    </button>
-                    <button onclick="toggleSettings()" title="Settings" class="pixel-btn icon-btn">
-                        <img src="../assets/imgs/const.png" alt="Settings">
-                    </button>
+                <div id="user-header" style="display: flex; gap: 15px; align-items: center;">
+                    <!-- User info will be injected here by JS -->
                 </div>
             </div>
 
             <div class="search-bar">
                 <input type="text" id="game-search" placeholder="Search games...">
-            </div>
-
-            <!-- Settings Modal -->
-            <div id="settings-modal"
-                style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #222; border: 2px solid #444; padding: 20px; border-radius: 10px; z-index: 1000; width: 300px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);">
-                <div
-                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 10px;">
-                    <h3 style="color: #fff; margin: 0;">Settings</h3>
-                    <button onclick="toggleSettings()"
-                        style="background: none; border: none; color: #888; cursor: pointer;">✕</button>
-                </div>
-
-                <!-- Global Audio -->
-                <div style="margin-bottom: 20px;">
-                    <label style="color: #bbb; display: block; margin-bottom: 10px;">Global Volume</label>
-                    <input type="range" id="volume-slider" min="0" max="100" value="100"
-                        oninput="updateGlobalVolume(this.value)" style="width: 100%;">
-                </div>
-
-                <!-- Auth Section -->
-                <div id="auth-section">
-                    <button id="login-btn" onclick="loginDiscord()" class="pixel-btn"
-                        style="width: 100%; display: flex; justify-content: center;">
-                        <img src="../assets/imgs/const.png" alt="Login with Discord"
-                            style="width: 100%; height: auto; max-width: 200px;">
-                    </button>
-                </div>
-            </div>
-
-            <!-- Profile Modal -->
-            <div id="profile-modal"
-                style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #222; border: 2px solid #1DCD9F; padding: 20px; border-radius: 10px; z-index: 1000; width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);">
-                <div
-                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 10px;">
-                    <h3 style="color: #1DCD9F; margin: 0;">Player Profile</h3>
-                    <button onclick="toggleProfile()"
-                        style="background: none; border: none; color: #888; cursor: pointer;">✕</button>
-                </div>
-
-                <div id="profile-content" style="text-align: center; color: #fff;">
-                    <p>Please login to see stats.</p>
-                </div>
             </div>
 
             <div id="game-lists">
@@ -103,7 +56,7 @@
             </div>
         </div>
 
-        <script src="../scripts/js/gamehub.js?v=24"></script>
+        <script src="../scripts/js/gamehub.js?v=25"></script>
 </body>
 
 </html>

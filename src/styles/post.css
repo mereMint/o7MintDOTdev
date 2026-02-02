@@ -9,6 +9,39 @@ body {
     margin: 50px auto;
 }
 
+/* Login Required */
+.login-required {
+    background-color: #1a1a1a;
+    border-radius: 10px;
+    border: 1px solid #333;
+    padding: 40px;
+    text-align: center;
+    margin-bottom: 50px;
+}
+
+.login-required p {
+    color: #888;
+    font-size: 1.1rem;
+    margin-bottom: 20px;
+}
+
+.btn-login {
+    display: inline-block;
+    background-color: #1DCD9F;
+    color: #000;
+    text-decoration: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: bold;
+    transition: transform 0.2s;
+}
+
+.btn-login:hover {
+    transform: scale(1.05);
+    background-color: #169976;
+}
+
 .input-bubble {
     background-color: #1a1a1a;
     border-radius: 10px;
@@ -19,6 +52,28 @@ body {
     gap: 15px;
     margin-bottom: 50px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+/* User info in post form */
+.post-user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #333;
+}
+
+.post-user-info img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid #1DCD9F;
+}
+
+.post-user-info span {
+    color: #1DCD9F;
+    font-weight: bold;
+    font-size: 1rem;
 }
 
 .input-bubble input,
@@ -89,11 +144,30 @@ body {
     margin-bottom: 10px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+}
+
+.post-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.post-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid #1DCD9F;
 }
 
 .post-username {
     color: #1DCD9F;
     font-weight: bold;
+}
+
+.post-time {
+    color: #666;
+    font-size: 0.85rem;
 }
 
 .post-content {
@@ -117,5 +191,15 @@ body {
         width: 100%;
         /* Full width button on phone */
         padding: 15px;
+    }
+
+    .post-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .login-required {
+        padding: 30px 20px;
     }
 }

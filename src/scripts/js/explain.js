@@ -7,7 +7,39 @@ const API_BASE = '/api/explain';
 // =============================================
 
 function parseExplainSyntax(content) {
-    let html = escapeHtml(content);
+    let html = content;
+    
+    // First, handle code blocks (before escaping HTML)
+    // Store code blocks and replace with placeholders
+    const codeBlocks = [];
+    html = html.replace(/```([\s\S]*?)```/g, (match, code) => {
+        codeBlocks.push(code.trim());
+        return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+    });
+    
+    // Store inline code and replace with placeholders
+    const inlineCodes = [];
+    html = html.replace(/`([^`]+)`/g, (match, code) => {
+        inlineCodes.push(code);
+        return `__INLINE_CODE_${inlineCodes.length - 1}__`;
+    });
+    
+    // Store LaTeX blocks and replace with placeholders
+    const latexBlocks = [];
+    html = html.replace(/\$\$([\s\S]+?)\$\$/g, (match, latex) => {
+        latexBlocks.push(latex.trim());
+        return `__LATEX_BLOCK_${latexBlocks.length - 1}__`;
+    });
+    
+    // Store inline LaTeX and replace with placeholders
+    const inlineLatex = [];
+    html = html.replace(/\$([^$\n]+)\$/g, (match, latex) => {
+        inlineLatex.push(latex);
+        return `__INLINE_LATEX_${inlineLatex.length - 1}__`;
+    });
+    
+    // Now escape HTML
+    html = escapeHtml(html);
     
     // Headings: # H1, ## H2, ### H3, #### H4
     html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
@@ -31,18 +63,6 @@ function parseExplainSyntax(content) {
     // Colored text: {color:red}text{/color}
     html = html.replace(/\{color:(red|green|blue|yellow|purple|orange)\}(.+?)\{\/color\}/g, 
         '<span class="text-$1">$2</span>');
-    
-    // Inline code: `code`
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-    
-    // Code blocks: ```code```
-    html = html.replace(/```([\s\S]+?)```/g, '<pre><code>$1</code></pre>');
-    
-    // LaTeX inline: $formula$
-    html = html.replace(/\$([^$\n]+)\$/g, '<span class="latex-inline">$1</span>');
-    
-    // LaTeX block: $$formula$$
-    html = html.replace(/\$\$([\s\S]+?)\$\$/g, '<div class="latex-block">$1</div>');
     
     // Links: [text](url)
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
@@ -82,15 +102,61 @@ function parseExplainSyntax(content) {
     html = html.replace(/(<\/h[1-4]>)<\/p>/g, '$1');
     html = html.replace(/<p>(<ul>)/g, '$1');
     html = html.replace(/(<\/ul>)<\/p>/g, '$1');
+    html = html.replace(/<p>(<ol>)/g, '$1');
+    html = html.replace(/(<\/ol>)<\/p>/g, '$1');
     html = html.replace(/<p>(<blockquote>)/g, '$1');
     html = html.replace(/(<\/blockquote>)<\/p>/g, '$1');
+    html = html.replace(/<p>(<hr>)<\/p>/g, '$1');
+    
+    // Restore code blocks
+    codeBlocks.forEach((code, i) => {
+        const escapedCode = escapeHtml(code);
+        html = html.replace(`__CODE_BLOCK_${i}__`, `<pre><code>${escapedCode}</code></pre>`);
+    });
+    
+    // Restore inline code
+    inlineCodes.forEach((code, i) => {
+        const escapedCode = escapeHtml(code);
+        html = html.replace(`__INLINE_CODE_${i}__`, `<code>${escapedCode}</code>`);
+    });
+    
+    // Restore LaTeX blocks - render with KaTeX if available
+    latexBlocks.forEach((latex, i) => {
+        const rendered = renderLatex(latex, true);
+        html = html.replace(`<p>__LATEX_BLOCK_${i}__</p>`, `<div class="latex-block">${rendered}</div>`);
+        html = html.replace(`__LATEX_BLOCK_${i}__`, `<div class="latex-block">${rendered}</div>`);
+    });
+    
+    // Restore inline LaTeX
+    inlineLatex.forEach((latex, i) => {
+        const rendered = renderLatex(latex, false);
+        html = html.replace(`__INLINE_LATEX_${i}__`, `<span class="latex-inline">${rendered}</span>`);
+    });
+    
+    // Fix any remaining paragraph issues around divs
+    html = html.replace(/<p>(<div)/g, '$1');
+    html = html.replace(/(<\/div>)<\/p>/g, '$1');
     html = html.replace(/<p>(<pre>)/g, '$1');
     html = html.replace(/(<\/pre>)<\/p>/g, '$1');
-    html = html.replace(/<p>(<hr>)<\/p>/g, '$1');
-    html = html.replace(/<p>(<div class="latex-block">)/g, '$1');
-    html = html.replace(/(<\/div>)<\/p>/g, '$1');
     
     return html;
+}
+
+// Render LaTeX using KaTeX if available, otherwise show raw
+function renderLatex(latex, displayMode) {
+    if (typeof katex !== 'undefined') {
+        try {
+            return katex.renderToString(latex, {
+                throwOnError: false,
+                displayMode: displayMode
+            });
+        } catch (e) {
+            console.error('KaTeX error:', e);
+            return escapeHtml(latex);
+        }
+    }
+    // Fallback: just show the raw LaTeX
+    return escapeHtml(latex);
 }
 
 function escapeHtml(text) {
