@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="../styles/generic.css?v=24">
-    <link rel="stylesheet" href="../styles/const.css?v=24">
-    <title>Art - o7m.dev</title>
+    <link rel="stylesheet" href="../styles/generic.css?v=25">
+    <link rel="stylesheet" href="../styles/explain.css?v=1">
+    <title>Article - Explain-TM</title>
 </head>
 
 <body>
@@ -36,12 +36,16 @@
         </nav>
     </header>
 
-    <div id="top-wip-container">
-        <div id="main-title">
-            <h1 id="txt">WIP</h1>
+    <div class="explain-container">
+        <div id="article-view" class="article-view">
+            <div class="loading">Loading article...</div>
         </div>
-        <img src="../assets/imgs/const.png">
     </div>
+
+    <script src="../scripts/js/explain.js?v=1"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', initArticleView);
+    </script>
 </body>
 
 </html>
