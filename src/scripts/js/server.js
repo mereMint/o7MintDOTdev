@@ -3195,76 +3195,191 @@ app.get('/api/rhythm/pp/song/:songId', async (req, res) => {
 // Anidle Game API
 // =============================================
 
-// Curated list of popular anime (no sequels/alternatives)
-// This is a static list that represents first seasons only
-const anidleAnimeList = [
-    { mal_id: 1, title: "Cowboy Bebop", title_english: "Cowboy Bebop", score: 8.75, studio: "Sunrise", genres: ["Action", "Adventure", "Sci-Fi"], release_date: "1998", source: "Original", tags: [{ name: "Space", primary: true }, { name: "Bounty Hunter", primary: true }, { name: "Jazz", primary: false }, { name: "Episodic", primary: false }], image: "https://cdn.myanimelist.net/images/anime/4/19644.jpg", synopsis: "In the year 2071, humanity has colonized several planets surrounding Earth. Enter Spike Spiegel, a bounty hunter with a history of violence.", main_character: { name: "Spike Spiegel", image: "https://cdn.myanimelist.net/images/characters/4/50197.jpg" } },
-    { mal_id: 5, title: "Cowboy Bebop: Tengoku no Tobira", title_english: "Cowboy Bebop: The Movie", score: 8.38, studio: "Bones", genres: ["Action", "Drama", "Mystery", "Sci-Fi"], release_date: "2001", source: "Original", tags: [{ name: "Space", primary: true }, { name: "Terrorism", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1439/93480.jpg", synopsis: "The Bebop crew is broke as usual, but the latest criminal is worth big bucks.", main_character: { name: "Spike Spiegel", image: "https://cdn.myanimelist.net/images/characters/4/50197.jpg" } },
-    { mal_id: 21, title: "One Punch Man", title_english: "One Punch Man", score: 8.50, studio: "Madhouse", genres: ["Action", "Comedy"], release_date: "2015", source: "Manga", tags: [{ name: "Superhero", primary: true }, { name: "Parody", primary: true }, { name: "Overpowered", primary: false }, { name: "Comedy", primary: false }], image: "https://cdn.myanimelist.net/images/anime/12/76049.jpg", synopsis: "Saitama, a bald hero, defeats all his enemies with a single punch but seeks a worthy opponent.", main_character: { name: "Saitama", image: "https://cdn.myanimelist.net/images/characters/11/294388.jpg" } },
-    { mal_id: 1735, title: "Naruto", title_english: "Naruto", score: 8.00, studio: "Pierrot", genres: ["Action", "Adventure", "Fantasy"], release_date: "2002", source: "Manga", tags: [{ name: "Ninja", primary: true }, { name: "Shounen", primary: true }, { name: "Training", primary: false }, { name: "Rivalry", primary: false }], image: "https://cdn.myanimelist.net/images/anime/13/17405.jpg", synopsis: "Naruto Uzumaki, a young ninja shunned by his village, dreams of becoming the Hokage.", main_character: { name: "Naruto Uzumaki", image: "https://cdn.myanimelist.net/images/characters/2/284121.jpg" } },
-    { mal_id: 11061, title: "Hunter x Hunter (2011)", title_english: "Hunter x Hunter", score: 9.04, studio: "Madhouse", genres: ["Action", "Adventure", "Fantasy"], release_date: "2011", source: "Manga", tags: [{ name: "Shounen", primary: true }, { name: "Adventure", primary: true }, { name: "Dark", primary: false }, { name: "Strategy", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1337/99013.jpg", synopsis: "Gon Freecss discovers his father is a legendary Hunter and sets out to become one himself.", main_character: { name: "Gon Freecss", image: "https://cdn.myanimelist.net/images/characters/11/174517.jpg" } },
-    { mal_id: 20, title: "Naruto: Shippuuden", title_english: "Naruto Shippuden", score: 8.25, studio: "Pierrot", genres: ["Action", "Adventure", "Fantasy"], release_date: "2007", source: "Manga", tags: [{ name: "Ninja", primary: true }, { name: "War", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1565/111305.jpg", synopsis: "Naruto returns after training to face the Akatsuki organization.", main_character: { name: "Naruto Uzumaki", image: "https://cdn.myanimelist.net/images/characters/2/284121.jpg" } },
-    { mal_id: 16498, title: "Shingeki no Kyojin", title_english: "Attack on Titan", score: 8.54, studio: "Wit Studio", genres: ["Action", "Drama", "Fantasy", "Mystery"], release_date: "2013", source: "Manga", tags: [{ name: "Post-Apocalyptic", primary: true }, { name: "Military", primary: true }, { name: "Gore", primary: false }, { name: "Survival", primary: false }], image: "https://cdn.myanimelist.net/images/anime/10/47347.jpg", synopsis: "Humanity lives within enormous walled cities to protect themselves from Titans, gigantic humanoid creatures.", main_character: { name: "Eren Yeager", image: "https://cdn.myanimelist.net/images/characters/10/216895.jpg" } },
-    { mal_id: 5114, title: "Fullmetal Alchemist: Brotherhood", title_english: "Fullmetal Alchemist: Brotherhood", score: 9.10, studio: "Bones", genres: ["Action", "Adventure", "Drama", "Fantasy"], release_date: "2009", source: "Manga", tags: [{ name: "Alchemy", primary: true }, { name: "Military", primary: true }, { name: "Brothers", primary: false }, { name: "Dark Fantasy", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1223/96541.jpg", synopsis: "Two brothers search for the Philosopher's Stone to restore their bodies after a failed alchemy experiment.", main_character: { name: "Edward Elric", image: "https://cdn.myanimelist.net/images/characters/9/72533.jpg" } },
-    { mal_id: 38000, title: "Kimetsu no Yaiba", title_english: "Demon Slayer", score: 8.45, studio: "ufotable", genres: ["Action", "Fantasy"], release_date: "2019", source: "Manga", tags: [{ name: "Demons", primary: true }, { name: "Historical", primary: true }, { name: "Swordplay", primary: false }, { name: "Family", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1286/99889.jpg", synopsis: "Tanjiro Kamado becomes a demon slayer to avenge his family and cure his sister.", main_character: { name: "Tanjiro Kamado", image: "https://cdn.myanimelist.net/images/characters/6/386735.jpg" } },
-    { mal_id: 9253, title: "Steins;Gate", title_english: "Steins;Gate", score: 9.08, studio: "White Fox", genres: ["Drama", "Sci-Fi", "Suspense"], release_date: "2011", source: "Visual novel", tags: [{ name: "Time Travel", primary: true }, { name: "Thriller", primary: true }, { name: "Science", primary: false }, { name: "Conspiracy", primary: false }], image: "https://cdn.myanimelist.net/images/anime/5/73199.jpg", synopsis: "A self-proclaimed mad scientist discovers he can send messages to the past using a microwave.", main_character: { name: "Rintarou Okabe", image: "https://cdn.myanimelist.net/images/characters/6/122643.jpg" } },
-    { mal_id: 1575, title: "Code Geass: Hangyaku no Lelouch", title_english: "Code Geass: Lelouch of the Rebellion", score: 8.70, studio: "Sunrise", genres: ["Action", "Drama", "Sci-Fi"], release_date: "2006", source: "Original", tags: [{ name: "Mecha", primary: true }, { name: "Military", primary: true }, { name: "Strategy", primary: false }, { name: "Supernatural Power", primary: false }], image: "https://cdn.myanimelist.net/images/anime/5/50331.jpg", synopsis: "Lelouch gains the power of Geass and leads a rebellion against the Holy Britannian Empire.", main_character: { name: "Lelouch Lamperouge", image: "https://cdn.myanimelist.net/images/characters/8/406163.jpg" } },
-    { mal_id: 22319, title: "Tokyo Ghoul", title_english: "Tokyo Ghoul", score: 7.79, studio: "Pierrot", genres: ["Action", "Drama", "Horror", "Supernatural"], release_date: "2014", source: "Manga", tags: [{ name: "Gore", primary: true }, { name: "Psychological", primary: true }, { name: "Urban Fantasy", primary: false }, { name: "Identity", primary: false }], image: "https://cdn.myanimelist.net/images/anime/5/64449.jpg", synopsis: "Ken Kaneki becomes a half-ghoul after a deadly encounter and struggles with his new identity.", main_character: { name: "Ken Kaneki", image: "https://cdn.myanimelist.net/images/characters/9/251339.jpg" } },
-    { mal_id: 2904, title: "Code Geass: Hangyaku no Lelouch R2", title_english: "Code Geass: Lelouch of the Rebellion R2", score: 8.91, studio: "Sunrise", genres: ["Action", "Drama", "Sci-Fi"], release_date: "2008", source: "Original", tags: [{ name: "Mecha", primary: true }, { name: "War", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1088/135089.jpg", synopsis: "Lelouch continues his rebellion against Britannia in this sequel.", main_character: { name: "Lelouch Lamperouge", image: "https://cdn.myanimelist.net/images/characters/8/406163.jpg" } },
-    { mal_id: 30276, title: "One Punch Man 2nd Season", title_english: "One Punch Man Season 2", score: 7.43, studio: "J.C.Staff", genres: ["Action", "Comedy"], release_date: "2019", source: "Manga", tags: [{ name: "Superhero", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1247/117004.jpg", synopsis: "Saitama continues his hero work in the second season.", main_character: { name: "Saitama", image: "https://cdn.myanimelist.net/images/characters/11/294388.jpg" } },
-    { mal_id: 31964, title: "Boku no Hero Academia", title_english: "My Hero Academia", score: 7.95, studio: "Bones", genres: ["Action", "Comedy"], release_date: "2016", source: "Manga", tags: [{ name: "Superhero", primary: true }, { name: "School", primary: true }, { name: "Shounen", primary: false }, { name: "Underdog", primary: false }], image: "https://cdn.myanimelist.net/images/anime/10/78745.jpg", synopsis: "Izuku Midoriya, born without powers, dreams of becoming a hero in a world where superpowers are common.", main_character: { name: "Izuku Midoriya", image: "https://cdn.myanimelist.net/images/characters/7/299404.jpg" } },
-    { mal_id: 40748, title: "Jujutsu Kaisen", title_english: "Jujutsu Kaisen", score: 8.60, studio: "MAPPA", genres: ["Action", "Fantasy"], release_date: "2020", source: "Manga", tags: [{ name: "Curses", primary: true }, { name: "School", primary: true }, { name: "Dark", primary: false }, { name: "Supernatural", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1171/109222.jpg", synopsis: "Yuji Itadori swallows a cursed finger and becomes host to a powerful curse.", main_character: { name: "Yuji Itadori", image: "https://cdn.myanimelist.net/images/characters/6/467646.jpg" } },
-    { mal_id: 21, title: "One Piece", title_english: "One Piece", score: 8.71, studio: "Toei Animation", genres: ["Action", "Adventure", "Fantasy"], release_date: "1999", source: "Manga", tags: [{ name: "Pirates", primary: true }, { name: "Shounen", primary: true }, { name: "Treasure", primary: false }, { name: "Friendship", primary: false }], image: "https://cdn.myanimelist.net/images/anime/6/73245.jpg", synopsis: "Monkey D. Luffy sets out to become the King of Pirates and find the legendary One Piece.", main_character: { name: "Monkey D. Luffy", image: "https://cdn.myanimelist.net/images/characters/9/310307.jpg" } },
-    { mal_id: 269, title: "Bleach", title_english: "Bleach", score: 7.92, studio: "Pierrot", genres: ["Action", "Adventure", "Fantasy"], release_date: "2004", source: "Manga", tags: [{ name: "Shinigami", primary: true }, { name: "Shounen", primary: true }, { name: "Soul Society", primary: false }, { name: "Swordplay", primary: false }], image: "https://cdn.myanimelist.net/images/anime/3/40451.jpg", synopsis: "Ichigo Kurosaki gains Soul Reaper powers and protects the living world from evil spirits.", main_character: { name: "Ichigo Kurosaki", image: "https://cdn.myanimelist.net/images/characters/2/81377.jpg" } },
-    { mal_id: 10620, title: "Mirai Nikki", title_english: "Future Diary", score: 7.42, studio: "Asread", genres: ["Action", "Mystery", "Supernatural", "Suspense"], release_date: "2011", source: "Manga", tags: [{ name: "Survival Game", primary: true }, { name: "Yandere", primary: true }, { name: "Psychological", primary: false }, { name: "Gore", primary: false }], image: "https://cdn.myanimelist.net/images/anime/13/33465.jpg", synopsis: "Yukiteru is thrust into a survival game where 12 people fight to become God.", main_character: { name: "Yuno Gasai", image: "https://cdn.myanimelist.net/images/characters/4/127183.jpg" } },
-    { mal_id: 32281, title: "Kimi no Na wa.", title_english: "Your Name", score: 8.83, studio: "CoMix Wave Films", genres: ["Drama", "Romance", "Supernatural"], release_date: "2016", source: "Original", tags: [{ name: "Body Swap", primary: true }, { name: "Time", primary: true }, { name: "Coming of Age", primary: false }, { name: "Beautiful Art", primary: false }], image: "https://cdn.myanimelist.net/images/anime/5/87048.jpg", synopsis: "Two teenagers discover they are swapping bodies and must find each other before it's too late.", main_character: { name: "Mitsuha Miyamizu", image: "https://cdn.myanimelist.net/images/characters/14/316108.jpg" } },
-    { mal_id: 28851, title: "Koe no Katachi", title_english: "A Silent Voice", score: 8.94, studio: "Kyoto Animation", genres: ["Drama", "Romance"], release_date: "2016", source: "Manga", tags: [{ name: "Bullying", primary: true }, { name: "Redemption", primary: true }, { name: "Deaf", primary: false }, { name: "Drama", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1122/96435.jpg", synopsis: "A former bully seeks to make amends with a deaf girl he tormented in elementary school.", main_character: { name: "Shouko Nishimiya", image: "https://cdn.myanimelist.net/images/characters/16/322892.jpg" } },
-    { mal_id: 35247, title: "Houseki no Kuni", title_english: "Land of the Lustrous", score: 8.35, studio: "Orange", genres: ["Action", "Drama", "Fantasy", "Mystery"], release_date: "2017", source: "Manga", tags: [{ name: "Gems", primary: true }, { name: "CGI", primary: true }, { name: "Philosophy", primary: false }, { name: "Identity", primary: false }], image: "https://cdn.myanimelist.net/images/anime/8/88147.jpg", synopsis: "Immortal gem beings fight against the Lunarians who seek to destroy them.", main_character: { name: "Phosphophyllite", image: "https://cdn.myanimelist.net/images/characters/12/346129.jpg" } },
-    { mal_id: 33, title: "Kenpuu Denki Berserk", title_english: "Berserk", score: 8.55, studio: "OLM", genres: ["Action", "Adventure", "Drama", "Fantasy", "Horror"], release_date: "1997", source: "Manga", tags: [{ name: "Dark Fantasy", primary: true }, { name: "Gore", primary: true }, { name: "Medieval", primary: false }, { name: "Tragedy", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1384/119988.jpg", synopsis: "Guts, a lone mercenary, joins the Band of the Hawk and becomes embroiled in a dark fate.", main_character: { name: "Guts", image: "https://cdn.myanimelist.net/images/characters/2/284121.jpg" } },
-    { mal_id: 32, title: "Neon Genesis Evangelion", title_english: "Neon Genesis Evangelion", score: 8.35, studio: "Gainax", genres: ["Action", "Drama", "Sci-Fi"], release_date: "1995", source: "Original", tags: [{ name: "Mecha", primary: true }, { name: "Psychological", primary: true }, { name: "Post-Apocalyptic", primary: false }, { name: "Depression", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1314/108941.jpg", synopsis: "Shinji Ikari is recruited by his father to pilot a giant robot and fight mysterious beings called Angels.", main_character: { name: "Shinji Ikari", image: "https://cdn.myanimelist.net/images/characters/8/338548.jpg" } },
-    { mal_id: 199, title: "Sen to Chihiro no Kamikakushi", title_english: "Spirited Away", score: 8.78, studio: "Studio Ghibli", genres: ["Adventure", "Drama", "Fantasy"], release_date: "2001", source: "Original", tags: [{ name: "Spirit World", primary: true }, { name: "Coming of Age", primary: true }, { name: "Magic", primary: false }, { name: "Japanese Folklore", primary: false }], image: "https://cdn.myanimelist.net/images/anime/6/79597.jpg", synopsis: "Chihiro enters a spirit world and must work to free her parents and herself.", main_character: { name: "Chihiro Ogino", image: "https://cdn.myanimelist.net/images/characters/2/80178.jpg" } },
-    { mal_id: 1535, title: "Death Note", title_english: "Death Note", score: 8.62, studio: "Madhouse", genres: ["Supernatural", "Suspense"], release_date: "2006", source: "Manga", tags: [{ name: "Psychological", primary: true }, { name: "Cat and Mouse", primary: true }, { name: "Mind Games", primary: false }, { name: "Dark", primary: false }], image: "https://cdn.myanimelist.net/images/anime/9/9453.jpg", synopsis: "Light Yagami finds a notebook that kills anyone whose name is written in it.", main_character: { name: "Light Yagami", image: "https://cdn.myanimelist.net/images/characters/2/84177.jpg" } },
-    { mal_id: 40456, title: "Spy x Family", title_english: "Spy x Family", score: 8.51, studio: "Wit Studio", genres: ["Action", "Comedy"], release_date: "2022", source: "Manga", tags: [{ name: "Family", primary: true }, { name: "Espionage", primary: true }, { name: "Cold War", primary: false }, { name: "Wholesome", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1441/122795.jpg", synopsis: "A spy must create a fake family to complete his mission, unaware his wife is an assassin and his daughter is a telepath.", main_character: { name: "Anya Forger", image: "https://cdn.myanimelist.net/images/characters/8/461346.jpg" } },
-    { mal_id: 48583, title: "Chainsaw Man", title_english: "Chainsaw Man", score: 8.54, studio: "MAPPA", genres: ["Action", "Fantasy"], release_date: "2022", source: "Manga", tags: [{ name: "Demons", primary: true }, { name: "Gore", primary: true }, { name: "Dark", primary: false }, { name: "Horror", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1806/126216.jpg", synopsis: "Denji becomes a devil hunter after merging with his chainsaw devil pet.", main_character: { name: "Denji", image: "https://cdn.myanimelist.net/images/characters/3/489135.jpg" } },
-    { mal_id: 42938, title: "Fruits Basket", title_english: "Fruits Basket", score: 8.22, studio: "TMS Entertainment", genres: ["Drama", "Romance", "Supernatural"], release_date: "2019", source: "Manga", tags: [{ name: "Zodiac", primary: true }, { name: "Family", primary: true }, { name: "Slice of Life", primary: false }, { name: "Healing", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1447/99827.jpg", synopsis: "Tohru Honda lives with a family cursed to turn into zodiac animals when hugged.", main_character: { name: "Tohru Honda", image: "https://cdn.myanimelist.net/images/characters/8/355958.jpg" } },
-    { mal_id: 20583, title: "Haikyuu!!", title_english: "Haikyu!!", score: 8.44, studio: "Production I.G", genres: ["Sports"], release_date: "2014", source: "Manga", tags: [{ name: "Volleyball", primary: true }, { name: "Team", primary: true }, { name: "Shounen", primary: false }, { name: "Competition", primary: false }], image: "https://cdn.myanimelist.net/images/anime/7/76014.jpg", synopsis: "Shoyo Hinata joins a high school volleyball team to prove that height isn't everything.", main_character: { name: "Shouyou Hinata", image: "https://cdn.myanimelist.net/images/characters/11/280453.jpg" } },
-    { mal_id: 37521, title: "Vinland Saga", title_english: "Vinland Saga", score: 8.72, studio: "Wit Studio", genres: ["Action", "Adventure", "Drama"], release_date: "2019", source: "Manga", tags: [{ name: "Vikings", primary: true }, { name: "Historical", primary: true }, { name: "Revenge", primary: false }, { name: "War", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1500/103005.jpg", synopsis: "Thorfinn seeks revenge against the man who killed his father in the Viking era.", main_character: { name: "Thorfinn", image: "https://cdn.myanimelist.net/images/characters/9/379687.jpg" } },
-    { mal_id: 9989, title: "Ano Hi Mita Hana no Namae wo Bokutachi wa Mada Shiranai.", title_english: "Anohana: The Flower We Saw That Day", score: 8.41, studio: "A-1 Pictures", genres: ["Drama", "Supernatural"], release_date: "2011", source: "Original", tags: [{ name: "Friendship", primary: true }, { name: "Grief", primary: true }, { name: "Ghost", primary: false }, { name: "Coming of Age", primary: false }], image: "https://cdn.myanimelist.net/images/anime/7/29949.jpg", synopsis: "A group of childhood friends reunite when the ghost of their deceased friend appears.", main_character: { name: "Meiko Honma", image: "https://cdn.myanimelist.net/images/characters/7/112837.jpg" } },
-    { mal_id: 35790, title: "Yakusoku no Neverland", title_english: "The Promised Neverland", score: 8.50, studio: "CloverWorks", genres: ["Mystery", "Sci-Fi", "Suspense"], release_date: "2019", source: "Manga", tags: [{ name: "Orphanage", primary: true }, { name: "Survival", primary: true }, { name: "Thriller", primary: false }, { name: "Strategy", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1830/118780.jpg", synopsis: "Children at an orphanage discover a dark secret and plan their escape.", main_character: { name: "Emma", image: "https://cdn.myanimelist.net/images/characters/5/361371.jpg" } },
-    { mal_id: 24833, title: "Ansatsu Kyoushitsu", title_english: "Assassination Classroom", score: 8.08, studio: "Lerche", genres: ["Action", "Comedy", "Sci-Fi"], release_date: "2015", source: "Manga", tags: [{ name: "School", primary: true }, { name: "Assassination", primary: true }, { name: "Comedy", primary: false }, { name: "Teacher", primary: false }], image: "https://cdn.myanimelist.net/images/anime/5/75639.jpg", synopsis: "Students must assassinate their alien teacher before he destroys Earth.", main_character: { name: "Koro-sensei", image: "https://cdn.myanimelist.net/images/characters/15/280306.jpg" } },
-    { mal_id: 39535, title: "Mushoku Tensei: Isekai Ittara Honki Dasu", title_english: "Mushoku Tensei: Jobless Reincarnation", score: 8.41, studio: "Studio Bind", genres: ["Adventure", "Drama", "Fantasy"], release_date: "2021", source: "Light novel", tags: [{ name: "Isekai", primary: true }, { name: "Reincarnation", primary: true }, { name: "Magic", primary: false }, { name: "Coming of Age", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1530/117776.jpg", synopsis: "A 34-year-old NEET is reincarnated in a fantasy world and decides to live life to the fullest.", main_character: { name: "Rudeus Greyrat", image: "https://cdn.myanimelist.net/images/characters/12/426178.jpg" } },
-    { mal_id: 44511, title: "Sono Bisque Doll wa Koi wo Suru", title_english: "My Dress-Up Darling", score: 8.18, studio: "CloverWorks", genres: ["Comedy", "Romance"], release_date: "2022", source: "Manga", tags: [{ name: "Cosplay", primary: true }, { name: "Romance", primary: true }, { name: "Slice of Life", primary: false }, { name: "Wholesome", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1179/119897.jpg", synopsis: "A doll-making student helps a popular girl with her cosplay hobby.", main_character: { name: "Marin Kitagawa", image: "https://cdn.myanimelist.net/images/characters/2/467012.jpg" } },
-    { mal_id: 21881, title: "Overlord", title_english: "Overlord", score: 7.94, studio: "Madhouse", genres: ["Action", "Fantasy"], release_date: "2015", source: "Light novel", tags: [{ name: "Isekai", primary: true }, { name: "Game World", primary: true }, { name: "Overpowered", primary: false }, { name: "Dark", primary: false }], image: "https://cdn.myanimelist.net/images/anime/7/88019.jpg", synopsis: "A player is trapped in his game world as an undead overlord and builds a kingdom.", main_character: { name: "Ainz Ooal Gown", image: "https://cdn.myanimelist.net/images/characters/11/291665.jpg" } },
-    { mal_id: 30831, title: "Kono Subarashii Sekai ni Shukufuku wo!", title_english: "KONOSUBA", score: 8.11, studio: "Studio Deen", genres: ["Adventure", "Comedy", "Fantasy"], release_date: "2016", source: "Light novel", tags: [{ name: "Isekai", primary: true }, { name: "Parody", primary: true }, { name: "Comedy", primary: false }, { name: "Dysfunctional Team", primary: false }], image: "https://cdn.myanimelist.net/images/anime/8/77831.jpg", synopsis: "A teenager is reincarnated in a fantasy world with a useless goddess.", main_character: { name: "Kazuma Satou", image: "https://cdn.myanimelist.net/images/characters/13/291295.jpg" } },
-    { mal_id: 22535, title: "Kiseijuu: Sei no Kakuritsu", title_english: "Parasyte -the maxim-", score: 8.35, studio: "Madhouse", genres: ["Action", "Horror", "Sci-Fi"], release_date: "2014", source: "Manga", tags: [{ name: "Parasites", primary: true }, { name: "Body Horror", primary: true }, { name: "Psychological", primary: false }, { name: "Survival", primary: false }], image: "https://cdn.myanimelist.net/images/anime/3/73178.jpg", synopsis: "Shinichi's hand is taken over by a parasitic alien, and they must coexist.", main_character: { name: "Shinichi Izumi", image: "https://cdn.myanimelist.net/images/characters/2/264549.jpg" } },
-    { mal_id: 37430, title: "Tensei shitara Slime Datta Ken", title_english: "That Time I Got Reincarnated as a Slime", score: 8.14, studio: "8bit", genres: ["Action", "Adventure", "Comedy", "Fantasy"], release_date: "2018", source: "Light novel", tags: [{ name: "Isekai", primary: true }, { name: "Reincarnation", primary: true }, { name: "Kingdom Building", primary: false }, { name: "Overpowered", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1694/93337.jpg", synopsis: "A man is reincarnated as a slime in a fantasy world and gains incredible powers.", main_character: { name: "Rimuru Tempest", image: "https://cdn.myanimelist.net/images/characters/15/368585.jpg" } },
-    { mal_id: 14719, title: "JoJo no Kimyou na Bouken", title_english: "JoJo's Bizarre Adventure", score: 7.98, studio: "David Production", genres: ["Action", "Adventure", "Supernatural"], release_date: "2012", source: "Manga", tags: [{ name: "Bizarre", primary: true }, { name: "Vampires", primary: true }, { name: "Generational", primary: false }, { name: "Poses", primary: false }], image: "https://cdn.myanimelist.net/images/anime/3/40409.jpg", synopsis: "The Joestar family battles supernatural threats across generations.", main_character: { name: "Jonathan Joestar", image: "https://cdn.myanimelist.net/images/characters/9/261879.jpg" } },
-    { mal_id: 23755, title: "Nanatsu no Taizai", title_english: "The Seven Deadly Sins", score: 7.72, studio: "A-1 Pictures", genres: ["Action", "Adventure", "Fantasy"], release_date: "2014", source: "Manga", tags: [{ name: "Knights", primary: true }, { name: "Fantasy", primary: true }, { name: "Shounen", primary: false }, { name: "Medieval", primary: false }], image: "https://cdn.myanimelist.net/images/anime/8/65409.jpg", synopsis: "Princess Elizabeth seeks the Seven Deadly Sins to help reclaim her kingdom.", main_character: { name: "Meliodas", image: "https://cdn.myanimelist.net/images/characters/4/266289.jpg" } },
-    { mal_id: 4224, title: "Toradora!", title_english: "Toradora!", score: 8.07, studio: "J.C.Staff", genres: ["Comedy", "Drama", "Romance"], release_date: "2008", source: "Light novel", tags: [{ name: "School", primary: true }, { name: "Tsundere", primary: true }, { name: "Romance", primary: false }, { name: "Comedy", primary: false }], image: "https://cdn.myanimelist.net/images/anime/13/22128.jpg", synopsis: "Two unlikely students team up to help each other confess to their crushes.", main_character: { name: "Taiga Aisaka", image: "https://cdn.myanimelist.net/images/characters/13/119052.jpg" } },
-    { mal_id: 34096, title: "Gintama.", title_english: "Gintama", score: 9.06, studio: "Bandai Namco Pictures", genres: ["Action", "Comedy", "Sci-Fi"], release_date: "2017", source: "Manga", tags: [{ name: "Parody", primary: true }, { name: "Samurai", primary: true }, { name: "Comedy", primary: false }, { name: "Historical", primary: false }], image: "https://cdn.myanimelist.net/images/anime/3/83528.jpg", synopsis: "A silver-haired samurai runs an odd jobs business in an alien-occupied Japan.", main_character: { name: "Gintoki Sakata", image: "https://cdn.myanimelist.net/images/characters/15/63558.jpg" } },
-    { mal_id: 52299, title: "Oshi no Ko", title_english: "Oshi No Ko", score: 8.55, studio: "Doga Kobo", genres: ["Drama", "Supernatural"], release_date: "2023", source: "Manga", tags: [{ name: "Idol", primary: true }, { name: "Reincarnation", primary: true }, { name: "Mystery", primary: false }, { name: "Entertainment Industry", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1812/134736.jpg", synopsis: "A doctor reincarnated as the child of his favorite idol uncovers dark secrets of the entertainment industry.", main_character: { name: "Aqua Hoshino", image: "https://cdn.myanimelist.net/images/characters/6/506389.jpg" } },
-    { mal_id: 50265, title: "Bocchi the Rock!", title_english: "Bocchi the Rock!", score: 8.77, studio: "CloverWorks", genres: ["Comedy"], release_date: "2022", source: "Manga", tags: [{ name: "Music", primary: true }, { name: "Band", primary: true }, { name: "Social Anxiety", primary: false }, { name: "Slice of Life", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1448/127956.jpg", synopsis: "A socially anxious girl joins a rock band to become a guitar hero.", main_character: { name: "Hitori Gotou", image: "https://cdn.myanimelist.net/images/characters/16/497656.jpg" } },
-    { mal_id: 23273, title: "Shigatsu wa Kimi no Uso", title_english: "Your Lie in April", score: 8.64, studio: "A-1 Pictures", genres: ["Drama", "Romance"], release_date: "2014", source: "Manga", tags: [{ name: "Music", primary: true }, { name: "Piano", primary: true }, { name: "Drama", primary: false }, { name: "Tragedy", primary: false }], image: "https://cdn.myanimelist.net/images/anime/3/67177.jpg", synopsis: "A piano prodigy who lost his ability to hear music meets a free-spirited violinist.", main_character: { name: "Kaori Miyazono", image: "https://cdn.myanimelist.net/images/characters/7/268187.jpg" } },
-    { mal_id: 15051, title: "Kakumeiki Valvrave", title_english: "Valvrave the Liberator", score: 6.90, studio: "Sunrise", genres: ["Action", "Sci-Fi"], release_date: "2013", source: "Original", tags: [{ name: "Mecha", primary: true }, { name: "Space", primary: true }], image: "https://cdn.myanimelist.net/images/anime/2/46621.jpg", synopsis: "Students pilot mysterious mechas to defend their space colony.", main_character: { name: "Haruto Tokishima", image: "https://cdn.myanimelist.net/images/characters/11/203441.jpg" } }
-];
+// Anime data cache - fetched from Jikan API (MyAnimeList)
+let anidleAnimeCache = [];
+let anidleCacheLastUpdate = null;
+const ANIDLE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const JIKAN_API_BASE = 'https://api.jikan.moe/v4';
 
-// Filter to only include first seasons (no sequels)
-const anidleValidAnime = anidleAnimeList.filter(anime => {
-    const title = anime.title.toLowerCase();
-    // Exclude sequels and alternatives
+// Helper to delay between API calls (Jikan has rate limits)
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Check if anime is a sequel/alternative based on title patterns
+function isSequelOrAlternative(anime) {
+    const title = (anime.title || '').toLowerCase();
     const sequelPatterns = [
-        'season 2', 'season 3', 'season 4', 'season 5',
-        '2nd season', '3rd season', '4th season',
-        'part 2', 'part 3', 'part ii', 'part iii',
-        'the final', 'final season',
+        'season 2', 'season 3', 'season 4', 'season 5', 'season 6',
+        '2nd season', '3rd season', '4th season', '5th season',
+        'part 2', 'part 3', 'part ii', 'part iii', 'part iv',
+        'the final', 'final season', 'cour 2',
         ': r2', ': shippuuden', ': shippuden',
-        'movie', 'ova', 'special'
+        'movie', 'ova', 'special', 'recap',
+        ' ii', ' iii', ' iv', ' 2:', ' 3:', ' 4:'
     ];
-    return !sequelPatterns.some(pattern => title.includes(pattern));
-});
+    return sequelPatterns.some(pattern => title.includes(pattern));
+}
+
+// Fetch anime from Jikan API and transform to our format
+async function fetchAnimeFromJikan(page = 1) {
+    try {
+        // Fetch top anime by score, TV only, ordered by popularity
+        const url = `${JIKAN_API_BASE}/top/anime?type=tv&filter=bypopularity&page=${page}&limit=25`;
+        const response = await axios.get(url, { timeout: 10000 });
+        
+        if (!response.data || !response.data.data) {
+            return [];
+        }
+        
+        const animeList = response.data.data;
+        const transformedAnime = [];
+        
+        for (const anime of animeList) {
+            // Skip sequels and alternatives
+            if (isSequelOrAlternative(anime)) continue;
+            
+            // Extract studio name
+            const studio = anime.studios && anime.studios.length > 0 
+                ? anime.studios[0].name 
+                : 'Unknown';
+            
+            // Extract genres
+            const genres = (anime.genres || []).map(g => g.name);
+            
+            // Extract themes as tags (primary) and demographics as tags (secondary)
+            const tags = [];
+            if (anime.themes) {
+                anime.themes.forEach(t => tags.push({ name: t.name, primary: true }));
+            }
+            if (anime.demographics) {
+                anime.demographics.forEach(d => tags.push({ name: d.name, primary: false }));
+            }
+            
+            // Get release year
+            const releaseDate = anime.aired?.from 
+                ? new Date(anime.aired.from).getFullYear().toString() 
+                : 'Unknown';
+            
+            transformedAnime.push({
+                mal_id: anime.mal_id,
+                title: anime.title,
+                title_english: anime.title_english || anime.title,
+                score: anime.score || 0,
+                studio: studio,
+                genres: genres,
+                release_date: releaseDate,
+                source: anime.source || 'Unknown',
+                tags: tags.slice(0, 6), // Limit to 6 tags
+                image: anime.images?.jpg?.image_url || anime.images?.jpg?.large_image_url,
+                synopsis: anime.synopsis ? anime.synopsis.substring(0, 300) + '...' : 'No synopsis available.',
+                main_character: null // Will be fetched separately if needed
+            });
+        }
+        
+        return transformedAnime;
+    } catch (error) {
+        console.error(`Error fetching anime from Jikan (page ${page}):`, error.message);
+        return [];
+    }
+}
+
+// Fetch main character for an anime
+async function fetchMainCharacter(malId) {
+    try {
+        const url = `${JIKAN_API_BASE}/anime/${malId}/characters`;
+        const response = await axios.get(url, { timeout: 10000 });
+        
+        if (response.data && response.data.data && response.data.data.length > 0) {
+            // Get the first main character or the most favorited one
+            const mainChar = response.data.data.find(c => c.role === 'Main') || response.data.data[0];
+            if (mainChar && mainChar.character) {
+                return {
+                    name: mainChar.character.name,
+                    image: mainChar.character.images?.jpg?.image_url
+                };
+            }
+        }
+        return null;
+    } catch (error) {
+        console.error(`Error fetching character for anime ${malId}:`, error.message);
+        return null;
+    }
+}
+
+// Initialize or refresh the anime cache
+async function refreshAnidleCache() {
+    console.log('[Anidle] Refreshing anime cache from Jikan API...');
+    const allAnime = [];
+    
+    // Fetch first 4 pages (100 anime, after filtering should be ~50-70)
+    for (let page = 1; page <= 4; page++) {
+        const anime = await fetchAnimeFromJikan(page);
+        allAnime.push(...anime);
+        
+        // Respect Jikan rate limit (3 requests per second)
+        if (page < 4) await delay(400);
+    }
+    
+    if (allAnime.length > 0) {
+        anidleAnimeCache = allAnime;
+        anidleCacheLastUpdate = Date.now();
+        console.log(`[Anidle] Cache refreshed with ${allAnime.length} anime`);
+    } else if (anidleAnimeCache.length === 0) {
+        // Use fallback data if API is unreachable and cache is empty
+        console.warn('[Anidle] Failed to fetch from API, using fallback data');
+        anidleAnimeCache = getAnidleFallbackData();
+        anidleCacheLastUpdate = Date.now();
+        console.log(`[Anidle] Loaded ${anidleAnimeCache.length} anime from fallback`);
+    } else {
+        console.warn('[Anidle] Failed to fetch anime, using existing cache');
+    }
+}
+
+// Fallback anime data in case API is unreachable
+function getAnidleFallbackData() {
+    return [
+        { mal_id: 5114, title: "Fullmetal Alchemist: Brotherhood", title_english: "Fullmetal Alchemist: Brotherhood", score: 9.10, studio: "Bones", genres: ["Action", "Adventure", "Drama", "Fantasy"], release_date: "2009", source: "Manga", tags: [{ name: "Military", primary: true }, { name: "Shounen", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1223/96541.jpg", synopsis: "Two brothers search for the Philosopher's Stone to restore their bodies after a failed alchemy experiment.", main_character: { name: "Edward Elric", image: "https://cdn.myanimelist.net/images/characters/9/72533.jpg" } },
+        { mal_id: 1535, title: "Death Note", title_english: "Death Note", score: 8.62, studio: "Madhouse", genres: ["Supernatural", "Suspense"], release_date: "2006", source: "Manga", tags: [{ name: "Psychological", primary: true }, { name: "Shounen", primary: false }], image: "https://cdn.myanimelist.net/images/anime/9/9453.jpg", synopsis: "Light Yagami finds a notebook that kills anyone whose name is written in it.", main_character: { name: "Light Yagami", image: "https://cdn.myanimelist.net/images/characters/2/84177.jpg" } },
+        { mal_id: 16498, title: "Shingeki no Kyojin", title_english: "Attack on Titan", score: 8.54, studio: "Wit Studio", genres: ["Action", "Drama", "Fantasy", "Mystery"], release_date: "2013", source: "Manga", tags: [{ name: "Military", primary: true }, { name: "Shounen", primary: false }], image: "https://cdn.myanimelist.net/images/anime/10/47347.jpg", synopsis: "Humanity lives within enormous walled cities to protect themselves from Titans.", main_character: { name: "Eren Yeager", image: "https://cdn.myanimelist.net/images/characters/10/216895.jpg" } },
+        { mal_id: 11061, title: "Hunter x Hunter (2011)", title_english: "Hunter x Hunter", score: 9.04, studio: "Madhouse", genres: ["Action", "Adventure", "Fantasy"], release_date: "2011", source: "Manga", tags: [{ name: "Shounen", primary: true }, { name: "Adventure", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1337/99013.jpg", synopsis: "Gon Freecss discovers his father is a legendary Hunter and sets out to become one himself.", main_character: { name: "Gon Freecss", image: "https://cdn.myanimelist.net/images/characters/11/174517.jpg" } },
+        { mal_id: 9253, title: "Steins;Gate", title_english: "Steins;Gate", score: 9.08, studio: "White Fox", genres: ["Drama", "Sci-Fi", "Suspense"], release_date: "2011", source: "Visual novel", tags: [{ name: "Time Travel", primary: true }, { name: "Thriller", primary: true }], image: "https://cdn.myanimelist.net/images/anime/5/73199.jpg", synopsis: "A self-proclaimed mad scientist discovers he can send messages to the past.", main_character: { name: "Rintarou Okabe", image: "https://cdn.myanimelist.net/images/characters/6/122643.jpg" } },
+        { mal_id: 38000, title: "Kimetsu no Yaiba", title_english: "Demon Slayer", score: 8.45, studio: "ufotable", genres: ["Action", "Fantasy"], release_date: "2019", source: "Manga", tags: [{ name: "Historical", primary: true }, { name: "Shounen", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1286/99889.jpg", synopsis: "Tanjiro Kamado becomes a demon slayer to avenge his family and cure his sister.", main_character: { name: "Tanjiro Kamado", image: "https://cdn.myanimelist.net/images/characters/6/386735.jpg" } },
+        { mal_id: 40748, title: "Jujutsu Kaisen", title_english: "Jujutsu Kaisen", score: 8.60, studio: "MAPPA", genres: ["Action", "Fantasy"], release_date: "2020", source: "Manga", tags: [{ name: "School", primary: true }, { name: "Supernatural", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1171/109222.jpg", synopsis: "Yuji Itadori swallows a cursed finger and becomes host to a powerful curse.", main_character: { name: "Yuji Itadori", image: "https://cdn.myanimelist.net/images/characters/6/467646.jpg" } },
+        { mal_id: 21, title: "One Piece", title_english: "One Piece", score: 8.71, studio: "Toei Animation", genres: ["Action", "Adventure", "Fantasy"], release_date: "1999", source: "Manga", tags: [{ name: "Pirates", primary: true }, { name: "Shounen", primary: false }], image: "https://cdn.myanimelist.net/images/anime/6/73245.jpg", synopsis: "Monkey D. Luffy sets out to become the King of Pirates.", main_character: { name: "Monkey D. Luffy", image: "https://cdn.myanimelist.net/images/characters/9/310307.jpg" } },
+        { mal_id: 1735, title: "Naruto", title_english: "Naruto", score: 8.00, studio: "Pierrot", genres: ["Action", "Adventure", "Fantasy"], release_date: "2002", source: "Manga", tags: [{ name: "Ninja", primary: true }, { name: "Shounen", primary: false }], image: "https://cdn.myanimelist.net/images/anime/13/17405.jpg", synopsis: "Naruto Uzumaki dreams of becoming the Hokage.", main_character: { name: "Naruto Uzumaki", image: "https://cdn.myanimelist.net/images/characters/2/284121.jpg" } },
+        { mal_id: 31964, title: "Boku no Hero Academia", title_english: "My Hero Academia", score: 7.95, studio: "Bones", genres: ["Action", "Comedy"], release_date: "2016", source: "Manga", tags: [{ name: "Superhero", primary: true }, { name: "School", primary: true }], image: "https://cdn.myanimelist.net/images/anime/10/78745.jpg", synopsis: "Izuku Midoriya dreams of becoming a hero in a world where superpowers are common.", main_character: { name: "Izuku Midoriya", image: "https://cdn.myanimelist.net/images/characters/7/299404.jpg" } },
+        { mal_id: 40456, title: "Spy x Family", title_english: "Spy x Family", score: 8.51, studio: "Wit Studio", genres: ["Action", "Comedy"], release_date: "2022", source: "Manga", tags: [{ name: "Family", primary: true }, { name: "Espionage", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1441/122795.jpg", synopsis: "A spy must create a fake family to complete his mission.", main_character: { name: "Anya Forger", image: "https://cdn.myanimelist.net/images/characters/8/461346.jpg" } },
+        { mal_id: 48583, title: "Chainsaw Man", title_english: "Chainsaw Man", score: 8.54, studio: "MAPPA", genres: ["Action", "Fantasy"], release_date: "2022", source: "Manga", tags: [{ name: "Gore", primary: true }, { name: "Supernatural", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1806/126216.jpg", synopsis: "Denji becomes a devil hunter after merging with his chainsaw devil pet.", main_character: { name: "Denji", image: "https://cdn.myanimelist.net/images/characters/3/489135.jpg" } },
+        { mal_id: 32281, title: "Kimi no Na wa.", title_english: "Your Name", score: 8.83, studio: "CoMix Wave Films", genres: ["Drama", "Romance", "Supernatural"], release_date: "2016", source: "Original", tags: [{ name: "Time", primary: true }, { name: "Romance", primary: false }], image: "https://cdn.myanimelist.net/images/anime/5/87048.jpg", synopsis: "Two teenagers discover they are swapping bodies.", main_character: { name: "Mitsuha Miyamizu", image: "https://cdn.myanimelist.net/images/characters/14/316108.jpg" } },
+        { mal_id: 37521, title: "Vinland Saga", title_english: "Vinland Saga", score: 8.72, studio: "Wit Studio", genres: ["Action", "Adventure", "Drama"], release_date: "2019", source: "Manga", tags: [{ name: "Vikings", primary: true }, { name: "Historical", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1500/103005.jpg", synopsis: "Thorfinn seeks revenge in the Viking era.", main_character: { name: "Thorfinn", image: "https://cdn.myanimelist.net/images/characters/9/379687.jpg" } },
+        { mal_id: 20583, title: "Haikyuu!!", title_english: "Haikyu!!", score: 8.44, studio: "Production I.G", genres: ["Sports"], release_date: "2014", source: "Manga", tags: [{ name: "Volleyball", primary: true }, { name: "Team", primary: true }], image: "https://cdn.myanimelist.net/images/anime/7/76014.jpg", synopsis: "Shoyo Hinata joins a high school volleyball team.", main_character: { name: "Shouyou Hinata", image: "https://cdn.myanimelist.net/images/characters/11/280453.jpg" } },
+        { mal_id: 1, title: "Cowboy Bebop", title_english: "Cowboy Bebop", score: 8.75, studio: "Sunrise", genres: ["Action", "Adventure", "Sci-Fi"], release_date: "1998", source: "Original", tags: [{ name: "Space", primary: true }, { name: "Adult Cast", primary: false }], image: "https://cdn.myanimelist.net/images/anime/4/19644.jpg", synopsis: "Bounty hunters travel through space catching criminals.", main_character: { name: "Spike Spiegel", image: "https://cdn.myanimelist.net/images/characters/4/50197.jpg" } },
+        { mal_id: 30831, title: "Kono Subarashii Sekai ni Shukufuku wo!", title_english: "KONOSUBA", score: 8.11, studio: "Studio Deen", genres: ["Adventure", "Comedy", "Fantasy"], release_date: "2016", source: "Light novel", tags: [{ name: "Isekai", primary: true }, { name: "Parody", primary: true }], image: "https://cdn.myanimelist.net/images/anime/8/77831.jpg", synopsis: "A teenager is reincarnated in a fantasy world with a useless goddess.", main_character: { name: "Kazuma Satou", image: "https://cdn.myanimelist.net/images/characters/13/291295.jpg" } },
+        { mal_id: 22535, title: "Kiseijuu: Sei no Kakuritsu", title_english: "Parasyte -the maxim-", score: 8.35, studio: "Madhouse", genres: ["Action", "Horror", "Sci-Fi"], release_date: "2014", source: "Manga", tags: [{ name: "Gore", primary: true }, { name: "Psychological", primary: false }], image: "https://cdn.myanimelist.net/images/anime/3/73178.jpg", synopsis: "Shinichi's hand is taken over by a parasitic alien.", main_character: { name: "Shinichi Izumi", image: "https://cdn.myanimelist.net/images/characters/2/264549.jpg" } },
+        { mal_id: 52299, title: "Oshi no Ko", title_english: "Oshi No Ko", score: 8.55, studio: "Doga Kobo", genres: ["Drama", "Supernatural"], release_date: "2023", source: "Manga", tags: [{ name: "Idol", primary: true }, { name: "Reincarnation", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1812/134736.jpg", synopsis: "A doctor reincarnated as the child of his favorite idol.", main_character: { name: "Aqua Hoshino", image: "https://cdn.myanimelist.net/images/characters/6/506389.jpg" } },
+        { mal_id: 50265, title: "Bocchi the Rock!", title_english: "Bocchi the Rock!", score: 8.77, studio: "CloverWorks", genres: ["Comedy"], release_date: "2022", source: "Manga", tags: [{ name: "Music", primary: true }, { name: "CGDCT", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1448/127956.jpg", synopsis: "A socially anxious girl joins a rock band.", main_character: { name: "Hitori Gotou", image: "https://cdn.myanimelist.net/images/characters/16/497656.jpg" } }
+    ];
+}
+
+// Get valid anime list (with cache check)
+async function getAnidleValidAnime() {
+    // Check if cache needs refresh
+    const now = Date.now();
+    const cacheExpired = !anidleCacheLastUpdate || (now - anidleCacheLastUpdate) > ANIDLE_CACHE_DURATION;
+    
+    if (cacheExpired || anidleAnimeCache.length === 0) {
+        await refreshAnidleCache();
+    }
+    
+    return anidleAnimeCache;
+}
 
 // Get today's daily anime (deterministic based on date)
-function getAnidleDailyAnime() {
+async function getAnidleDailyAnime() {
+    const animeList = await getAnidleValidAnime();
+    if (animeList.length === 0) {
+        return null;
+    }
+    
     const today = new Date();
     const dateString = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
     // Simple hash of date string
@@ -3274,152 +3389,183 @@ function getAnidleDailyAnime() {
         hash = ((hash << 5) - hash) + char;
         hash = hash & hash;
     }
-    const index = Math.abs(hash) % anidleValidAnime.length;
-    return anidleValidAnime[index];
+    const index = Math.abs(hash) % animeList.length;
+    return animeList[index];
 }
 
 // GET /api/anidle/daily - Get today's anime for the daily challenge
-app.get('/api/anidle/daily', (req, res) => {
-    const anime = getAnidleDailyAnime();
-    // Don't send the title to the client!
-    res.json({
-        mal_id: anime.mal_id,
-        score: anime.score,
-        studio: anime.studio,
-        genres: anime.genres,
-        release_date: anime.release_date,
-        source: anime.source,
-        tags: anime.tags,
-        image: anime.image,
-        synopsis: anime.synopsis,
-        main_character: anime.main_character
-    });
+app.get('/api/anidle/daily', async (req, res) => {
+    try {
+        const anime = await getAnidleDailyAnime();
+        if (!anime) {
+            return res.status(503).json({ error: "Anime data not available. Please try again later." });
+        }
+        // Don't send the title to the client!
+        res.json({
+            mal_id: anime.mal_id,
+            score: anime.score,
+            studio: anime.studio,
+            genres: anime.genres,
+            release_date: anime.release_date,
+            source: anime.source,
+            tags: anime.tags,
+            image: anime.image,
+            synopsis: anime.synopsis,
+            main_character: anime.main_character
+        });
+    } catch (err) {
+        console.error("Daily anime error:", err);
+        res.status(500).json({ error: "Failed to get daily anime" });
+    }
 });
 
 // GET /api/anidle/random - Get a random anime for unlimited mode
-app.get('/api/anidle/random', (req, res) => {
-    const index = Math.floor(Math.random() * anidleValidAnime.length);
-    const anime = anidleValidAnime[index];
-    res.json({
-        mal_id: anime.mal_id,
-        score: anime.score,
-        studio: anime.studio,
-        genres: anime.genres,
-        release_date: anime.release_date,
-        source: anime.source,
-        tags: anime.tags,
-        image: anime.image,
-        synopsis: anime.synopsis,
-        main_character: anime.main_character
-    });
+app.get('/api/anidle/random', async (req, res) => {
+    try {
+        const animeList = await getAnidleValidAnime();
+        if (animeList.length === 0) {
+            return res.status(503).json({ error: "Anime data not available. Please try again later." });
+        }
+        
+        const index = Math.floor(Math.random() * animeList.length);
+        const anime = animeList[index];
+        res.json({
+            mal_id: anime.mal_id,
+            score: anime.score,
+            studio: anime.studio,
+            genres: anime.genres,
+            release_date: anime.release_date,
+            source: anime.source,
+            tags: anime.tags,
+            image: anime.image,
+            synopsis: anime.synopsis,
+            main_character: anime.main_character
+        });
+    } catch (err) {
+        console.error("Random anime error:", err);
+        res.status(500).json({ error: "Failed to get random anime" });
+    }
 });
 
 // GET /api/anidle/anime-list - Get list of anime for autocomplete
-app.get('/api/anidle/anime-list', (req, res) => {
-    // Return only necessary fields for autocomplete
-    const list = anidleValidAnime.map(anime => ({
-        mal_id: anime.mal_id,
-        title: anime.title,
-        title_english: anime.title_english,
-        image: anime.image
-    }));
-    res.json(list);
+app.get('/api/anidle/anime-list', async (req, res) => {
+    try {
+        const animeList = await getAnidleValidAnime();
+        // Return only necessary fields for autocomplete
+        const list = animeList.map(anime => ({
+            mal_id: anime.mal_id,
+            title: anime.title,
+            title_english: anime.title_english,
+            image: anime.image
+        }));
+        res.json(list);
+    } catch (err) {
+        console.error("Anime list error:", err);
+        res.status(500).json({ error: "Failed to get anime list" });
+    }
 });
 
 // POST /api/anidle/guess - Check a guess
-app.post('/api/anidle/guess', (req, res) => {
+app.post('/api/anidle/guess', async (req, res) => {
     const { guess, target_id, mode } = req.body;
     
     if (!guess || !target_id) {
         return res.status(400).json({ error: "Missing guess or target" });
     }
     
-    // Find guessed anime
-    const guessedAnime = anidleValidAnime.find(a => 
-        a.title.toLowerCase() === guess.toLowerCase() ||
-        (a.title_english && a.title_english.toLowerCase() === guess.toLowerCase())
-    );
-    
-    if (!guessedAnime) {
-        return res.status(400).json({ error: "Anime not found in database" });
+    try {
+        const animeList = await getAnidleValidAnime();
+        
+        // Find guessed anime
+        const guessedAnime = animeList.find(a => 
+            a.title.toLowerCase() === guess.toLowerCase() ||
+            (a.title_english && a.title_english.toLowerCase() === guess.toLowerCase())
+        );
+        
+        if (!guessedAnime) {
+            return res.status(400).json({ error: "Anime not found in database" });
+        }
+        
+        // Find target anime
+        const targetAnime = animeList.find(a => a.mal_id === target_id);
+        
+        if (!targetAnime) {
+            return res.status(400).json({ error: "Target anime not found" });
+        }
+        
+        // Check if correct
+        const isCorrect = guessedAnime.mal_id === targetAnime.mal_id;
+        
+        // Compare properties
+        const comparison = {
+            score_match: guessedAnime.score === targetAnime.score,
+            score_direction: guessedAnime.score < targetAnime.score ? '↑' : (guessedAnime.score > targetAnime.score ? '↓' : ''),
+            studio_match: guessedAnime.studio === targetAnime.studio,
+            source_match: guessedAnime.source === targetAnime.source,
+            release_match: guessedAnime.release_date === targetAnime.release_date,
+            release_direction: parseInt(guessedAnime.release_date) < parseInt(targetAnime.release_date) ? '↑' : 
+                             (parseInt(guessedAnime.release_date) > parseInt(targetAnime.release_date) ? '↓' : '')
+        };
+        
+        // Compare genres
+        const guessGenres = guessedAnime.genres || [];
+        const targetGenres = targetAnime.genres || [];
+        const correctGenres = guessGenres.filter(g => targetGenres.includes(g));
+        const wrongGenres = guessGenres.filter(g => !targetGenres.includes(g));
+        
+        comparison.genres_match = {
+            correct: correctGenres.length,
+            total: targetGenres.length
+        };
+        comparison.genres_details = {
+            correct: correctGenres,
+            wrong: wrongGenres
+        };
+        
+        // Compare tags
+        const guessTags = (guessedAnime.tags || []).map(t => t.name || t);
+        const targetTags = targetAnime.tags || [];
+        const targetTagNames = targetTags.map(t => t.name || t);
+        const targetPrimaryTags = targetTags.filter(t => t.primary).map(t => t.name || t);
+        const targetSecondaryTags = targetTags.filter(t => !t.primary).map(t => t.name || t);
+        
+        const primaryMatches = guessTags.filter(t => targetPrimaryTags.includes(t));
+        const secondaryMatches = guessTags.filter(t => targetSecondaryTags.includes(t));
+        const wrongTags = guessTags.filter(t => !targetTagNames.includes(t));
+        
+        comparison.tags_match = {
+            primary: primaryMatches.length,
+            secondary: secondaryMatches.length
+        };
+        comparison.tags_details = {
+            primary: primaryMatches,
+            secondary: secondaryMatches,
+            wrong: wrongTags
+        };
+        
+        res.json({
+            correct: isCorrect,
+            guessed_anime: {
+                mal_id: guessedAnime.mal_id,
+                title: guessedAnime.title,
+                name: guessedAnime.title,
+                score: guessedAnime.score,
+                studio: guessedAnime.studio,
+                genres: guessedAnime.genres,
+                release_date: guessedAnime.release_date,
+                source: guessedAnime.source,
+                tags: guessedAnime.tags
+            },
+            comparison: comparison,
+            target_anime: isCorrect ? {
+                title: targetAnime.title,
+                image: targetAnime.image
+            } : null
+        });
+    } catch (err) {
+        console.error("Guess error:", err);
+        res.status(500).json({ error: "Failed to process guess" });
     }
-    
-    // Find target anime
-    const targetAnime = anidleValidAnime.find(a => a.mal_id === target_id);
-    
-    if (!targetAnime) {
-        return res.status(400).json({ error: "Target anime not found" });
-    }
-    
-    // Check if correct
-    const isCorrect = guessedAnime.mal_id === targetAnime.mal_id;
-    
-    // Compare properties
-    const comparison = {
-        score_match: guessedAnime.score === targetAnime.score,
-        score_direction: guessedAnime.score < targetAnime.score ? '↑' : (guessedAnime.score > targetAnime.score ? '↓' : ''),
-        studio_match: guessedAnime.studio === targetAnime.studio,
-        source_match: guessedAnime.source === targetAnime.source,
-        release_match: guessedAnime.release_date === targetAnime.release_date,
-        release_direction: parseInt(guessedAnime.release_date) < parseInt(targetAnime.release_date) ? '↑' : 
-                         (parseInt(guessedAnime.release_date) > parseInt(targetAnime.release_date) ? '↓' : '')
-    };
-    
-    // Compare genres
-    const guessGenres = guessedAnime.genres || [];
-    const targetGenres = targetAnime.genres || [];
-    const correctGenres = guessGenres.filter(g => targetGenres.includes(g));
-    const wrongGenres = guessGenres.filter(g => !targetGenres.includes(g));
-    
-    comparison.genres_match = {
-        correct: correctGenres.length,
-        total: targetGenres.length
-    };
-    comparison.genres_details = {
-        correct: correctGenres,
-        wrong: wrongGenres
-    };
-    
-    // Compare tags
-    const guessTags = (guessedAnime.tags || []).map(t => t.name || t);
-    const targetTags = targetAnime.tags || [];
-    const targetTagNames = targetTags.map(t => t.name || t);
-    const targetPrimaryTags = targetTags.filter(t => t.primary).map(t => t.name || t);
-    const targetSecondaryTags = targetTags.filter(t => !t.primary).map(t => t.name || t);
-    
-    const primaryMatches = guessTags.filter(t => targetPrimaryTags.includes(t));
-    const secondaryMatches = guessTags.filter(t => targetSecondaryTags.includes(t));
-    const wrongTags = guessTags.filter(t => !targetTagNames.includes(t));
-    
-    comparison.tags_match = {
-        primary: primaryMatches.length,
-        secondary: secondaryMatches.length
-    };
-    comparison.tags_details = {
-        primary: primaryMatches,
-        secondary: secondaryMatches,
-        wrong: wrongTags
-    };
-    
-    res.json({
-        correct: isCorrect,
-        guessed_anime: {
-            mal_id: guessedAnime.mal_id,
-            title: guessedAnime.title,
-            name: guessedAnime.title,
-            score: guessedAnime.score,
-            studio: guessedAnime.studio,
-            genres: guessedAnime.genres,
-            release_date: guessedAnime.release_date,
-            source: guessedAnime.source,
-            tags: guessedAnime.tags
-        },
-        comparison: comparison,
-        target_anime: isCorrect ? {
-            title: targetAnime.title,
-            image: targetAnime.image
-        } : null
-    });
 });
 
 // GET /api/anidle/check-daily - Check if user has completed today's daily
@@ -3503,7 +3649,39 @@ app.get('/api/anidle/daily-leaderboard', async (req, res) => {
     }
 });
 
+// POST /api/anidle/refresh-cache - Force refresh anime cache (admin only)
+app.post('/api/anidle/refresh-cache', adminMiddleware, async (req, res) => {
+    try {
+        await refreshAnidleCache();
+        res.json({ 
+            success: true, 
+            count: anidleAnimeCache.length,
+            message: `Cache refreshed with ${anidleAnimeCache.length} anime`
+        });
+    } catch (err) {
+        console.error("Cache refresh error:", err);
+        res.status(500).json({ error: "Failed to refresh cache" });
+    }
+});
+
+// GET /api/anidle/cache-status - Get cache status
+app.get('/api/anidle/cache-status', (req, res) => {
+    res.json({
+        count: anidleAnimeCache.length,
+        lastUpdate: anidleCacheLastUpdate ? new Date(anidleCacheLastUpdate).toISOString() : null,
+        cacheAge: anidleCacheLastUpdate ? Math.floor((Date.now() - anidleCacheLastUpdate) / 1000 / 60) + ' minutes' : 'never'
+    });
+});
+
 // Start Server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`Server running at http://localhost:${PORT}`);
+    
+    // Initialize anime cache on startup
+    console.log('[Anidle] Initializing anime cache...');
+    try {
+        await refreshAnidleCache();
+    } catch (err) {
+        console.error('[Anidle] Failed to initialize cache on startup:', err.message);
+    }
 });
