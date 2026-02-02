@@ -265,10 +265,30 @@
             position: absolute;
             top: 0;
             bottom: 0;
-            width: 2px;
+            width: 8px;
             background: #ff3366;
             z-index: 100;
-            pointer-events: none;
+            cursor: ew-resize;
+            transform: translateX(-4px);
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(255, 51, 102, 0.5);
+        }
+
+        .playhead:hover {
+            background: #ff6699;
+            box-shadow: 0 0 15px rgba(255, 51, 102, 0.8);
+        }
+
+        .playhead-handle {
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 10px solid #ff3366;
         }
 
         .note-list {
@@ -388,6 +408,11 @@
                 <label>BPM</label>
                 <input type="number" id="song-bpm" value="120" min="60" max="300">
             </div>
+            <div class="form-group">
+                <label>Background Image</label>
+                <button class="btn secondary" style="width: 100%; padding: 8px;" onclick="loadBackground()">Load Background</button>
+                <span id="bg-filename" style="font-size: 0.75rem; color: #666; margin-top: 5px; display: block;">No background</span>
+            </div>
 
             <h3>Note Tool</h3>
             <div class="tool-selector">
@@ -422,6 +447,7 @@
                 Space - Play/Pause<br>
                 1-4 - Select Tool<br>
                 Click Timeline - Add Note<br>
+                Drag Playhead - Seek<br>
                 Delete - Remove Selected<br>
             </div>
         </div>
@@ -453,7 +479,7 @@
                                 <span class="track-label">Hold/Spam</span>
                             </div>
                         </div>
-                        <div class="playhead" id="playhead" style="left: 0;"></div>
+                        <div class="playhead" id="playhead" style="left: 0;"><div class="playhead-handle"></div></div>
                     </div>
                 </div>
             </div>
@@ -462,6 +488,7 @@
 
     <input type="file" id="audio-input" accept="audio/*" style="display: none;">
     <input type="file" id="map-input" accept=".json" style="display: none;">
+    <input type="file" id="bg-input" accept="image/*" style="display: none;">
 
     <script>
         // ===== STATE =====
@@ -472,6 +499,9 @@
         let isPlaying = false;
         let zoomLevel = 5;
         let pixelsPerMs = 0.1;
+        let backgroundImage = null;
+        let backgroundFilename = '';
+        let isDraggingPlayhead = false;
 
         const previewCanvas = document.getElementById('preview-canvas');
         const previewCtx = previewCanvas.getContext('2d');
@@ -487,6 +517,7 @@
             // Audio file input
             document.getElementById('audio-input').addEventListener('change', handleAudioLoad);
             document.getElementById('map-input').addEventListener('change', handleMapImport);
+            document.getElementById('bg-input').addEventListener('change', handleBackgroundLoad);
 
             // Zoom slider
             document.getElementById('zoom-slider').addEventListener('input', (e) => {
@@ -500,6 +531,39 @@
 
             // Keyboard shortcuts
             document.addEventListener('keydown', handleKeyboard);
+
+            // Playhead dragging
+            const playhead = document.getElementById('playhead');
+            playhead.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                isDraggingPlayhead = true;
+                document.body.style.cursor = 'ew-resize';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDraggingPlayhead) return;
+                
+                const timelineScroll = document.getElementById('timeline-scroll');
+                const timeline = document.getElementById('timeline');
+                const rect = timeline.getBoundingClientRect();
+                const x = e.clientX - rect.left + timelineScroll.scrollLeft;
+                const newTime = Math.max(0, x / pixelsPerMs);
+                
+                if (audio && audio.duration) {
+                    const clampedTime = Math.min(newTime, audio.duration * 1000);
+                    audio.currentTime = clampedTime / 1000;
+                }
+                
+                // Update playhead position manually while dragging
+                playhead.style.left = `${x}px`;
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isDraggingPlayhead) {
+                    isDraggingPlayhead = false;
+                    document.body.style.cursor = '';
+                }
+            });
 
             // Playback update using requestAnimationFrame for better performance
             function playbackLoop() {
@@ -558,8 +622,33 @@
             }
         }
 
+        // ===== BACKGROUND =====
+        function loadBackground() {
+            document.getElementById('bg-input').click();
+        }
+
+        function handleBackgroundLoad(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            backgroundFilename = file.name;
+            document.getElementById('bg-filename').textContent = backgroundFilename;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    backgroundImage = img;
+                    drawPreview();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
         function updatePlayback() {
             if (!audio) return;
+            if (isDraggingPlayhead) return; // Don't update while dragging
 
             const currentTime = audio.currentTime * 1000;
             const playhead = document.getElementById('playhead');
@@ -737,9 +826,33 @@
             const cx = w / 2;
             const cy = h / 2;
 
-            // Clear
-            ctx.fillStyle = '#0a0a1a';
-            ctx.fillRect(0, 0, w, h);
+            // Clear / Draw background
+            if (backgroundImage) {
+                // Draw background image (cover style)
+                const imgRatio = backgroundImage.width / backgroundImage.height;
+                const canvasRatio = w / h;
+                let drawW, drawH, drawX, drawY;
+                
+                if (imgRatio > canvasRatio) {
+                    drawH = h;
+                    drawW = h * imgRatio;
+                    drawX = (w - drawW) / 2;
+                    drawY = 0;
+                } else {
+                    drawW = w;
+                    drawH = w / imgRatio;
+                    drawX = 0;
+                    drawY = (h - drawH) / 2;
+                }
+                
+                ctx.drawImage(backgroundImage, drawX, drawY, drawW, drawH);
+                // Add dark overlay for visibility
+                ctx.fillStyle = 'rgba(10, 10, 26, 0.7)';
+                ctx.fillRect(0, 0, w, h);
+            } else {
+                ctx.fillStyle = '#0a0a1a';
+                ctx.fillRect(0, 0, w, h);
+            }
 
             // Draw center ring
             const ringRadius = 60;
@@ -857,6 +970,7 @@
                 difficultyLevel: parseInt(document.getElementById('difficulty-level').value) || 3,
                 bpm: parseInt(document.getElementById('song-bpm').value) || 120,
                 audioFile: 'song.mp3',
+                backgroundFile: backgroundFilename || null,
                 previewTime: 0,
                 notes: notes
             };

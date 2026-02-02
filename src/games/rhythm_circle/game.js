@@ -4,6 +4,7 @@
 const GameState = {
     MENU: 'menu',
     SONG_SELECT: 'song-select',
+    BROWSE: 'browse',
     SETTINGS: 'settings',
     PLAYING: 'playing',
     PAUSED: 'paused',
@@ -14,14 +15,18 @@ let currentState = GameState.MENU;
 let songs = [];
 let selectedSongIndex = 0;
 let currentMap = null;
+let availableMaps = []; // Maps available for download
 
 // Game settings (loaded from localStorage)
 let settings = {
     audioOffset: 0,
     keyRed: 'KeyD',
     keyBlue: 'KeyK',
+    keyPause: 'Escape',
     mouseKey: 'red',
-    volume: 0.8
+    volume: 0.8,
+    approachRate: 1500,
+    noteStyle: 'shrink'
 };
 
 // ===== GAME VARIABLES =====
@@ -48,7 +53,7 @@ const RING_RADIUS = 120;
 const RING_THICKNESS = 15;
 const NOTE_SPAWN_RADIUS = 400;
 const NOTE_SIZE = 35;
-const APPROACH_TIME = 1500; // ms for note to reach center
+let APPROACH_TIME = 1500; // ms for note to reach center (now configurable)
 
 // Timing windows (in ms)
 const TIMING = {
@@ -105,6 +110,10 @@ function showScreen(screenId) {
             currentState = GameState.SONG_SELECT;
             updateSongSelect();
             break;
+        case 'browse-screen':
+            currentState = GameState.BROWSE;
+            loadAvailableMaps();
+            break;
         case 'settings-screen':
             currentState = GameState.SETTINGS;
             break;
@@ -159,13 +168,16 @@ function activateMenuOption(action) {
         case 'play':
             showScreen('song-select-screen');
             break;
+        case 'browse':
+            showScreen('browse-screen');
+            break;
         case 'settings':
             showScreen('settings-screen');
             break;
         case 'editor':
             window.location.href = 'editor/index.html';
             break;
-        case 'back':
+        case 'quit':
             window.history.back();
             break;
     }
@@ -173,42 +185,22 @@ function activateMenuOption(action) {
 
 // ===== SONG LOADING =====
 async function loadSongs() {
-    try {
-        // Scan the maps folder for songs
-        const response = await fetch('/api/rhythm/maps');
-        if (response.ok) {
-            songs = await response.json();
-        }
-    } catch (e) {
-        console.log('API not available, using local scan');
-    }
-    
-    // Fallback: try to load demo song directly
-    if (songs.length === 0) {
+    // Load songs from localStorage only (downloaded maps)
+    const savedMaps = localStorage.getItem('rhythm_circle_maps');
+    if (savedMaps) {
         try {
-            const demoRes = await fetch('maps/demo_song/map.json');
-            if (demoRes.ok) {
-                const demoMap = await demoRes.json();
-                songs.push({
-                    id: 'demo_song',
-                    title: demoMap.title || 'Demo Song',
-                    artist: demoMap.artist || 'Unknown',
-                    difficulty: demoMap.difficulty || 'Normal',
-                    difficultyLevel: demoMap.difficultyLevel || 3,
-                    path: 'maps/demo_song'
-                });
-            }
+            songs = JSON.parse(savedMaps);
         } catch (e) {
-            console.log('No demo song found');
+            songs = [];
         }
     }
     
-    // If still no songs, add placeholder
+    // If no downloaded songs, show message
     if (songs.length === 0) {
         songs.push({
             id: 'no_songs',
-            title: 'No Songs Found',
-            artist: 'Add songs to maps folder',
+            title: 'No Maps Downloaded',
+            artist: 'Browse maps to download some!',
             difficulty: '-',
             difficultyLevel: 0,
             path: null
@@ -216,6 +208,141 @@ async function loadSongs() {
     }
     
     updateSongSelect();
+}
+
+// ===== MAP BROWSING & DOWNLOAD =====
+async function loadAvailableMaps() {
+    const browseList = document.getElementById('browse-list');
+    browseList.innerHTML = '<div class="loading">Loading available maps...</div>';
+    
+    // Get downloaded map IDs from localStorage
+    const savedMaps = localStorage.getItem('rhythm_circle_maps');
+    const downloadedMaps = savedMaps ? JSON.parse(savedMaps) : [];
+    const downloadedIds = downloadedMaps.map(m => m.id);
+    
+    try {
+        // Try to fetch available maps from the API
+        const response = await fetch('/api/rhythm/maps');
+        if (response.ok) {
+            availableMaps = await response.json();
+        }
+    } catch (e) {
+        console.log('API not available, loading local maps');
+    }
+    
+    // Fallback: try to load demo song from maps folder
+    if (availableMaps.length === 0) {
+        try {
+            const demoRes = await fetch('maps/demo_song/map.json');
+            if (demoRes.ok) {
+                const demoMap = await demoRes.json();
+                availableMaps.push({
+                    id: 'demo_song',
+                    title: demoMap.title || 'Demo Song',
+                    artist: demoMap.artist || 'Unknown',
+                    difficulty: demoMap.difficulty || 'Normal',
+                    difficultyLevel: demoMap.difficultyLevel || 3,
+                    path: 'maps/demo_song',
+                    mapData: demoMap
+                });
+            }
+        } catch (e) {
+            console.log('No demo song found');
+        }
+    }
+    
+    // Render the browse list
+    if (availableMaps.length === 0) {
+        browseList.innerHTML = '<div class="loading">No maps available. Create some in the editor!</div>';
+        return;
+    }
+    
+    browseList.innerHTML = availableMaps.map((map, i) => {
+        const isDownloaded = downloadedIds.includes(map.id);
+        const diffClass = getDifficultyClass(map.difficultyLevel);
+        return `
+            <div class="browse-card ${isDownloaded ? 'downloaded' : ''}" data-map-index="${i}">
+                ${isDownloaded ? `<button class="delete-btn" onclick="deleteDownloadedMap('${map.id}')" title="Delete">×</button>` : ''}
+                <div class="map-title">${escapeHtml(map.title)}</div>
+                <div class="map-artist">${escapeHtml(map.artist)}</div>
+                <div class="map-diff ${diffClass}">${escapeHtml(map.difficulty)}</div>
+                <button class="download-btn ${isDownloaded ? 'downloaded' : ''}" 
+                        onclick="downloadMap(${i})" 
+                        ${isDownloaded ? 'disabled' : ''}>
+                    ${isDownloaded ? '✓ Downloaded' : 'Download'}
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+async function downloadMap(index) {
+    const map = availableMaps[index];
+    if (!map) return;
+    
+    try {
+        // If mapData is not already included, fetch it
+        let mapData = map.mapData;
+        if (!mapData && map.path) {
+            const res = await fetch(`${map.path}/map.json`);
+            if (res.ok) {
+                mapData = await res.json();
+            }
+        }
+        
+        if (!mapData) {
+            alert('Failed to download map data');
+            return;
+        }
+        
+        // Get existing downloaded maps
+        const savedMaps = localStorage.getItem('rhythm_circle_maps');
+        const downloadedMaps = savedMaps ? JSON.parse(savedMaps) : [];
+        
+        // Check if already downloaded
+        if (downloadedMaps.find(m => m.id === map.id)) {
+            alert('Map already downloaded!');
+            return;
+        }
+        
+        // Add to downloaded maps
+        downloadedMaps.push({
+            id: map.id,
+            title: map.title,
+            artist: map.artist,
+            difficulty: map.difficulty,
+            difficultyLevel: map.difficultyLevel,
+            path: null, // Local storage maps don't have paths
+            mapData: mapData
+        });
+        
+        // Save to localStorage
+        localStorage.setItem('rhythm_circle_maps', JSON.stringify(downloadedMaps));
+        
+        // Reload songs and browse list
+        loadSongs();
+        loadAvailableMaps();
+        
+    } catch (e) {
+        console.error('Failed to download map:', e);
+        alert('Failed to download map');
+    }
+}
+
+function deleteDownloadedMap(mapId) {
+    if (!confirm('Are you sure you want to delete this map?')) return;
+    
+    const savedMaps = localStorage.getItem('rhythm_circle_maps');
+    if (!savedMaps) return;
+    
+    let downloadedMaps = JSON.parse(savedMaps);
+    downloadedMaps = downloadedMaps.filter(m => m.id !== mapId);
+    
+    localStorage.setItem('rhythm_circle_maps', JSON.stringify(downloadedMaps));
+    
+    // Reload
+    loadSongs();
+    loadAvailableMaps();
 }
 
 function updateSongSelect() {
@@ -290,6 +417,11 @@ function saveSettings() {
     settings.audioOffset = parseInt(document.getElementById('audio-offset').value);
     settings.volume = parseInt(document.getElementById('volume').value) / 100;
     settings.mouseKey = document.getElementById('mouse-key').value;
+    settings.approachRate = parseInt(document.getElementById('approach-rate').value);
+    settings.noteStyle = document.getElementById('note-style').value;
+    
+    // Update the approach time
+    APPROACH_TIME = settings.approachRate;
     
     localStorage.setItem('rhythm_circle_settings', JSON.stringify(settings));
     showScreen('menu-screen');
@@ -304,7 +436,15 @@ function updateSettingsUI() {
     document.getElementById('key-red').dataset.key = settings.keyRed;
     document.getElementById('key-blue').textContent = getKeyName(settings.keyBlue);
     document.getElementById('key-blue').dataset.key = settings.keyBlue;
+    document.getElementById('key-pause').textContent = getKeyName(settings.keyPause);
+    document.getElementById('key-pause').dataset.key = settings.keyPause;
     document.getElementById('mouse-key').value = settings.mouseKey;
+    document.getElementById('approach-rate').value = settings.approachRate;
+    document.getElementById('approach-rate-value').textContent = `${settings.approachRate}ms`;
+    document.getElementById('note-style').value = settings.noteStyle;
+    
+    // Apply approach rate
+    APPROACH_TIME = settings.approachRate;
     
     // Slider listeners
     document.getElementById('audio-offset').oninput = (e) => {
@@ -312,6 +452,9 @@ function updateSettingsUI() {
     };
     document.getElementById('volume').oninput = (e) => {
         document.getElementById('volume-value').textContent = `${e.target.value}%`;
+    };
+    document.getElementById('approach-rate').oninput = (e) => {
+        document.getElementById('approach-rate-value').textContent = `${e.target.value}ms`;
     };
     
     // Key binding
@@ -340,6 +483,8 @@ function handleKeyBindInput(e) {
         settings.keyRed = key;
     } else if (listeningForKey.id === 'key-blue') {
         settings.keyBlue = key;
+    } else if (listeningForKey.id === 'key-pause') {
+        settings.keyPause = key;
     }
     
     listeningForKey.textContent = getKeyName(key);
@@ -358,28 +503,58 @@ function getKeyName(code) {
 // ===== GAME START =====
 async function startGame() {
     const song = songs[selectedSongIndex];
-    if (!song || !song.path) {
-        alert('Please select a valid song');
+    if (!song || song.id === 'no_songs') {
+        alert('Please download a map from the Browse section first!');
         return;
     }
     
-    // Load map
+    // Load map - check if it's from localStorage (has mapData) or from path
     try {
-        const mapRes = await fetch(`${song.path}/map.json`);
-        currentMap = await mapRes.json();
+        if (song.mapData) {
+            // Map is stored in localStorage
+            currentMap = song.mapData;
+        } else if (song.path) {
+            // Map is from server path
+            const mapRes = await fetch(`${song.path}/map.json`);
+            currentMap = await mapRes.json();
+        } else {
+            alert('Map data not available');
+            return;
+        }
     } catch (e) {
         alert('Failed to load map');
         return;
     }
     
-    // Load audio
+    // Load audio - for localStorage maps, we need to handle audio differently
     try {
-        audio = new Audio(`${song.path}/${currentMap.audioFile || 'song.mp3'}`);
-        audio.volume = settings.volume;
-        await audio.load();
+        let audioPath;
+        if (song.path) {
+            audioPath = `${song.path}/${currentMap.audioFile || 'song.mp3'}`;
+        } else if (currentMap.audioFile) {
+            // Try to find audio in default maps location
+            audioPath = `maps/${song.id}/${currentMap.audioFile}`;
+        } else {
+            // No audio available - use a silent fallback or notify user
+            console.log('No audio file specified');
+            audioPath = null;
+        }
+        
+        if (audioPath) {
+            audio = new Audio(audioPath);
+            audio.volume = settings.volume;
+            await new Promise((resolve, reject) => {
+                audio.addEventListener('canplaythrough', resolve, { once: true });
+                audio.addEventListener('error', reject, { once: true });
+                audio.load();
+            });
+        } else {
+            // Create a dummy audio for timing (maps without audio)
+            audio = null;
+        }
     } catch (e) {
-        alert('Failed to load audio');
-        return;
+        console.log('Audio load failed, continuing without audio');
+        audio = null;
     }
     
     // Reset game state
@@ -390,7 +565,7 @@ async function startGame() {
     
     // Start after short delay
     setTimeout(() => {
-        audio.play();
+        if (audio) audio.play();
         gameStartTime = performance.now();
         isPaused = false;
         gameLoop();
@@ -447,11 +622,24 @@ function gameLoop() {
         return;
     }
     
+    // Check if all notes are done (for maps without audio)
+    if (!audio) {
+        const allNotesDone = notes.every(n => n.hit || n.missed);
+        const lastNoteTime = notes.length > 0 ? Math.max(...notes.map(n => n.endTime || n.time)) : 0;
+        if (allNotesDone && currentTime > lastNoteTime + 1000) {
+            endGame();
+            return;
+        }
+    }
+    
     animationFrameId = requestAnimationFrame(gameLoop);
 }
 
 function getCurrentTime() {
-    if (!audio) return 0;
+    if (!audio) {
+        // Fallback to performance timing when no audio
+        return (performance.now() - gameStartTime) + settings.audioOffset;
+    }
     return (audio.currentTime * 1000) + settings.audioOffset;
 }
 
@@ -512,14 +700,8 @@ function drawNotes(currentTime) {
         const timeUntilHit = note.time - currentTime;
         if (timeUntilHit > APPROACH_TIME || timeUntilHit < -TIMING.MISS) return;
         
-        // Calculate position (approaching from outside)
-        const progress = 1 - (timeUntilHit / APPROACH_TIME);
-        const radius = NOTE_SPAWN_RADIUS - (NOTE_SPAWN_RADIUS - RING_RADIUS) * progress;
-        
         // Angle for this note (use note's angle or default)
         const angle = (note.angle || 0) * Math.PI / 180;
-        const x = cx + Math.cos(angle) * radius;
-        const y = cy + Math.sin(angle) * radius;
         
         // Note color based on type
         let color;
@@ -533,45 +715,111 @@ function drawNotes(currentTime) {
             color = '#ff3366';
         }
         
-        // Draw note
-        ctx.beginPath();
-        ctx.arc(x, y, NOTE_SIZE, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        
-        // Note border
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        
-        // Hold note trail
-        if (note.type === 'hold' && note.endTime) {
-            const holdDuration = note.endTime - note.time;
-            const endTimeUntil = note.endTime - currentTime;
-            const endProgress = 1 - (endTimeUntil / APPROACH_TIME);
-            const endRadius = Math.max(RING_RADIUS, NOTE_SPAWN_RADIUS - (NOTE_SPAWN_RADIUS - RING_RADIUS) * endProgress);
+        // Calculate based on note style setting
+        if (settings.noteStyle === 'shrink') {
+            // SHRINKING APPROACH CIRCLE STYLE
+            // Note stays at hit position, approach circle shrinks toward it
+            const hitX = cx + Math.cos(angle) * RING_RADIUS;
+            const hitY = cy + Math.sin(angle) * RING_RADIUS;
             
-            // Draw trail
+            // Progress from 0 (just appeared) to 1 (hit time)
+            const progress = 1 - (timeUntilHit / APPROACH_TIME);
+            
+            // Approach circle shrinks from large to note size
+            const approachRadius = NOTE_SIZE + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progress);
+            
+            // Draw the hit circle (static at hit position)
             ctx.beginPath();
-            ctx.moveTo(x, y);
-            const endX = cx + Math.cos(angle) * endRadius;
-            const endY = cy + Math.sin(angle) * endRadius;
-            ctx.lineTo(endX, endY);
-            ctx.strokeStyle = color;
-            ctx.lineWidth = NOTE_SIZE * 1.5;
-            ctx.lineCap = 'round';
-            ctx.globalAlpha = 0.5;
+            ctx.arc(hitX, hitY, NOTE_SIZE, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.globalAlpha = Math.min(progress * 2, 1); // Fade in
+            ctx.fill();
+            
+            // Note border
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
             ctx.stroke();
             ctx.globalAlpha = 1;
-        }
-        
-        // Spam note indicator
-        if (note.type === 'spam' && note.spamRequired) {
-            ctx.fillStyle = '#000';
-            ctx.font = 'bold 16px Orbitron';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(`${note.spamRequired - (note.spamCount || 0)}`, x, y);
+            
+            // Draw the shrinking approach circle
+            if (timeUntilHit > 0) {
+                ctx.beginPath();
+                ctx.arc(hitX, hitY, approachRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 4;
+                ctx.globalAlpha = 0.8;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+            
+            // Hold note indicator
+            if (note.type === 'hold' && note.endTime) {
+                const holdDuration = note.endTime - note.time;
+                // Draw a ring around the note to indicate hold
+                ctx.beginPath();
+                ctx.arc(hitX, hitY, NOTE_SIZE + 8, 0, Math.PI * 2);
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+            
+            // Spam note indicator
+            if (note.type === 'spam' && note.spamRequired) {
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 16px Orbitron';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`${note.spamRequired - (note.spamCount || 0)}`, hitX, hitY);
+            }
+        } else {
+            // ORIGINAL APPROACH STYLE - notes fly toward center
+            const progress = 1 - (timeUntilHit / APPROACH_TIME);
+            const radius = NOTE_SPAWN_RADIUS - (NOTE_SPAWN_RADIUS - RING_RADIUS) * progress;
+            const x = cx + Math.cos(angle) * radius;
+            const y = cy + Math.sin(angle) * radius;
+            
+            // Draw note
+            ctx.beginPath();
+            ctx.arc(x, y, NOTE_SIZE, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            
+            // Note border
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Hold note trail
+            if (note.type === 'hold' && note.endTime) {
+                const holdDuration = note.endTime - note.time;
+                const endTimeUntil = note.endTime - currentTime;
+                const endProgress = 1 - (endTimeUntil / APPROACH_TIME);
+                const endRadius = Math.max(RING_RADIUS, NOTE_SPAWN_RADIUS - (NOTE_SPAWN_RADIUS - RING_RADIUS) * endProgress);
+                
+                // Draw trail
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                const endX = cx + Math.cos(angle) * endRadius;
+                const endY = cy + Math.sin(angle) * endRadius;
+                ctx.lineTo(endX, endY);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = NOTE_SIZE * 1.5;
+                ctx.lineCap = 'round';
+                ctx.globalAlpha = 0.5;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+            
+            // Spam note indicator
+            if (note.type === 'spam' && note.spamRequired) {
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 16px Orbitron';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`${note.spamRequired - (note.spamCount || 0)}`, x, y);
+            }
         }
     });
 }
@@ -627,8 +875,8 @@ function handleKeyDown(e) {
         if (handleKeyBindInput(e)) return;
     }
     
-    // Pause
-    if (e.code === 'Escape') {
+    // Pause - use configurable pause key
+    if (e.code === settings.keyPause) {
         if (currentState === GameState.PLAYING) {
             pauseGame();
         } else if (isPaused) {

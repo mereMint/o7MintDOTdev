@@ -25,11 +25,11 @@
                     <div class="menu-option" data-action="settings" data-angle="90">
                         <span>Settings</span>
                     </div>
-                    <div class="menu-option" data-action="editor" data-angle="180">
-                        <span>Editor</span>
+                    <div class="menu-option" data-action="browse" data-angle="180">
+                        <span>Browse</span>
                     </div>
-                    <div class="menu-option" data-action="back" data-angle="270">
-                        <span>Back</span>
+                    <div class="menu-option" data-action="editor" data-angle="270">
+                        <span>Editor</span>
                     </div>
                 </div>
             </div>
@@ -56,6 +56,20 @@
             </div>
             <div class="song-actions">
                 <button class="btn primary" onclick="startGame()">Start</button>
+                <button class="btn secondary" onclick="showScreen('menu-screen')">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Browse Maps Screen -->
+    <div id="browse-screen" class="screen">
+        <div class="browse-container">
+            <h2>Browse Maps</h2>
+            <p class="browse-info">Download maps to play offline. Maps are saved to your browser.</p>
+            <div class="browse-list" id="browse-list">
+                <div class="loading">Loading available maps...</div>
+            </div>
+            <div class="browse-actions">
                 <button class="btn secondary" onclick="showScreen('menu-screen')">Back</button>
             </div>
         </div>
@@ -90,6 +104,22 @@
                 <label for="volume">Master Volume</label>
                 <input type="range" id="volume" min="0" max="100" value="80">
                 <span id="volume-value">80%</span>
+            </div>
+            <div class="setting-group">
+                <label for="approach-rate">Approach Rate</label>
+                <input type="range" id="approach-rate" min="500" max="2500" value="1500" step="100">
+                <span id="approach-rate-value">1500ms</span>
+            </div>
+            <div class="setting-group">
+                <label for="key-pause">Pause Key</label>
+                <button class="key-bind" id="key-pause" data-key="Escape">Esc</button>
+            </div>
+            <div class="setting-group">
+                <label for="note-style">Note Style</label>
+                <select id="note-style">
+                    <option value="shrink">Shrinking Circle</option>
+                    <option value="approach">Approach Circle</option>
+                </select>
             </div>
             <div class="setting-actions">
                 <button class="btn primary" onclick="saveSettings()">Save</button>
