@@ -114,6 +114,8 @@ pool.getConnection()
             // Migrations: Ensure columns exist (for existing tables)
             try {
                 // MariaDB 10.2+ supports IF NOT EXISTS in ADD COLUMN
+                await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255)");
+                await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar VARCHAR(255)");
                 await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS points INT DEFAULT 0");
                 await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS inventory JSON");
                 await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS decoration VARCHAR(50) DEFAULT NULL");
@@ -1401,6 +1403,62 @@ app.get('/api/explain/categories', async (req, res) => {
         res.json(rows);
     } catch (err) {
         console.error('Error fetching categories:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/explain/categories - Create a new category
+app.post('/api/explain/categories', async (req, res) => {
+    const { name, description, color } = req.body;
+
+    if (!name || name.trim().length < 2 || name.trim().length > 100) {
+        return res.status(400).json({ error: 'Category name must be between 2 and 100 characters' });
+    }
+
+    // Validate color format (hex color)
+    const colorValue = color && /^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#1DCD9F';
+    const descValue = description ? description.substring(0, 500) : '';
+
+    if (useInMemory) {
+        return res.json({ 
+            success: true, 
+            category: { id: Date.now(), name: name.trim(), description: descValue, color: colorValue }
+        });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureExplainTables(conn);
+
+        // Check if category with same name already exists
+        const existing = await conn.query(
+            `SELECT id FROM explain_categories WHERE LOWER(name) = LOWER(?)`,
+            [name.trim()]
+        );
+
+        if (existing.length > 0) {
+            return res.status(400).json({ error: 'A category with this name already exists' });
+        }
+
+        const result = await conn.query(
+            `INSERT INTO explain_categories (name, description, color) VALUES (?, ?, ?)`,
+            [name.trim(), descValue, colorValue]
+        );
+
+        res.json({ 
+            success: true, 
+            category: { 
+                id: Number(result.insertId), 
+                name: name.trim(), 
+                description: descValue, 
+                color: colorValue 
+            }
+        });
+    } catch (err) {
+        console.error('Error creating category:', err);
         res.status(500).json({ error: 'Database error' });
     } finally {
         if (conn) conn.release();

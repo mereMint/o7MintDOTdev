@@ -10,32 +10,32 @@ function parseExplainSyntax(content) {
     let html = content;
     
     // First, handle code blocks (before escaping HTML)
-    // Store code blocks and replace with placeholders
+    // Store code blocks and replace with placeholders (using format without underscores to avoid markdown conflicts)
     const codeBlocks = [];
     html = html.replace(/```([\s\S]*?)```/g, (match, code) => {
         codeBlocks.push(code.trim());
-        return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+        return `@@CODEBLOCK${codeBlocks.length - 1}@@`;
     });
     
     // Store inline code and replace with placeholders
     const inlineCodes = [];
     html = html.replace(/`([^`]+)`/g, (match, code) => {
         inlineCodes.push(code);
-        return `__INLINE_CODE_${inlineCodes.length - 1}__`;
+        return `@@INLINECODE${inlineCodes.length - 1}@@`;
     });
     
     // Store LaTeX blocks and replace with placeholders
     const latexBlocks = [];
     html = html.replace(/\$\$([\s\S]+?)\$\$/g, (match, latex) => {
         latexBlocks.push(latex.trim());
-        return `__LATEX_BLOCK_${latexBlocks.length - 1}__`;
+        return `@@LATEXBLOCK${latexBlocks.length - 1}@@`;
     });
     
     // Store inline LaTeX and replace with placeholders
     const inlineLatex = [];
     html = html.replace(/\$([^$\n]+)\$/g, (match, latex) => {
         inlineLatex.push(latex);
-        return `__INLINE_LATEX_${inlineLatex.length - 1}__`;
+        return `@@INLINELATEX${inlineLatex.length - 1}@@`;
     });
     
     // Now escape HTML
@@ -111,26 +111,26 @@ function parseExplainSyntax(content) {
     // Restore code blocks
     codeBlocks.forEach((code, i) => {
         const escapedCode = escapeHtml(code);
-        html = html.replace(`__CODE_BLOCK_${i}__`, `<pre><code>${escapedCode}</code></pre>`);
+        html = html.replace(`@@CODEBLOCK${i}@@`, `<pre><code>${escapedCode}</code></pre>`);
     });
     
     // Restore inline code
     inlineCodes.forEach((code, i) => {
         const escapedCode = escapeHtml(code);
-        html = html.replace(`__INLINE_CODE_${i}__`, `<code>${escapedCode}</code>`);
+        html = html.replace(`@@INLINECODE${i}@@`, `<code>${escapedCode}</code>`);
     });
     
     // Restore LaTeX blocks - render with KaTeX if available
     latexBlocks.forEach((latex, i) => {
         const rendered = renderLatex(latex, true);
-        html = html.replace(`<p>__LATEX_BLOCK_${i}__</p>`, `<div class="latex-block">${rendered}</div>`);
-        html = html.replace(`__LATEX_BLOCK_${i}__`, `<div class="latex-block">${rendered}</div>`);
+        html = html.replace(`<p>@@LATEXBLOCK${i}@@</p>`, `<div class="latex-block">${rendered}</div>`);
+        html = html.replace(`@@LATEXBLOCK${i}@@`, `<div class="latex-block">${rendered}</div>`);
     });
     
     // Restore inline LaTeX
     inlineLatex.forEach((latex, i) => {
         const rendered = renderLatex(latex, false);
-        html = html.replace(`__INLINE_LATEX_${i}__`, `<span class="latex-inline">${rendered}</span>`);
+        html = html.replace(`@@INLINELATEX${i}@@`, `<span class="latex-inline">${rendered}</span>`);
     });
     
     // Fix any remaining paragraph issues around divs
@@ -144,19 +144,21 @@ function parseExplainSyntax(content) {
 
 // Render LaTeX using KaTeX if available, otherwise show raw
 function renderLatex(latex, displayMode) {
-    if (typeof katex !== 'undefined') {
+    if (typeof katex !== 'undefined' && katex.renderToString) {
         try {
             return katex.renderToString(latex, {
                 throwOnError: false,
-                displayMode: displayMode
+                displayMode: displayMode,
+                output: 'html'
             });
         } catch (e) {
-            console.error('KaTeX error:', e);
-            return escapeHtml(latex);
+            console.error('KaTeX rendering error:', e);
+            return `<span class="latex-error" title="LaTeX error">${escapeHtml(latex)}</span>`;
         }
     }
-    // Fallback: just show the raw LaTeX
-    return escapeHtml(latex);
+    // Fallback: show the raw LaTeX with a note that KaTeX isn't loaded
+    console.warn('KaTeX not available. LaTeX will display as raw text.');
+    return `<span class="latex-fallback">${escapeHtml(latex)}</span>`;
 }
 
 function escapeHtml(text) {
@@ -364,6 +366,9 @@ function renderArticleView(article) {
     `;
 }
 
+// Track if category select listener is attached
+let categorySelectListenerAttached = false;
+
 function renderCategorySelect(categories, selectedId = null) {
     const select = document.getElementById('category-select');
     if (!select) return;
@@ -375,7 +380,57 @@ function renderCategorySelect(categories, selectedId = null) {
                 ${cat.name}
             </option>
         `).join('')}
+        <option value="__new__">+ Create new category...</option>
     `;
+    
+    // Set the selected value after rendering if provided
+    if (selectedId) {
+        select.value = selectedId;
+    }
+    
+    // Only attach listener once
+    if (!categorySelectListenerAttached) {
+        categorySelectListenerAttached = true;
+        select.addEventListener('change', handleCategorySelectChange);
+    }
+}
+
+async function handleCategorySelectChange(e) {
+    const select = e.target;
+    if (select.value === '__new__') {
+        const newCatName = prompt('Enter the name for your new category:');
+        if (newCatName && newCatName.trim().length >= 2) {
+            const result = await createCategory(newCatName.trim());
+            if (result.success && result.category) {
+                // Reload categories and select the new one
+                const updatedCategories = await fetchCategories();
+                renderCategorySelect(updatedCategories, result.category.id);
+                showMessage(`Category "${result.category.name}" created!`, 'success');
+            } else {
+                showMessage(result.error || 'Failed to create category', 'error');
+                select.value = '';
+            }
+        } else if (newCatName !== null) {
+            showMessage('Category name must be at least 2 characters', 'error');
+            select.value = '';
+        } else {
+            select.value = '';
+        }
+    }
+}
+
+async function createCategory(name, description = '', color = '#1DCD9F') {
+    try {
+        const res = await fetch(`${API_BASE}/categories`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description, color })
+        });
+        return await res.json();
+    } catch (err) {
+        console.error('Error creating category:', err);
+        return { error: 'Network error' };
+    }
 }
 
 function showMessage(message, type = 'success') {

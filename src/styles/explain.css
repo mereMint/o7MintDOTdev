@@ -290,6 +290,20 @@ body {
     color: #fff;
 }
 
+/* LaTeX fallback when KaTeX is not available */
+.latex-fallback {
+    font-family: 'Courier New', monospace;
+    background: rgba(29, 205, 159, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #1DCD9F;
+}
+
+.latex-error {
+    color: #FF6B6B;
+    font-family: 'Courier New', monospace;
+}
+
 /* Create/Edit Form */
 .article-form {
     background: #1a1a1a;
