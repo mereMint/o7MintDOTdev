@@ -144,19 +144,21 @@ function parseExplainSyntax(content) {
 
 // Render LaTeX using KaTeX if available, otherwise show raw
 function renderLatex(latex, displayMode) {
-    if (typeof katex !== 'undefined') {
+    if (typeof katex !== 'undefined' && katex.renderToString) {
         try {
             return katex.renderToString(latex, {
                 throwOnError: false,
-                displayMode: displayMode
+                displayMode: displayMode,
+                output: 'html'
             });
         } catch (e) {
-            console.error('KaTeX error:', e);
-            return escapeHtml(latex);
+            console.error('KaTeX rendering error:', e);
+            return `<span class="latex-error" title="LaTeX error">${escapeHtml(latex)}</span>`;
         }
     }
-    // Fallback: just show the raw LaTeX
-    return escapeHtml(latex);
+    // Fallback: show the raw LaTeX with a note that KaTeX isn't loaded
+    console.warn('KaTeX not available. LaTeX will display as raw text.');
+    return `<span class="latex-fallback">${escapeHtml(latex)}</span>`;
 }
 
 function escapeHtml(text) {

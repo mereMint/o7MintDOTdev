@@ -7,8 +7,8 @@
     <link rel="stylesheet" href="../styles/generic.css?v=26">
     <link rel="stylesheet" href="../styles/explain.css?v=2">
     <!-- KaTeX for LaTeX rendering -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
     <title>Create Article - Explain-TM</title>
 </head>
 
@@ -110,8 +110,12 @@
         </form>
     </div>
 
-    <script src="../scripts/js/explain.js?v=2"></script>
+    <script src="../scripts/js/explain.js?v=3"></script>
     <script>
+        // Check if KaTeX loaded successfully
+        if (typeof katex === 'undefined') {
+            console.warn('KaTeX failed to load from CDN. LaTeX formulas will not render.');
+        }
         document.addEventListener('DOMContentLoaded', initCreatePage);
     </script>
 </body>
