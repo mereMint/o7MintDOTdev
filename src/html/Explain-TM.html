@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="../styles/generic.css?v=27">
-    <link rel="stylesheet" href="../styles/explain.css?v=3">
+    <link rel="stylesheet" href="../styles/generic.css?v=28">
+    <link rel="stylesheet" href="../styles/explain.css?v=4">
     <!-- KaTeX for LaTeX rendering - with fallback CDN -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
@@ -67,7 +67,7 @@
 
         <!-- Trending Section -->
         <div class="trending-section">
-            <h2>🔥 Trending Articles</h2>
+            <h2><img src="../assets/imgs/icons/fire.svg" alt="" style="width:24px;height:24px;vertical-align:middle;"> Trending Articles</h2>
             <div id="trending-articles" class="articles-grid">
                 <div class="loading" style="grid-column: 1 / -1;">Loading...</div>
             </div>
@@ -76,7 +76,7 @@
         <!-- All Articles -->
         <div class="all-articles-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2 style="color: #1DCD9F; margin: 0;">📚 All Articles</h2>
+                <h2 style="color: #1DCD9F; margin: 0;"><img src="../assets/imgs/icons/book.svg" alt="" style="width:24px;height:24px;vertical-align:middle;"> All Articles</h2>
                 <button class="btn btn-primary" onclick="showCreateForm()">+ Create Article</button>
             </div>
             <div id="articles-grid" class="articles-grid">
@@ -88,7 +88,7 @@
         <div id="status-message" class="status-message" style="display: none;"></div>
     </div>
 
-    <script src="../scripts/js/explain.js?v=4"></script>
+    <script src="../scripts/js/explain.js?v=5"></script>
     <script>
         document.addEventListener('DOMContentLoaded', initWikiHome);
     </script>

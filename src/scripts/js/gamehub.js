@@ -3,7 +3,7 @@ const apiBase = ''; // Relative path for same-origin
 document.addEventListener('DOMContentLoaded', () => {
     // Check for file protocol
     if (window.location.protocol === 'file:') {
-        alert("⚠️ CRITICAL: You are opening this file directly!\n\nPlease access the site via the server:\nhttp://localhost:8000/src/html/GameHub.html");
+        alert("[WARNING] CRITICAL: You are opening this file directly!\n\nPlease access the site via the server:\nhttp://localhost:8000/src/html/GameHub.html");
         document.body.innerHTML = '<h1 style="color:red; padding: 20px;">Please open http://localhost:8000</h1>';
         return;
     }

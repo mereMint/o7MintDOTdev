@@ -7,7 +7,7 @@ let allGames = [];
 document.addEventListener('DOMContentLoaded', () => {
     // Check for file protocol
     if (window.location.protocol === 'file:') {
-        alert("⚠️ Please access the site via the server:\nhttp://localhost:8000/src/html/Profile.html");
+        alert("[WARNING] Please access the site via the server:\nhttp://localhost:8000/src/html/Profile.html");
         return;
     }
 
@@ -544,17 +544,43 @@ async function loadModeratorPanel() {
     document.getElementById('moderator-panel').style.display = 'block';
 
     try {
-        const res = await fetch(`/api/moderator/pending?moderator_username=${currentUser.username}`);
+        // Fetch pending articles/revisions and pending posts
+        const [res, postsRes] = await Promise.all([
+            fetch(`/api/moderator/pending?moderator_username=${currentUser.username}`),
+            fetch(`/api/moderator/posts/pending?moderator_username=${currentUser.username}`)
+        ]);
         const data = await res.json();
+        const pendingPosts = await postsRes.json();
 
         const container = document.getElementById('pending-items');
         
-        if (data.articles.length === 0 && data.revisions.length === 0) {
+        if (data.articles.length === 0 && data.revisions.length === 0 && pendingPosts.length === 0) {
             container.innerHTML = '<p class="muted">No pending items to review</p>';
             return;
         }
 
         let html = '';
+
+        // Pending Posts Section
+        if (pendingPosts.length > 0) {
+            html += '<h3 style="color: #aaa; margin-bottom: 15px;">Pending Posts</h3>';
+            pendingPosts.forEach(post => {
+                html += `
+                    <div class="pending-item">
+                        <div class="pending-post-header">
+                            <strong>${escapeHtml(post.username)}</strong>
+                            <span class="muted">${new Date(post.created_at).toLocaleString()}</span>
+                        </div>
+                        <p style="margin: 10px 0; padding: 10px; background: #222; border-radius: 4px;">${escapeHtml(post.content)}</p>
+                        <div class="pending-actions">
+                            <button onclick="approvePost(${post.id})" class="btn-primary btn-small">Approve</button>
+                            <button onclick="rejectPost(${post.id})" class="btn-danger btn-small">Reject</button>
+                            <button onclick="deletePost(${post.id})" class="btn-danger btn-small">Delete</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
 
         if (data.articles.length > 0) {
             html += '<h3 style="color: #aaa; margin-bottom: 15px;">Pending Articles</h3>';
@@ -562,7 +588,7 @@ async function loadModeratorPanel() {
                 html += `
                     <div class="pending-item">
                         <h4>${escapeHtml(article.title)}</h4>
-                        <p>By ${escapeHtml(article.author)} • ${article.category_name || 'Uncategorized'}</p>
+                        <p>By ${escapeHtml(article.author)} - ${article.category_name || 'Uncategorized'}</p>
                         <div class="pending-actions">
                             <button onclick="approveArticle(${article.id})" class="btn-primary btn-small">Approve</button>
                             <button onclick="rejectArticle(${article.id})" class="btn-danger btn-small">Reject</button>
@@ -578,7 +604,7 @@ async function loadModeratorPanel() {
                 html += `
                     <div class="pending-item">
                         <h4>Edit for: ${escapeHtml(rev.title)}</h4>
-                        <p>By ${escapeHtml(rev.editor)} • ${rev.edit_summary || 'No summary'}</p>
+                        <p>By ${escapeHtml(rev.editor)} - ${rev.edit_summary || 'No summary'}</p>
                         <div class="pending-actions">
                             <button onclick="approveRevision(${rev.id})" class="btn-primary btn-small">Approve</button>
                             <button onclick="rejectRevision(${rev.id})" class="btn-danger btn-small">Reject</button>
@@ -644,6 +670,46 @@ async function rejectRevision(id) {
         loadModeratorPanel();
     } catch (err) {
         console.error("Reject Revision Error:", err);
+    }
+}
+
+// Post Moderation Functions
+async function approvePost(id) {
+    try {
+        await fetch(`/api/moderator/post/${id}/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ moderator_username: currentUser.username })
+        });
+        loadModeratorPanel();
+    } catch (err) {
+        console.error("Approve Post Error:", err);
+    }
+}
+
+async function rejectPost(id) {
+    try {
+        await fetch(`/api/moderator/post/${id}/reject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ moderator_username: currentUser.username })
+        });
+        loadModeratorPanel();
+    } catch (err) {
+        console.error("Reject Post Error:", err);
+    }
+}
+
+async function deletePost(id) {
+    if (!confirm('Are you sure you want to permanently delete this post?')) return;
+    
+    try {
+        await fetch(`/api/moderator/post/${id}?moderator_username=${currentUser.username}`, {
+            method: 'DELETE'
+        });
+        loadModeratorPanel();
+    } catch (err) {
+        console.error("Delete Post Error:", err);
     }
 }
 
