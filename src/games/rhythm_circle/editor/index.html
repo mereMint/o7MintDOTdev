@@ -191,6 +191,8 @@
             min-width: 100%;
             position: relative;
             background: linear-gradient(to right, #0d0d1d, #1a1a2a);
+            user-select: none;
+            /* Prevent text selection */
         }
 
         .timeline-ruler {
@@ -581,6 +583,8 @@
         let backgroundImage = null;
         let backgroundFilename = '';
         let isDraggingPlayhead = false;
+        let isDraggingNote = false;
+        let draggedNoteIndex = -1;
 
         const previewCanvas = document.getElementById('preview-canvas');
         const previewCtx = previewCanvas.getContext('2d');
@@ -642,7 +646,47 @@
                     isDraggingPlayhead = false;
                     document.body.style.cursor = '';
                 }
+                if (isDraggingNote) {
+                    isDraggingNote = false;
+                    draggedNoteIndex = -1;
+                    document.body.style.cursor = '';
+                    // Sort notes after drag
+                    notes.sort((a, b) => a.time - b.time);
+                    updateTimeline();
+                }
             });
+
+            document.addEventListener('mousemove', (e) => {
+                // Note Dragging Logic
+                if (isDraggingNote && draggedNoteIndex !== -1) {
+                    const timeline = document.getElementById('timeline');
+                    const scroll = document.getElementById('timeline-scroll');
+                    const rect = timeline.getBoundingClientRect();
+                    const x = e.clientX - rect.left + scroll.scrollLeft;
+                    let time = Math.max(0, x / pixelsPerMs);
+
+                    // Snap Logic (Duplicate of addNote logic - refactor if possible)
+                    const snapDivisor = parseInt(document.getElementById('snap-select').value);
+                    if (snapDivisor > 0) {
+                        const bpm = parseInt(document.getElementById('song-bpm').value) || 120;
+                        const msPerBeat = 60000 / bpm;
+                        const msPerSnap = msPerBeat / (snapDivisor / 1);
+                        time = Math.round(time / msPerSnap) * msPerSnap;
+                    } else {
+                        time = Math.round(time);
+                    }
+
+                    notes[draggedNoteIndex].time = time;
+                    // Update specific note visual without full redraw? 
+                    // For now full redraw is safest but maybe slow. 
+                    // Let's just update styles manually for performance or move marker?
+                    // Actually updateTimeline calls renderNotes which clears DOM. 
+                    // Let's just do full update for correctness for now.
+                    updateTimeline();
+                    drawPreview(time);
+                }
+            });
+
 
             // Playback update using requestAnimationFrame for better performance
             function playbackLoop() {
@@ -809,9 +853,14 @@
                 marker.className = `note-marker ${note.type}`;
                 marker.style.left = `${note.time * pixelsPerMs}px`;
                 marker.dataset.index = index;
+                marker.onmousedown = (e) => {
+                    e.stopPropagation(); // Prevent timeline click
+                    startDragNote(index, e);
+                    selectNote(index);
+                };
                 marker.onclick = (e) => {
                     e.stopPropagation();
-                    selectNote(index);
+                    // Selection is handled in mousedown
                 };
 
                 // Determine track
@@ -837,6 +886,11 @@
         }
 
         function handleTimelineClick(e) {
+            // Prevent placing note if dragging something
+            if (isDraggingPlayhead || isDraggingNote) return;
+            // Also prevent if clicking a note marker (handled by note click/drag)
+            if (e.target.classList.contains('note-marker')) return;
+
             const timeline = document.getElementById('timeline');
             const rect = timeline.getBoundingClientRect();
             const x = e.clientX - rect.left + document.getElementById('timeline-scroll').scrollLeft;
@@ -888,6 +942,12 @@
             selectedNote = index;
             document.querySelectorAll('.note-marker').forEach(m => m.classList.remove('selected'));
             document.querySelector(`.note-marker[data-index="${index}"]`)?.classList.add('selected');
+        }
+
+        function startDragNote(index, e) {
+            isDraggingNote = true;
+            draggedNoteIndex = index;
+            document.body.style.cursor = 'grabbing';
         }
 
         function deleteNote(index) {
