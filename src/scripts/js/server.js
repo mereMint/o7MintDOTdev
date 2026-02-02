@@ -65,11 +65,21 @@ pool.getConnection()
             `);
             await conn.query(`
                 CREATE TABLE IF NOT EXISTS user_achievements (
-                    username VARCHAR(255),
-                    game_id VARCHAR(255),
-                    achievement_id VARCHAR(255),
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(255) NOT NULL,
+                    game_id VARCHAR(255) NOT NULL,
+                    achievement_id VARCHAR(255) NOT NULL,
                     unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (username, game_id, achievement_id)
+                    UNIQUE KEY unique_unlock (username, game_id, achievement_id)
+                )
+            `);
+            // Ensure posts table exists
+            await conn.query(`
+                CREATE TABLE IF NOT EXISTS posts (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(255) DEFAULT 'Anonymous',
+                    content VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             `);
             // Ensure scores table exists with avatar columns
@@ -110,6 +120,8 @@ pool.getConnection()
                 await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(500) DEFAULT NULL");
                 await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255)");
                 await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS avatar VARCHAR(255)");
+                // Migration for user_achievements: ensure id column exists
+                await conn.query("ALTER TABLE user_achievements ADD COLUMN IF NOT EXISTS id INT AUTO_INCREMENT PRIMARY KEY FIRST");
                 console.log("✅ Schema Migrations applied.");
             } catch (migErr) {
                 // Fallback for older versions or if syntax fails: verify manually
