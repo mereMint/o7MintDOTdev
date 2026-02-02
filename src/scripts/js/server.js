@@ -120,8 +120,32 @@ pool.getConnection()
                 await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(500) DEFAULT NULL");
                 await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255)");
                 await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS avatar VARCHAR(255)");
+                
                 // Migration for user_achievements: ensure id column exists
-                await conn.query("ALTER TABLE user_achievements ADD COLUMN IF NOT EXISTS id INT AUTO_INCREMENT PRIMARY KEY FIRST");
+                // Check if id column already exists before attempting migration
+                try {
+                    const columns = await conn.query("SHOW COLUMNS FROM user_achievements LIKE 'id'");
+                    if (columns.length === 0) {
+                        // id column doesn't exist - this is an old table that needs migration
+                        // Drop the old primary key and add the new id column
+                        try {
+                            await conn.query("ALTER TABLE user_achievements DROP PRIMARY KEY");
+                        } catch (pkErr) {
+                            // Primary key may not exist or already dropped
+                        }
+                        await conn.query("ALTER TABLE user_achievements ADD COLUMN id INT AUTO_INCREMENT PRIMARY KEY FIRST");
+                        // Add unique key for the original columns if not exists
+                        try {
+                            await conn.query("ALTER TABLE user_achievements ADD UNIQUE KEY unique_unlock (username, game_id, achievement_id)");
+                        } catch (ukErr) {
+                            // Unique key may already exist
+                        }
+                        console.log("✅ user_achievements table migrated to include id column.");
+                    }
+                } catch (achMigErr) {
+                    console.warn("user_achievements migration skipped:", achMigErr.message);
+                }
+                
                 console.log("✅ Schema Migrations applied.");
             } catch (migErr) {
                 // Fallback for older versions or if syntax fails: verify manually
