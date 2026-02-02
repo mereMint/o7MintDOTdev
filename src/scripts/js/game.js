@@ -437,6 +437,16 @@ async function submitManualScore() {
 
 async function submitScore(username, score, boardId = 'main') {
     try {
+        // Get user's discord_id and avatar from localStorage
+        const storedUser = localStorage.getItem('discord_user');
+        let discord_id = null;
+        let avatar = null;
+        if (storedUser) {
+            const userData = JSON.parse(storedUser);
+            discord_id = userData.discord_id;
+            avatar = userData.avatar;
+        }
+
         const res = await fetch('/api/score', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -444,7 +454,9 @@ async function submitScore(username, score, boardId = 'main') {
                 game_id: gameId,
                 username: username,
                 score: score,
-                board_id: boardId
+                board_id: boardId,
+                discord_id: discord_id,
+                avatar: avatar
             })
         });
 

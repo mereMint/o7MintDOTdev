@@ -3,6 +3,19 @@
 CREATE DATABASE IF NOT EXISTS mintdev_db;
 USE mintdev_db;
 
+-- Users Table
+CREATE TABLE IF NOT EXISTS users (
+    username VARCHAR(255) PRIMARY KEY,
+    discord_id VARCHAR(255),
+    avatar VARCHAR(255),
+    points INT DEFAULT 0,
+    inventory JSON,
+    decoration VARCHAR(50) DEFAULT NULL,
+    bio VARCHAR(500) DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 -- Posts Table
 CREATE TABLE IF NOT EXISTS posts (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -11,13 +24,15 @@ CREATE TABLE IF NOT EXISTS posts (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Scores Table (Updated for Flexible Leaderboards)
+-- Scores Table (Updated for Flexible Leaderboards with avatar caching)
 CREATE TABLE IF NOT EXISTS scores (
     id INT AUTO_INCREMENT PRIMARY KEY,
     game_id VARCHAR(50) NOT NULL,
     board_id VARCHAR(50) DEFAULT 'main',
     username VARCHAR(255) NOT NULL,
     score INT NOT NULL,
+    discord_id VARCHAR(255),
+    avatar VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_game_board_score (game_id, board_id, score DESC)
 );
@@ -32,7 +47,7 @@ CREATE TABLE IF NOT EXISTS user_achievements (
     UNIQUE KEY unique_unlock (username, game_id, achievement_id)
 );
 
--- Saved Games Table (NEW generic save system)
+-- Saved Games Table (Generic save system)
 CREATE TABLE IF NOT EXISTS saved_games (
     id INT AUTO_INCREMENT PRIMARY KEY,
     save_id VARCHAR(100) NOT NULL UNIQUE, -- Combination of game_user_slot

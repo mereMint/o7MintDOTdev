@@ -57,6 +57,8 @@ pool.getConnection()
                     avatar VARCHAR(255),
                     points INT DEFAULT 0,
                     inventory JSON,
+                    decoration VARCHAR(50) DEFAULT NULL,
+                    bio VARCHAR(500) DEFAULT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
@@ -70,7 +72,7 @@ pool.getConnection()
                     PRIMARY KEY (username, game_id, achievement_id)
                 )
             `);
-            // Ensure scores table exists (simple check)
+            // Ensure scores table exists with avatar columns
             await conn.query(`
                 CREATE TABLE IF NOT EXISTS scores (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -78,7 +80,23 @@ pool.getConnection()
                     username VARCHAR(255),
                     score INT,
                     board_id VARCHAR(50) DEFAULT 'main',
+                    discord_id VARCHAR(255),
+                    avatar VARCHAR(255),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+            // Ensure saved_games table exists
+            await conn.query(`
+                CREATE TABLE IF NOT EXISTS saved_games (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    save_id VARCHAR(100) NOT NULL UNIQUE,
+                    game_id VARCHAR(50) NOT NULL,
+                    username VARCHAR(255) NOT NULL,
+                    slot_id VARCHAR(50) NOT NULL DEFAULT 'auto',
+                    label VARCHAR(100),
+                    data JSON NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX idx_user_game (username, game_id)
                 )
             `);
             console.log("✅ Tables verified/created.");
@@ -88,6 +106,10 @@ pool.getConnection()
                 // MariaDB 10.2+ supports IF NOT EXISTS in ADD COLUMN
                 await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS points INT DEFAULT 0");
                 await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS inventory JSON");
+                await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS decoration VARCHAR(50) DEFAULT NULL");
+                await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(500) DEFAULT NULL");
+                await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255)");
+                await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS avatar VARCHAR(255)");
                 console.log("✅ Schema Migrations applied.");
             } catch (migErr) {
                 // Fallback for older versions or if syntax fails: verify manually
@@ -148,6 +170,26 @@ function containsBadWord(text) {
     const allBadWords = [...badWords, ...defaultBadWords];
     return allBadWords.some(word => lowerText.includes(word.toLowerCase()));
 }
+
+// --- Admin Middleware (Localhost Only) ---
+const adminMiddleware = (req, res, next) => {
+    // 1. Check Cloudflare Header (Tunnel)
+    if (req.headers['cf-ray'] || req.headers['x-forwarded-for']) {
+        console.warn(`[Security] Blocked Admin access from Tunnel/External: ${req.ip}`);
+        return res.status(403).send("Forbidden: Localhost Only");
+    }
+
+    // 2. Check IP (IPv4 and IPv6 localhost)
+    const ip = req.ip || req.connection.remoteAddress;
+    const isLocal = ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1';
+
+    if (!isLocal) {
+        console.warn(`[Security] Blocked Admin access from IP: ${ip}`);
+        return res.status(403).send("Forbidden: Localhost Only");
+    }
+
+    next();
+};
 
 // --- API Routes ---
 
@@ -262,6 +304,130 @@ app.get('/api/games', (req, res) => {
     }
 });
 
+// GET /api/games/:gameId - Get single game details
+app.get('/api/games/:gameId', (req, res) => {
+    const gameId = req.params.gameId;
+    
+    // Validate gameId to prevent path traversal
+    if (!/^[a-zA-Z0-9_-]+$/.test(gameId)) {
+        return res.status(400).json({ error: "Invalid game ID" });
+    }
+    
+    const gameData = getGameData(gameId);
+    
+    if (!gameData) {
+        return res.status(404).json({ error: "Game not found" });
+    }
+    
+    res.json({
+        id: gameId,
+        name: gameData.name || gameId,
+        description: gameData.description || "",
+        genre: gameData.genre || "Uncategorized",
+        settings: gameData.settings || {},
+        images: gameData.images || [],
+        achievements: gameData.achievements || [],
+        image: `/src/games/${gameId}/logo.png`,
+        url: `/src/games/${gameId}/index.html`
+    });
+});
+
+// PUT /api/games/:gameId/achievements - Update achievement settings (for game devs, localhost only)
+app.put('/api/games/:gameId/achievements', adminMiddleware, (req, res) => {
+    const gameId = req.params.gameId;
+    const { achievements } = req.body;
+    
+    // Validate gameId to prevent path traversal
+    if (!/^[a-zA-Z0-9_-]+$/.test(gameId)) {
+        return res.status(400).json({ error: "Invalid game ID" });
+    }
+    
+    if (!achievements || !Array.isArray(achievements)) {
+        return res.status(400).json({ error: "Invalid achievements data" });
+    }
+    
+    const dataPath = path.join(__dirname, '../../games', gameId, 'data.json');
+    
+    if (!fs.existsSync(dataPath)) {
+        return res.status(404).json({ error: "Game not found" });
+    }
+    
+    try {
+        const gameData = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+        gameData.achievements = achievements;
+        fs.writeFileSync(dataPath, JSON.stringify(gameData, null, 4), 'utf8');
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Error updating achievements:", err);
+        res.status(500).json({ error: "Failed to update achievements" });
+    }
+});
+
+// GET /api/games/:gameId/stats - Get game statistics (for devs)
+app.get('/api/games/:gameId/stats', async (req, res) => {
+    const gameId = req.params.gameId;
+    
+    // Validate gameId
+    if (!/^[a-zA-Z0-9_-]+$/.test(gameId)) {
+        return res.status(400).json({ error: "Invalid game ID" });
+    }
+    
+    if (useInMemory) {
+        const gameScores = memoryScores.filter(s => s.game_id === gameId);
+        const gameAch = memoryAchievements.filter(a => a.game_id === gameId);
+        return res.json({
+            total_plays: gameScores.length,
+            unique_players: [...new Set(gameScores.map(s => s.username))].length,
+            total_achievements_unlocked: gameAch.length,
+            avg_score: gameScores.length ? Math.round(gameScores.reduce((a, s) => a + s.score, 0) / gameScores.length) : 0,
+            top_score: gameScores.length ? Math.max(...gameScores.map(s => s.score)) : 0
+        });
+    }
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        
+        // Get score stats
+        const scoreStats = await conn.query(`
+            SELECT 
+                COUNT(*) as total_plays,
+                COUNT(DISTINCT username) as unique_players,
+                AVG(score) as avg_score,
+                MAX(score) as top_score
+            FROM scores WHERE game_id = ?
+        `, [gameId]);
+        
+        // Get achievement stats
+        const achStats = await conn.query(`
+            SELECT COUNT(*) as total_unlocks
+            FROM user_achievements WHERE game_id = ?
+        `, [gameId]);
+        
+        // Get achievement breakdown
+        const achBreakdown = await conn.query(`
+            SELECT achievement_id, COUNT(*) as unlock_count
+            FROM user_achievements WHERE game_id = ?
+            GROUP BY achievement_id
+        `, [gameId]);
+        
+        const stats = scoreStats[0] || {};
+        res.json({
+            total_plays: Number(stats.total_plays) || 0,
+            unique_players: Number(stats.unique_players) || 0,
+            avg_score: Math.round(stats.avg_score) || 0,
+            top_score: Number(stats.top_score) || 0,
+            total_achievements_unlocked: Number(achStats[0]?.total_unlocks) || 0,
+            achievement_breakdown: achBreakdown
+        });
+    } catch (err) {
+        console.error("Game Stats Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
 let memoryScores = [
     { game_id: "sample_game", board_id: "main", username: "DevMode", score: 9999, created_at: new Date() }
 ];
@@ -365,7 +531,7 @@ app.get('/api/scores/rank', async (req, res) => {
 // POST /api/score
 app.post('/api/score', async (req, res) => {
     try {
-        const { game_id, username, score, board_id } = req.body;
+        const { game_id, username, score, board_id, discord_id, avatar } = req.body;
         if (!game_id || score === undefined) return res.status(400).json({ error: "Invalid data" });
 
         const user = username || "Anonymous";
@@ -373,21 +539,34 @@ app.post('/api/score', async (req, res) => {
 
         if (useInMemory) {
             console.log(`[RAM] Score saved: ${user} - ${score} for ${game_id} (${board})`);
-            memoryScores.push({ game_id, board_id: board, username: user, score: parseInt(score), created_at: new Date() });
+            memoryScores.push({ game_id, board_id: board, username: user, score: parseInt(score), discord_id, avatar, created_at: new Date() });
             return res.json({ success: true, mode: "memory" });
         }
 
         let conn;
         try {
             conn = await pool.getConnection();
-            // Note: DB Schema needs board_id column
-            await conn.query("INSERT INTO scores (game_id, username, score, board_id) VALUES (?, ?, ?, ?)", [game_id, user, score, board]);
+            // Get user's avatar from users table if not provided
+            let userDiscordId = discord_id;
+            let userAvatar = avatar;
+            if (!userDiscordId || !userAvatar) {
+                const userRes = await conn.query("SELECT discord_id, avatar FROM users WHERE username = ?", [user]);
+                if (userRes.length > 0) {
+                    userDiscordId = userDiscordId || userRes[0].discord_id;
+                    userAvatar = userAvatar || userRes[0].avatar;
+                }
+            }
+            
+            await conn.query(
+                "INSERT INTO scores (game_id, username, score, board_id, discord_id, avatar) VALUES (?, ?, ?, ?, ?, ?)",
+                [game_id, user, score, board, userDiscordId || null, userAvatar || null]
+            );
             res.json({ success: true });
         } catch (err) {
             if (err.code === 'ER_BAD_FIELD_ERROR') {
-                // Fallback
-                await conn.query("INSERT INTO scores (game_id, username, score) VALUES (?, ?, ?)", [game_id, user, score]);
-                return res.json({ success: true, warning: "board_id ignored" });
+                // Fallback for older schema without discord_id/avatar columns
+                await conn.query("INSERT INTO scores (game_id, username, score, board_id) VALUES (?, ?, ?, ?)", [game_id, user, score, board]);
+                return res.json({ success: true, warning: "avatar columns not available" });
             }
             throw err;
         } finally {
@@ -678,42 +857,59 @@ app.get('/api/user/:username/stats', async (req, res) => {
         const totalScore = userScores.reduce((acc, s) => acc + s.score, 0);
         const avgScore = userScores.length ? (totalScore / userScores.length).toFixed(0) : 0;
         const bestScore = userScores.length ? Math.max(...userScores.map(s => s.score)) : 0;
+        const achievementCount = memoryAchievements.filter(a => a.username === username).length;
 
         return res.json({
             username,
             games_played: uniqueGames,
             total_score: totalScore,
             average_score: avgScore,
-            best_score: bestScore
+            best_score: bestScore,
+            total_achievements: achievementCount,
+            points: 0,
+            decoration: null,
+            bio: null
         });
     }
 
     let conn;
     try {
         conn = await pool.getConnection();
+        
+        // Get user data
+        const userRes = await conn.query("SELECT points, decoration, bio, discord_id, avatar FROM users WHERE username = ?", [username]);
+        const userData = userRes[0] || {};
+        
         // Calculate stats
-        // Note: For 'games_played', we count unique game_ids for this user
-        // For 'best_score', we get the max score
         const stats = await conn.query(`
             SELECT 
                 COUNT(DISTINCT s.game_id) as games_played,
                 SUM(s.score) as total_score,
                 AVG(s.score) as average_score,
                 MAX(s.score) as best_score,
-                MAX(u.points) as points
+                COUNT(s.id) as total_submissions
             FROM scores s
-            LEFT JOIN users u ON s.username = u.username
             WHERE s.username = ?
         `, [username]);
+        
+        // Count achievements
+        const achRes = await conn.query("SELECT COUNT(*) as count FROM user_achievements WHERE username = ?", [username]);
+        const totalAchievements = Number(achRes[0]?.count) || 0;
 
         const data = stats[0] || {};
         res.json({
             username,
+            discord_id: userData.discord_id || null,
+            avatar: userData.avatar || null,
             games_played: Number(data.games_played) || 0,
             total_score: Number(data.total_score) || 0,
             average_score: Math.round(data.average_score) || 0,
             best_score: Number(data.best_score) || 0,
-            points: Number(data.points) || 0
+            total_submissions: Number(data.total_submissions) || 0,
+            total_achievements: totalAchievements,
+            points: Number(userData.points) || 0,
+            decoration: userData.decoration || null,
+            bio: userData.bio || null
         });
 
     } catch (err) {
@@ -725,29 +921,201 @@ app.get('/api/user/:username/stats', async (req, res) => {
 
 });
 
+// GET /api/user/:username/profile - Get full profile with achievements including images
+app.get('/api/user/:username/profile', async (req, res) => {
+    const { username } = req.params;
+
+    if (useInMemory) {
+        const userAch = memoryAchievements.filter(a => a.username === username);
+        const achWithImages = userAch.map(a => {
+            const gameData = getGameData(a.game_id);
+            const achData = gameData?.achievements?.find(x => x.id === a.achievement_id || x.title === a.achievement_id);
+            return {
+                ...a,
+                title: achData?.title || a.achievement_id,
+                description: achData?.description || '',
+                image: achData?.image || null,
+                game_name: gameData?.name || a.game_id,
+                points: achData?.points || 10
+            };
+        });
+        return res.json({
+            username,
+            achievements: achWithImages,
+            decoration: null,
+            bio: null
+        });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        
+        // Get user data
+        const userRes = await conn.query("SELECT points, decoration, bio, discord_id, avatar FROM users WHERE username = ?", [username]);
+        const userData = userRes[0] || {};
+        
+        // Get achievements
+        const achRes = await conn.query("SELECT achievement_id, game_id, unlocked_at FROM user_achievements WHERE username = ?", [username]);
+        
+        // Enrich achievements with game data
+        const achievementsWithImages = achRes.map(a => {
+            const gameData = getGameData(a.game_id);
+            const achData = gameData?.achievements?.find(x => x.id === a.achievement_id || x.title === a.achievement_id);
+            return {
+                ...a,
+                title: achData?.title || a.achievement_id,
+                description: achData?.description || '',
+                image: achData?.image || null,
+                game_name: gameData?.name || a.game_id,
+                points: achData?.points || 10
+            };
+        });
+        
+        res.json({
+            username,
+            discord_id: userData.discord_id || null,
+            avatar: userData.avatar || null,
+            points: Number(userData.points) || 0,
+            decoration: userData.decoration || null,
+            bio: userData.bio || null,
+            achievements: achievementsWithImages
+        });
+
+    } catch (err) {
+        console.error("Profile Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// PUT /api/user/:username/profile - Update user profile (decoration, bio)
+app.put('/api/user/:username/profile', async (req, res) => {
+    const { username } = req.params;
+    const { decoration, bio } = req.body;
+
+    if (useInMemory) {
+        return res.json({ success: true, mode: "memory" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        
+        // Build update query dynamically
+        const updates = [];
+        const values = [];
+        
+        if (decoration !== undefined) {
+            updates.push("decoration = ?");
+            values.push(decoration);
+        }
+        if (bio !== undefined) {
+            updates.push("bio = ?");
+            values.push(bio ? bio.substring(0, 500) : null); // Limit bio length
+        }
+        
+        if (updates.length === 0) {
+            return res.status(400).json({ error: "No updates provided" });
+        }
+        
+        values.push(username);
+        await conn.query(`UPDATE users SET ${updates.join(', ')} WHERE username = ?`, values);
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Profile Update Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/decorations - Get available decorations
+app.get('/api/decorations', (req, res) => {
+    // Define available decorations
+    const decorations = [
+        { id: 'none', name: 'None', image: null, cost: 0 },
+        { id: 'gold_ring', name: 'Gold Ring', image: '/src/assets/imgs/decorations/gold_ring.svg', cost: 100 },
+        { id: 'fire', name: 'Fire Border', image: '/src/assets/imgs/decorations/fire.svg', cost: 250 },
+        { id: 'rainbow', name: 'Rainbow Glow', image: '/src/assets/imgs/decorations/rainbow.svg', cost: 500 },
+        { id: 'crown', name: 'Crown', image: '/src/assets/imgs/decorations/crown.svg', cost: 1000 },
+        { id: 'stars', name: 'Starry', image: '/src/assets/imgs/decorations/stars.svg', cost: 750 },
+        { id: 'pixel', name: 'Pixel Frame', image: '/src/assets/imgs/decorations/pixel.svg', cost: 150 }
+    ];
+    res.json(decorations);
+});
+
+// POST /api/user/:username/decoration - Purchase and equip decoration
+app.post('/api/user/:username/decoration', async (req, res) => {
+    const { username } = req.params;
+    const { decoration_id } = req.body;
+
+    if (useInMemory) {
+        return res.json({ success: true, mode: "memory" });
+    }
+
+    const decorationCosts = {
+        'none': 0, 'gold_ring': 100, 'fire': 250, 'rainbow': 500, 'crown': 1000, 'stars': 750, 'pixel': 150
+    };
+
+    const cost = decorationCosts[decoration_id];
+    if (cost === undefined) {
+        return res.status(400).json({ error: "Invalid decoration" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        
+        // Get user's current points and inventory
+        const userRes = await conn.query("SELECT points, inventory FROM users WHERE username = ?", [username]);
+        if (userRes.length === 0) {
+            return res.status(404).json({ error: "User not found" });
+        }
+        
+        const user = userRes[0];
+        const currentPoints = Number(user.points) || 0;
+        let inventory = [];
+        try {
+            inventory = user.inventory ? JSON.parse(user.inventory) : [];
+        } catch (e) {
+            inventory = [];
+        }
+        
+        // Check if already owned or can afford
+        const alreadyOwned = decoration_id === 'none' || inventory.includes(decoration_id);
+        
+        if (!alreadyOwned && currentPoints < cost) {
+            return res.status(400).json({ error: "Not enough points", required: cost, current: currentPoints });
+        }
+        
+        // If not owned, deduct points and add to inventory
+        if (!alreadyOwned) {
+            inventory.push(decoration_id);
+            await conn.query(
+                "UPDATE users SET points = points - ?, inventory = ?, decoration = ? WHERE username = ?",
+                [cost, JSON.stringify(inventory), decoration_id, username]
+            );
+        } else {
+            // Just equip
+            await conn.query("UPDATE users SET decoration = ? WHERE username = ?", [decoration_id === 'none' ? null : decoration_id, username]);
+        }
+        
+        res.json({ success: true, decoration: decoration_id, points_spent: alreadyOwned ? 0 : cost });
+    } catch (err) {
+        console.error("Decoration Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
 // --- Admin Endpoints (Localhost Only) ---
 
-const adminMiddleware = (req, res, next) => {
-    // 1. Check Cloudflare Header (Tunnel)
-    if (req.headers['cf-ray'] || req.headers['x-forwarded-for']) {
-        console.warn(`[Security] Blocked Admin access from Tunnel/External: ${req.ip}`);
-        return res.status(403).send("Forbidden: Localhost Only");
-    }
-
-    // 2. Check IP (IPv4 and IPv6 localhost)
-    const ip = req.ip || req.connection.remoteAddress;
-    const isLocal = ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1';
-
-    if (!isLocal) {
-        console.warn(`[Security] Blocked Admin access from IP: ${ip}`);
-        return res.status(403).send("Forbidden: Localhost Only");
-    }
-
-    next();
-};
-
 app.get('/api/admin/tables', adminMiddleware, async (req, res) => {
-    if (useInMemory) return res.json([{ name: "Memory Mode (No Tables)" }]);
+    if (useInMemory) return res.json(["Memory Mode (No Tables)"]);
 
     let conn;
     try {
@@ -782,6 +1150,54 @@ app.get('/api/admin/data/:table', adminMiddleware, async (req, res) => {
     } catch (err) {
         console.error(`Admin Query Error (${tableName}):`, err);
         res.status(500).json({ error: "Query Error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// DELETE /api/admin/data/:table/:id - Delete a row from a table
+app.delete('/api/admin/data/:table/:id', adminMiddleware, async (req, res) => {
+    if (useInMemory) return res.status(400).json({ error: "Memory mode - no deletion" });
+
+    const tableName = req.params.table;
+    const id = req.params.id;
+
+    // Whitelist of allowed tables and their primary keys for security
+    const allowedTables = {
+        'users': 'username',
+        'posts': 'id',
+        'scores': 'id',
+        'user_achievements': 'id',
+        'saved_games': 'id'
+    };
+
+    // Basic sanitization: only allow alphanumeric + underscore
+    if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
+        return res.status(400).json({ error: "Invalid table name" });
+    }
+
+    // Check if table is in whitelist
+    if (!allowedTables[tableName]) {
+        return res.status(400).json({ error: "Table not allowed for deletion" });
+    }
+
+    const pkColumn = allowedTables[tableName];
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        
+        // Delete the row using parameterized query for the id value
+        const result = await conn.query(`DELETE FROM ${tableName} WHERE ${pkColumn} = ?`, [id]);
+        
+        if (result.affectedRows > 0) {
+            res.json({ success: true, deleted: result.affectedRows });
+        } else {
+            res.status(404).json({ error: "Row not found" });
+        }
+    } catch (err) {
+        console.error(`Admin Delete Error (${tableName}/${id}):`, err);
+        res.status(500).json({ error: "Delete Error: " + err.message });
     } finally {
         if (conn) conn.release();
     }
