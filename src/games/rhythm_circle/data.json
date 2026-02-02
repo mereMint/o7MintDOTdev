@@ -1,0 +1,58 @@
+{
+    "name": "Rhythm Circle",
+    "description": "A rhythm game with circular notes and two-key gameplay. Hit notes as they approach the center ring - red with one key, blue with the other!",
+    "genre": "Rhythm",
+    "settings": {
+        "achievements": true,
+        "leaderboard": {
+            "key": "pp",
+            "title": "PP Ranking"
+        },
+        "phone": false
+    },
+    "images": [
+        "logo.png"
+    ],
+    "achievements": [
+        {
+            "id": "first_clear",
+            "title": "First Clear",
+            "description": "Complete your first song.",
+            "image": "logo.png",
+            "secret": false,
+            "points": 50
+        },
+        {
+            "id": "perfect_combo",
+            "title": "Perfect Combo",
+            "description": "Get a full combo on any song.",
+            "image": "logo.png",
+            "secret": false,
+            "points": 200
+        },
+        {
+            "id": "pp_100",
+            "title": "Rising Star",
+            "description": "Reach 100 total PP.",
+            "image": "logo.png",
+            "secret": false,
+            "points": 100
+        },
+        {
+            "id": "pp_500",
+            "title": "Rhythm Master",
+            "description": "Reach 500 total PP.",
+            "image": "logo.png",
+            "secret": false,
+            "points": 300
+        },
+        {
+            "id": "hidden_song",
+            "title": "Easter Egg Hunter",
+            "description": "Find and play the hidden song.",
+            "image": "logo.png",
+            "secret": true,
+            "points": 500
+        }
+    ]
+}

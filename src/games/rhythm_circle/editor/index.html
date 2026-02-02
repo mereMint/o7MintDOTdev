@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rhythm Circle - Map Editor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: #0a0a1a;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: #111;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+        }
+
+        .logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            color: #ff3366;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn.primary {
+            background: #ff3366;
+            color: #fff;
+        }
+
+        .btn.primary:hover {
+            background: #ff4477;
+        }
+
+        .btn.secondary {
+            background: #333;
+            color: #ccc;
+        }
+
+        .btn.secondary:hover {
+            background: #444;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #111;
+            border-right: 1px solid #333;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .sidebar h3 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            color: #ff3366;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            background: #1a1a2a;
+            border: 1px solid #333;
+            border-radius: 5px;
+            color: #fff;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #ff3366;
+        }
+
+        .editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .preview-canvas-container {
+            height: 300px;
+            background: #0a0a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-bottom: 1px solid #333;
+        }
+
+        #preview-canvas {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .timeline-container {
+            flex: 1;
+            background: #0d0d1d;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .timeline-controls {
+            padding: 15px;
+            background: #111;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border-bottom: 1px solid #333;
+        }
+
+        .time-display {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            color: #33ccff;
+            min-width: 100px;
+        }
+
+        .play-btn {
+            width: 40px;
+            height: 40px;
+            background: #ff3366;
+            border: none;
+            border-radius: 50%;
+            color: #fff;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .timeline-scroll {
+            flex: 1;
+            overflow-x: auto;
+            overflow-y: hidden;
+            position: relative;
+        }
+
+        #timeline {
+            height: 200px;
+            min-width: 100%;
+            position: relative;
+            background: linear-gradient(to right, #0d0d1d, #1a1a2a);
+        }
+
+        .timeline-ruler {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 30px;
+            width: 100%;
+            background: #111;
+            border-bottom: 1px solid #333;
+        }
+
+        .timeline-tracks {
+            position: absolute;
+            top: 30px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        .track {
+            height: 40px;
+            border-bottom: 1px solid #222;
+            position: relative;
+        }
+
+        .track.red { background: rgba(255, 51, 102, 0.1); }
+        .track.blue { background: rgba(51, 204, 255, 0.1); }
+        .track.special { background: rgba(255, 204, 0, 0.1); }
+
+        .track-label {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .note-marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            border: 2px solid #fff;
+        }
+
+        .note-marker.red { background: #ff3366; top: 50%; }
+        .note-marker.blue { background: #33ccff; top: 50%; }
+        .note-marker.hold { background: #ff3366; }
+        .note-marker.spam { background: #ffcc00; }
+
+        .note-marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .note-marker.selected {
+            box-shadow: 0 0 10px #fff;
+        }
+
+        .hold-trail {
+            position: absolute;
+            height: 10px;
+            background: rgba(255, 51, 102, 0.5);
+            top: 50%;
+            transform: translateY(-50%);
+            border-radius: 5px;
+        }
+
+        .playhead {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #ff3366;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .note-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .note-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            background: #1a1a2a;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            font-size: 0.85rem;
+        }
+
+        .note-item .type {
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+
+        .note-item .type.red { background: #ff3366; }
+        .note-item .type.blue { background: #33ccff; color: #000; }
+        .note-item .type.hold { background: #ff9933; }
+        .note-item .type.spam { background: #ffcc00; color: #000; }
+
+        .note-item .delete-btn {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .note-item .delete-btn:hover {
+            color: #ff3366;
+        }
+
+        .help-text {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+
+        .tool-selector {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+
+        .tool-btn {
+            flex: 1;
+            padding: 10px;
+            background: #222;
+            border: 2px solid transparent;
+            border-radius: 5px;
+            color: #888;
+            cursor: pointer;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .tool-btn.active {
+            border-color: #ff3366;
+            color: #fff;
+        }
+
+        .tool-btn.red.active { border-color: #ff3366; background: rgba(255, 51, 102, 0.2); }
+        .tool-btn.blue.active { border-color: #33ccff; background: rgba(51, 204, 255, 0.2); }
+        .tool-btn.hold.active { border-color: #ff9933; background: rgba(255, 153, 51, 0.2); }
+        .tool-btn.spam.active { border-color: #ffcc00; background: rgba(255, 204, 0, 0.2); }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="logo">Map Editor</div>
+        <div class="toolbar">
+            <button class="btn secondary" onclick="loadAudio()">Load Audio</button>
+            <button class="btn secondary" onclick="importMap()">Import Map</button>
+            <button class="btn primary" onclick="exportMap()">Export Map</button>
+            <button class="btn secondary" onclick="window.location.href='../index.html'">Back to Game</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <h3>Song Info</h3>
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" id="song-title" placeholder="Song Title">
+            </div>
+            <div class="form-group">
+                <label>Artist</label>
+                <input type="text" id="song-artist" placeholder="Artist Name">
+            </div>
+            <div class="form-group">
+                <label>Difficulty</label>
+                <select id="song-difficulty">
+                    <option value="Easy">Easy</option>
+                    <option value="Normal" selected>Normal</option>
+                    <option value="Hard">Hard</option>
+                    <option value="Expert">Expert</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Difficulty Level (1-10)</label>
+                <input type="number" id="difficulty-level" min="1" max="10" value="3">
+            </div>
+            <div class="form-group">
+                <label>BPM</label>
+                <input type="number" id="song-bpm" value="120" min="60" max="300">
+            </div>
+
+            <h3>Note Tool</h3>
+            <div class="tool-selector">
+                <button class="tool-btn red active" data-type="red" onclick="selectTool('red')">Red</button>
+                <button class="tool-btn blue" data-type="blue" onclick="selectTool('blue')">Blue</button>
+                <button class="tool-btn hold" data-type="hold" onclick="selectTool('hold')">Hold</button>
+                <button class="tool-btn spam" data-type="spam" onclick="selectTool('spam')">Spam</button>
+            </div>
+
+            <div class="form-group">
+                <label>Angle (0-360°)</label>
+                <input type="number" id="note-angle" value="0" min="0" max="360">
+            </div>
+
+            <div class="form-group" id="hold-duration-group" style="display: none;">
+                <label>Hold Duration (ms)</label>
+                <input type="number" id="hold-duration" value="1000" min="100">
+            </div>
+
+            <div class="form-group" id="spam-count-group" style="display: none;">
+                <label>Spam Count Required</label>
+                <input type="number" id="spam-count" value="5" min="2" max="20">
+            </div>
+
+            <h3>Notes (<span id="note-count">0</span>)</h3>
+            <div class="note-list" id="note-list">
+                <!-- Notes will be listed here -->
+            </div>
+
+            <div class="help-text">
+                <strong>Shortcuts:</strong><br>
+                Space - Play/Pause<br>
+                1-4 - Select Tool<br>
+                Click Timeline - Add Note<br>
+                Delete - Remove Selected<br>
+            </div>
+        </div>
+
+        <div class="editor-area">
+            <div class="preview-canvas-container">
+                <canvas id="preview-canvas" width="400" height="300"></canvas>
+            </div>
+
+            <div class="timeline-container">
+                <div class="timeline-controls">
+                    <button class="play-btn" id="play-btn" onclick="togglePlay()">▶</button>
+                    <span class="time-display" id="time-display">0:00.000</span>
+                    <input type="range" id="zoom-slider" min="1" max="10" value="5" style="width: 100px;">
+                    <span style="color: #888; font-size: 0.85rem;">Zoom</span>
+                </div>
+
+                <div class="timeline-scroll" id="timeline-scroll">
+                    <div id="timeline">
+                        <div class="timeline-ruler" id="timeline-ruler"></div>
+                        <div class="timeline-tracks">
+                            <div class="track red">
+                                <span class="track-label">Red</span>
+                            </div>
+                            <div class="track blue">
+                                <span class="track-label">Blue</span>
+                            </div>
+                            <div class="track special">
+                                <span class="track-label">Hold/Spam</span>
+                            </div>
+                        </div>
+                        <div class="playhead" id="playhead" style="left: 0;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="audio-input" accept="audio/*" style="display: none;">
+    <input type="file" id="map-input" accept=".json" style="display: none;">
+
+    <script>
+        // ===== STATE =====
+        let notes = [];
+        let selectedNote = null;
+        let currentTool = 'red';
+        let audio = null;
+        let isPlaying = false;
+        let zoomLevel = 5;
+        let pixelsPerMs = 0.1;
+
+        const previewCanvas = document.getElementById('preview-canvas');
+        const previewCtx = previewCanvas.getContext('2d');
+
+        // ===== INITIALIZATION =====
+        document.addEventListener('DOMContentLoaded', () => {
+            setupEventListeners();
+            updateTimeline();
+            drawPreview();
+        });
+
+        function setupEventListeners() {
+            // Audio file input
+            document.getElementById('audio-input').addEventListener('change', handleAudioLoad);
+            document.getElementById('map-input').addEventListener('change', handleMapImport);
+
+            // Zoom slider
+            document.getElementById('zoom-slider').addEventListener('input', (e) => {
+                zoomLevel = parseInt(e.target.value);
+                pixelsPerMs = 0.05 * zoomLevel;
+                updateTimeline();
+            });
+
+            // Timeline click to add notes
+            document.getElementById('timeline').addEventListener('click', handleTimelineClick);
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', handleKeyboard);
+
+            // Playback update using requestAnimationFrame for better performance
+            function playbackLoop() {
+                updatePlayback();
+                requestAnimationFrame(playbackLoop);
+            }
+            requestAnimationFrame(playbackLoop);
+        }
+
+        // ===== TOOL SELECTION =====
+        function selectTool(type) {
+            currentTool = type;
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.type === type);
+            });
+
+            // Show/hide relevant options
+            document.getElementById('hold-duration-group').style.display = type === 'hold' ? 'block' : 'none';
+            document.getElementById('spam-count-group').style.display = type === 'spam' ? 'block' : 'none';
+        }
+
+        // ===== AUDIO =====
+        function loadAudio() {
+            document.getElementById('audio-input').click();
+        }
+
+        function handleAudioLoad(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const url = URL.createObjectURL(file);
+            audio = new Audio(url);
+            audio.addEventListener('loadedmetadata', () => {
+                updateTimeline();
+            });
+            audio.addEventListener('ended', () => {
+                isPlaying = false;
+                document.getElementById('play-btn').textContent = '▶';
+            });
+        }
+
+        function togglePlay() {
+            if (!audio) {
+                alert('Please load an audio file first');
+                return;
+            }
+
+            if (isPlaying) {
+                audio.pause();
+                isPlaying = false;
+                document.getElementById('play-btn').textContent = '▶';
+            } else {
+                audio.play();
+                isPlaying = true;
+                document.getElementById('play-btn').textContent = '⏸';
+            }
+        }
+
+        function updatePlayback() {
+            if (!audio) return;
+
+            const currentTime = audio.currentTime * 1000;
+            const playhead = document.getElementById('playhead');
+            playhead.style.left = `${currentTime * pixelsPerMs}px`;
+
+            // Update time display
+            const mins = Math.floor(audio.currentTime / 60);
+            const secs = Math.floor(audio.currentTime % 60);
+            const ms = Math.floor((audio.currentTime % 1) * 1000);
+            document.getElementById('time-display').textContent = 
+                `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+
+            // Auto-scroll timeline
+            if (isPlaying) {
+                const scroll = document.getElementById('timeline-scroll');
+                const playheadX = currentTime * pixelsPerMs;
+                const viewportWidth = scroll.clientWidth;
+                if (playheadX > scroll.scrollLeft + viewportWidth - 100) {
+                    scroll.scrollLeft = playheadX - 100;
+                }
+            }
+
+            drawPreview(currentTime);
+        }
+
+        // ===== TIMELINE =====
+        function updateTimeline() {
+            const timeline = document.getElementById('timeline');
+            const ruler = document.getElementById('timeline-ruler');
+            
+            // Calculate timeline width
+            const duration = audio ? audio.duration * 1000 : 60000;
+            const width = duration * pixelsPerMs;
+            timeline.style.width = `${Math.max(width, window.innerWidth)}px`;
+
+            // Draw ruler
+            ruler.innerHTML = '';
+            const beatInterval = 60000 / (parseInt(document.getElementById('song-bpm').value) || 120);
+            
+            for (let t = 0; t < duration; t += beatInterval) {
+                const marker = document.createElement('div');
+                marker.style.cssText = `
+                    position: absolute;
+                    left: ${t * pixelsPerMs}px;
+                    top: 0;
+                    height: 100%;
+                    width: 1px;
+                    background: ${t % (beatInterval * 4) === 0 ? '#555' : '#333'};
+                `;
+                ruler.appendChild(marker);
+
+                // Time labels every 4 beats
+                if (t % (beatInterval * 4) === 0) {
+                    const label = document.createElement('span');
+                    label.style.cssText = `
+                        position: absolute;
+                        left: ${t * pixelsPerMs + 5}px;
+                        top: 5px;
+                        font-size: 10px;
+                        color: #666;
+                    `;
+                    label.textContent = `${Math.floor(t / 1000)}s`;
+                    ruler.appendChild(label);
+                }
+            }
+
+            // Render notes
+            renderNotes();
+        }
+
+        function renderNotes() {
+            // Clear existing note markers
+            document.querySelectorAll('.note-marker, .hold-trail').forEach(el => el.remove());
+
+            const tracks = document.querySelector('.timeline-tracks');
+
+            notes.forEach((note, index) => {
+                const marker = document.createElement('div');
+                marker.className = `note-marker ${note.type}`;
+                marker.style.left = `${note.time * pixelsPerMs}px`;
+                marker.dataset.index = index;
+                marker.onclick = (e) => {
+                    e.stopPropagation();
+                    selectNote(index);
+                };
+
+                // Determine track
+                let trackIndex = 0;
+                if (note.type === 'blue') trackIndex = 1;
+                if (note.type === 'hold' || note.type === 'spam') trackIndex = 2;
+
+                const track = tracks.children[trackIndex];
+                track.appendChild(marker);
+
+                // Hold trail
+                if (note.type === 'hold' && note.endTime) {
+                    const trail = document.createElement('div');
+                    trail.className = 'hold-trail';
+                    trail.style.left = `${note.time * pixelsPerMs}px`;
+                    trail.style.width = `${(note.endTime - note.time) * pixelsPerMs}px`;
+                    track.appendChild(trail);
+                }
+            });
+
+            // Update note list
+            updateNoteList();
+        }
+
+        function handleTimelineClick(e) {
+            const timeline = document.getElementById('timeline');
+            const rect = timeline.getBoundingClientRect();
+            const x = e.clientX - rect.left + document.getElementById('timeline-scroll').scrollLeft;
+            const time = Math.round(x / pixelsPerMs);
+
+            addNote(time);
+        }
+
+        // ===== NOTE MANAGEMENT =====
+        function addNote(time) {
+            const angle = parseInt(document.getElementById('note-angle').value) || 0;
+            
+            const note = {
+                time: time,
+                type: currentTool,
+                angle: angle
+            };
+
+            if (currentTool === 'hold') {
+                const duration = parseInt(document.getElementById('hold-duration').value) || 1000;
+                note.endTime = time + duration;
+            }
+
+            if (currentTool === 'spam') {
+                note.spamRequired = parseInt(document.getElementById('spam-count').value) || 5;
+            }
+
+            notes.push(note);
+            notes.sort((a, b) => a.time - b.time);
+            
+            updateTimeline();
+            drawPreview();
+        }
+
+        function selectNote(index) {
+            selectedNote = index;
+            document.querySelectorAll('.note-marker').forEach(m => m.classList.remove('selected'));
+            document.querySelector(`.note-marker[data-index="${index}"]`)?.classList.add('selected');
+        }
+
+        function deleteNote(index) {
+            notes.splice(index, 1);
+            selectedNote = null;
+            updateTimeline();
+            drawPreview();
+        }
+
+        function updateNoteList() {
+            const list = document.getElementById('note-list');
+            document.getElementById('note-count').textContent = notes.length;
+
+            list.innerHTML = notes.map((note, i) => `
+                <div class="note-item" onclick="selectNote(${i})">
+                    <span class="type ${note.type}">${note.type}</span>
+                    <span>${(note.time / 1000).toFixed(2)}s @ ${note.angle}°</span>
+                    <button class="delete-btn" onclick="event.stopPropagation(); deleteNote(${i})">×</button>
+                </div>
+            `).join('');
+        }
+
+        // ===== PREVIEW =====
+        function drawPreview(currentTime = 0) {
+            const ctx = previewCtx;
+            const w = previewCanvas.width;
+            const h = previewCanvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+
+            // Clear
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, w, h);
+
+            // Draw center ring
+            const ringRadius = 60;
+            const ringThickness = 8;
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, ringRadius + ringThickness, 0, Math.PI * 2);
+            ctx.arc(cx, cy, ringRadius - ringThickness, 0, Math.PI * 2, true);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw notes
+            const approachTime = 1500;
+            const spawnRadius = 150;
+            const noteSize = 15;
+
+            notes.forEach(note => {
+                const timeUntil = note.time - currentTime;
+                if (timeUntil > approachTime || timeUntil < -100) return;
+
+                const progress = 1 - (timeUntil / approachTime);
+                const radius = spawnRadius - (spawnRadius - ringRadius) * progress;
+
+                const angle = (note.angle || 0) * Math.PI / 180;
+                const x = cx + Math.cos(angle) * radius;
+                const y = cy + Math.sin(angle) * radius;
+
+                let color = '#ff3366';
+                if (note.type === 'blue') color = '#33ccff';
+                if (note.type === 'spam') color = '#ffcc00';
+
+                ctx.beginPath();
+                ctx.arc(x, y, noteSize, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+        }
+
+        // ===== KEYBOARD =====
+        function handleKeyboard(e) {
+            if (e.target.tagName === 'INPUT') return;
+
+            switch (e.code) {
+                case 'Space':
+                    e.preventDefault();
+                    togglePlay();
+                    break;
+                case 'Digit1':
+                    selectTool('red');
+                    break;
+                case 'Digit2':
+                    selectTool('blue');
+                    break;
+                case 'Digit3':
+                    selectTool('hold');
+                    break;
+                case 'Digit4':
+                    selectTool('spam');
+                    break;
+                case 'Delete':
+                case 'Backspace':
+                    if (selectedNote !== null) {
+                        deleteNote(selectedNote);
+                    }
+                    break;
+            }
+        }
+
+        // ===== IMPORT/EXPORT =====
+        function importMap() {
+            document.getElementById('map-input').click();
+        }
+
+        function handleMapImport(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    
+                    document.getElementById('song-title').value = data.title || '';
+                    document.getElementById('song-artist').value = data.artist || '';
+                    document.getElementById('song-difficulty').value = data.difficulty || 'Normal';
+                    document.getElementById('difficulty-level').value = data.difficultyLevel || 3;
+                    document.getElementById('song-bpm').value = data.bpm || 120;
+                    
+                    notes = data.notes || [];
+                    updateTimeline();
+                    drawPreview();
+                    
+                    alert('Map imported successfully!');
+                } catch (err) {
+                    alert('Failed to parse map file');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function exportMap() {
+            const mapData = {
+                title: document.getElementById('song-title').value || 'Untitled',
+                artist: document.getElementById('song-artist').value || 'Unknown',
+                difficulty: document.getElementById('song-difficulty').value,
+                difficultyLevel: parseInt(document.getElementById('difficulty-level').value) || 3,
+                bpm: parseInt(document.getElementById('song-bpm').value) || 120,
+                audioFile: 'song.mp3',
+                previewTime: 0,
+                notes: notes
+            };
+
+            const json = JSON.stringify(mapData, null, 4);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'map.json';
+            a.click();
+
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+
+</html>
