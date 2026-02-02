@@ -291,6 +291,21 @@
             border-radius: 5px;
         }
 
+        .hold-resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            background: rgba(255, 255, 255, 0.5);
+            cursor: e-resize;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .hold-resize-handle:hover {
+            background: #fff;
+        }
+
         .playhead {
             position: absolute;
             top: 0;
@@ -343,6 +358,31 @@
             border-radius: 3px;
             font-size: 0.75rem;
             text-transform: uppercase;
+        }
+
+        #context-menu {
+            display: none;
+            position: absolute;
+            background: #2a2a3a;
+            border: 1px solid #444;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            min-width: 150px;
+        }
+
+        #context-menu .menu-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #333;
+        }
+
+        #context-menu .menu-item:last-child {
+            border-bottom: none;
+        }
+
+        #context-menu .menu-item:hover {
+            background: #33ccff;
+            color: #000;
         }
 
         .note-item .type.red {
@@ -436,6 +476,8 @@
             <button class="btn secondary" onclick="loadDraft()">Load Draft</button>
             <button class="btn secondary" onclick="importMap()">Import Map</button>
             <button class="btn primary" onclick="exportMap()">Export Map</button>
+            <div style="width: 20px;"></div>
+            <button id="record-btn" class="btn secondary" onclick="toggleRecordMode()">⏺ Record</button>
             <button class="btn secondary" onclick="window.location.href='../index.html'">Back to Game</button>
         </div>
     </header>
@@ -522,6 +564,7 @@
             <div class="timeline-container">
                 <div class="timeline-controls">
                     <button class="play-btn" id="play-btn" onclick="togglePlay()">▶</button>
+                    <button class="play-btn" id="record-btn" onclick="toggleRecord()" style="color: #ff5555;">●</button>
                     <span class="time-display" id="time-display">0:00.000</span>
                     <div style="width: 1px; height: 30px; background: #333; margin: 0 10px;"></div>
                     <select id="snap-select"
@@ -564,10 +607,18 @@
     <input type="file" id="map-input" accept=".json" style="display: none;">
     <input type="file" id="bg-input" accept="image/*" style="display: none;">
 
+    <div id="context-menu">
+        <div class="menu-item" onclick="deleteSelectedNotes(); hideContextMenu()">Delete</div>
+        <div class="menu-item" onclick="copySelectedNotes(); hideContextMenu()">Copy</div>
+        <div class="menu-item" onclick="pasteNotes(); hideContextMenu()">Paste</div>
+        <div class="menu-item" onclick="toggleNoteType(); hideContextMenu()">Switch Type</div>
+    </div>
+
     <script>
         // ===== STATE =====
         let notes = [];
-        let selectedNote = null;
+        let selectedNotes = new Set(); // Changed to Set for multi-select
+        let copiedNotes = []; // Clipboard
         let currentTool = 'red';
         let audio = null;
         let isPlaying = false;
@@ -577,8 +628,64 @@
         let backgroundFilename = '';
         let isDraggingPlayhead = false;
         let isDraggingNote = false;
-        let wasDragging = false; // Flag to prevent click after drag
+        let isResizingHold = false;
+        let wasDragging = false;
         let draggedNoteIndex = -1;
+        let resizingNoteIndex = -1; // New tracker for resizing
+
+        let isRecording = false;
+        let recordingKeys = {};
+
+        // Undo/Redo State
+        const historyStack = [];
+        const redoStack = [];
+        const MAX_HISTORY = 50;
+
+        // Context Menu Helper
+        function hideContextMenu() {
+            const menu = document.getElementById('context-menu');
+            if (menu) menu.style.display = 'none';
+        }
+
+        function saveState() {
+            // Deep copy notes to history
+            const state = JSON.stringify(notes);
+            historyStack.push(state);
+            if (historyStack.length > MAX_HISTORY) historyStack.shift();
+            redoStack.length = 0; // Clear redo stack on new action
+            console.log('State Saved', historyStack.length);
+        }
+
+        function undo() {
+            if (historyStack.length === 0) return;
+            const currentState = JSON.stringify(notes);
+            redoStack.push(currentState);
+
+            const prevState = historyStack.pop();
+            notes = JSON.parse(prevState);
+
+            // Restore selection? verifying if indices match is hard if notes changed order.
+            // For now clear selection to be safe.
+            selectedNotes.clear();
+
+            updateTimeline();
+            drawPreview();
+            console.log('Undo performed');
+        }
+
+        function redo() {
+            if (redoStack.length === 0) return;
+            const currentState = JSON.stringify(notes);
+            historyStack.push(currentState);
+
+            const nextState = redoStack.pop();
+            notes = JSON.parse(nextState);
+
+            selectedNotes.clear();
+            updateTimeline();
+            drawPreview();
+            console.log('Redo performed');
+        }
 
         const previewCanvas = document.getElementById('preview-canvas');
         const previewCtx = previewCanvas.getContext('2d');
@@ -588,7 +695,28 @@
             setupEventListeners();
             updateTimeline();
             drawPreview();
+
+            // Hide context menu on click elsewhere
+            document.addEventListener('click', () => {
+                hideContextMenu();
+            });
+
+            // Fix sticking drag by ensuring mouseup on window clears everything
+            window.addEventListener('mouseup', handleGlobalMouseUp);
         });
+
+        function toggleRecord() {
+            isRecording = !isRecording;
+            const btn = document.getElementById('record-btn');
+            if (isRecording) {
+                btn.style.background = '#aa0000';
+                btn.style.color = 'white';
+                if (!isPlaying) togglePlay(); // Auto-start play on record
+            } else {
+                btn.style.background = '#333';
+                btn.style.color = '#ff5555';
+            }
+        }
 
         function setupEventListeners() {
             // Audio file input
@@ -606,6 +734,36 @@
             // Timeline click to add notes
             document.getElementById('timeline').addEventListener('click', handleTimelineClick);
 
+            // Timeline Right-Click (Context Menu)
+            document.getElementById('timeline').addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const menu = document.getElementById('context-menu');
+                menu.style.display = 'block';
+                menu.style.left = `${e.pageX}px`;
+                menu.style.top = `${e.pageY}px`;
+            });
+
+            // Scroll Wheel & Zoom
+            document.getElementById('timeline-container').addEventListener('wheel', (e) => {
+                e.preventDefault();
+                if (e.ctrlKey) {
+                    // Zoom
+                    const zoomChange = e.deltaY > 0 ? -1 : 1;
+                    let newZoom = zoomLevel + zoomChange;
+                    newZoom = Math.max(1, Math.min(20, newZoom)); // Clamp 1-20
+                    if (newZoom !== zoomLevel) {
+                        zoomLevel = newZoom;
+                        pixelsPerMs = 0.05 * zoomLevel;
+                        document.getElementById('zoom-slider').value = zoomLevel;
+                        updateTimeline();
+                    }
+                } else {
+                    // Scroll
+                    const scroll = document.getElementById('timeline-scroll');
+                    scroll.scrollLeft += e.deltaY;
+                }
+            }, { passive: false });
+
             // Keyboard shortcuts
             document.addEventListener('keydown', handleKeyboard);
 
@@ -618,13 +776,21 @@
             });
 
             document.addEventListener('mousemove', (e) => {
-                if (!isDraggingPlayhead) return;
+                if (!isDraggingPlayhead && !isDraggingNote && !isResizingHold) return;
 
                 const timelineScroll = document.getElementById('timeline-scroll');
                 const timeline = document.getElementById('timeline');
                 const rect = timeline.getBoundingClientRect();
                 const x = e.clientX - rect.left + timelineScroll.scrollLeft;
                 const newTime = Math.max(0, x / pixelsPerMs);
+
+                // Update ALL selected notes if dragging one of them
+                if (isDraggingNote && draggedNoteIndex !== -1 && selectedNotes.has(draggedNoteIndex)) {
+                    const originalTime = notes[draggedNoteIndex].time;
+                    // Only calculate delta for the main dragged note? 
+                    // Wait, logic in mousemove handles absolute position.
+                    // Multi-drag needs logic update in mousemove.
+                }
 
                 if (audio && audio.duration) {
                     const clampedTime = Math.min(newTime, audio.duration * 1000);
@@ -635,66 +801,149 @@
                 playhead.style.left = `${x}px`;
             });
 
-            document.addEventListener('mouseup', () => {
-                if (isDraggingPlayhead || isDraggingNote) {
-                    wasDragging = true;
-                    // Reset flag after a short delay to allow click event to be ignored
-                    setTimeout(() => wasDragging = false, 50);
-                }
+            // Replaced by global handler
+            // document.addEventListener('mouseup', () => { ... });
+        } // End setupEventListeners()
 
-                if (isDraggingPlayhead) {
-                    isDraggingPlayhead = false;
-                    document.body.style.cursor = '';
-                }
-                if (isDraggingNote) {
-                    isDraggingNote = false;
-                    draggedNoteIndex = -1;
-                    document.body.style.cursor = '';
-                    // Sort notes after drag
-                    notes.sort((a, b) => a.time - b.time);
-                    updateTimeline();
-                }
-            });
+        function handleGlobalMouseUp(e) {
+            if (e.button === 2) return; // Ignore right click
 
-            document.addEventListener('mousemove', (e) => {
-                // Note Dragging Logic
-                if (isDraggingNote && draggedNoteIndex !== -1) {
-                    const timeline = document.getElementById('timeline');
-                    const scroll = document.getElementById('timeline-scroll');
-                    const rect = timeline.getBoundingClientRect();
-                    const x = e.clientX - rect.left + scroll.scrollLeft;
-                    let time = Math.max(0, x / pixelsPerMs);
-
-                    // Snap Logic (Duplicate of addNote logic - refactor if possible)
-                    const snapDivisor = parseInt(document.getElementById('snap-select').value);
-                    if (snapDivisor > 0) {
-                        const bpm = parseInt(document.getElementById('song-bpm').value) || 120;
-                        const msPerBeat = 60000 / bpm;
-                        const msPerSnap = msPerBeat / (snapDivisor / 1);
-                        time = Math.round(time / msPerSnap) * msPerSnap;
-                    } else {
-                        time = Math.round(time);
-                    }
-
-                    notes[draggedNoteIndex].time = time;
-                    // Update specific note visual without full redraw? 
-                    // For now full redraw is safest but maybe slow. 
-                    // Let's just update styles manually for performance or move marker?
-                    // Actually updateTimeline calls renderNotes which clears DOM. 
-                    // Let's just do full update for correctness for now.
-                    updateTimeline();
-                    drawPreview(time);
-                }
-            });
-
-
-            // Playback update using requestAnimationFrame for better performance
-            function playbackLoop() {
-                updatePlayback();
-                requestAnimationFrame(playbackLoop);
+            // Save state if we finished a drag operation that changed things
+            if ((isDraggingNote && draggedNoteIndex !== -1) || (isResizingHold && resizingNoteIndex !== -1)) {
+                // State already saved on mousedown
             }
+
+            if (isDraggingPlayhead || isDraggingNote || isResizingHold) {
+                wasDragging = true;
+                setTimeout(() => wasDragging = false, 50);
+            }
+
+            if (isDraggingPlayhead) {
+                isDraggingPlayhead = false;
+                document.body.style.cursor = '';
+            }
+            if (isDraggingNote) {
+                isDraggingNote = false;
+                draggedNoteIndex = -1;
+                document.body.style.cursor = '';
+                notes.sort((a, b) => a.time - b.time);
+                updateTimeline();
+            }
+            if (isResizingHold) {
+                isResizingHold = false;
+                resizingNoteIndex = -1;
+                document.body.style.cursor = '';
+                updateTimeline();
+            }
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            // Note Dragging Logic
+            if (isDraggingNote && draggedNoteIndex !== -1) {
+                const timeline = document.getElementById('timeline');
+                const scroll = document.getElementById('timeline-scroll');
+                const rect = timeline.getBoundingClientRect();
+                const x = e.clientX - rect.left + scroll.scrollLeft;
+                let time = Math.max(0, x / pixelsPerMs);
+
+                // Snap Logic
+                const snapDivisor = parseInt(document.getElementById('snap-select').value);
+                if (snapDivisor > 0) {
+                    const bpm = parseInt(document.getElementById('song-bpm').value) || 120;
+                    const msPerBeat = 60000 / bpm;
+                    const msPerSnap = msPerBeat / (snapDivisor / 1);
+                    time = Math.round(time / msPerSnap) * msPerSnap;
+                } else {
+                    time = Math.round(time);
+                }
+
+                // Calculate delta for multi-select
+                const originalTime = notes[draggedNoteIndex].time;
+                const delta = time - originalTime;
+
+                // Update Data
+                notes[draggedNoteIndex].time = time;
+                if (notes[draggedNoteIndex].endTime) {
+                    const duration = notes[draggedNoteIndex].endTime - originalTime;
+                    notes[draggedNoteIndex].endTime = time + duration;
+                }
+
+                // Update DOM directly (Performant & fixes sticking)
+                const marker = document.querySelector(`.note-marker[data-index="${draggedNoteIndex}"]`);
+                if (marker) {
+                    marker.style.left = `${time * pixelsPerMs}px`;
+
+                    // Update hold trail if exists
+                    if (notes[draggedNoteIndex].type === 'hold') {
+                        // Find the trail in the same track container? 
+                        // It's safer to find by structure if we don't have IDs.
+                        // Holding track is index 2.
+                        // Actually, let's just use updateTimeline ONLY if we really have to, 
+                        // OR (better) just rely on the note marker moving for now, 
+                        // and update trail on mouseup. 
+                        // But user wants to see it move.
+                        // Let's try to update trail too.
+                        // The hold-trail is a sibling or near the marker? 
+                        // In renderNotes: track.appendChild(marker); track.appendChild(trail);
+                        // They are not parent/child.
+                        // This makes easy toggle hard.
+                        // FALLBACK: If it's a hold note, we might NEED to re-render OR do expensive DOM search.
+                        // For now, let's just move the marker. The trail update on mouseup is acceptable 
+                        // vs the "glued" bug.
+                        // OR we can find sibling hold-trail with matching left/width? Hard/Fragile.
+                    }
+                }
+
+                // Multi-select move
+                if (selectedNotes.has(draggedNoteIndex) && selectedNotes.size > 1) {
+                    selectedNotes.forEach(idx => {
+                        if (idx !== draggedNoteIndex) {
+                            notes[idx].time += delta;
+                            if (notes[idx].endTime) notes[idx].endTime += delta;
+
+                            const m = document.querySelector(`.note-marker[data-index="${idx}"]`);
+                            if (m) m.style.left = `${notes[idx].time * pixelsPerMs}px`;
+                        }
+                    });
+                }
+
+                // drawPreview(time); // Optional: might be heavy?
+            }
+
+            // Hold Resizing Logic
+            if (isResizingHold && resizingNoteIndex !== -1) {
+                const timeline = document.getElementById('timeline');
+                const scroll = document.getElementById('timeline-scroll');
+                const rect = timeline.getBoundingClientRect();
+                const x = e.clientX - rect.left + scroll.scrollLeft;
+                let time = Math.max(0, x / pixelsPerMs);
+
+                // Snap Logic 
+                const snapDivisor = parseInt(document.getElementById('snap-select').value);
+                if (snapDivisor > 0) {
+                    const bpm = parseInt(document.getElementById('song-bpm').value) || 120;
+                    const msPerBeat = 60000 / bpm;
+                    const msPerSnap = msPerBeat / (snapDivisor / 1);
+                    time = Math.round(time / msPerSnap) * msPerSnap;
+                }
+
+                // Enforce start time < end time
+                const startTime = notes[resizingNoteIndex].time;
+                if (time > startTime) {
+                    notes[resizingNoteIndex].endTime = time;
+                    updateTimeline(); // We use updateTimeline for resize as it simplifies UI update (handle pos etc)
+                    drawPreview(startTime);
+                }
+            }
+        });
+
+
+        // Playback update using requestAnimationFrame for better performance
+        function playbackLoop() {
+            updatePlayback();
             requestAnimationFrame(playbackLoop);
         }
+        requestAnimationFrame(playbackLoop);
 
         // ===== TOOL SELECTION =====
         function selectTool(type) {
@@ -853,14 +1102,26 @@
                 marker.className = `note-marker ${note.type}`;
                 marker.style.left = `${note.time * pixelsPerMs}px`;
                 marker.dataset.index = index;
+                if (selectedNotes.has(index)) marker.classList.add('selected');
+
                 marker.onmousedown = (e) => {
-                    e.stopPropagation(); // Prevent timeline click
-                    startDragNote(index, e);
-                    selectNote(index);
-                };
-                marker.onclick = (e) => {
                     e.stopPropagation();
-                    // Selection is handled in mousedown
+
+                    // Multi-select Logic
+                    if (e.shiftKey) {
+                        if (selectedNotes.has(index)) {
+                            selectedNotes.delete(index);
+                        } else {
+                            selectedNotes.add(index);
+                        }
+                    } else if (!selectedNotes.has(index)) {
+                        selectedNotes.clear();
+                        selectedNotes.add(index);
+                    }
+
+                    saveState(); // Save before drag starts
+                    startDragNote(index, e);
+                    updateTimeline(); // Refresh selection visuals
                 };
 
                 // Determine track
@@ -877,9 +1138,22 @@
                     trail.className = 'hold-trail';
                     trail.style.left = `${note.time * pixelsPerMs}px`;
                     trail.style.width = `${(note.endTime - note.time) * pixelsPerMs}px`;
+
+                    // Resize Handle
+                    const handle = document.createElement('div');
+                    handle.className = 'hold-resize-handle';
+                    handle.onmousedown = (e) => {
+                        e.stopPropagation();
+                        saveState(); // Save before resize
+                        isResizingHold = true;
+                        resizingNoteIndex = index;
+                        document.body.style.cursor = 'e-resize';
+                    };
+                    trail.appendChild(handle);
+
                     track.appendChild(trail);
                 }
-            });
+            }); // This closes the forEach loop
 
             // Update note list
             updateNoteList();
@@ -912,7 +1186,31 @@
         }
 
         // ===== NOTE MANAGEMENT =====
+        function addNoteAtCurrentTime(type) {
+            if (!audio) return;
+            // Use current tool settings but override type
+            const savedTool = currentTool;
+            currentTool = type;
+
+            // Calculate time
+            let time = audio.currentTime * 1000;
+
+            // Optional: Quantize if snap is on
+            const snapDivisor = parseInt(document.getElementById('snap-select').value);
+            if (snapDivisor > 0) {
+                const bpm = parseInt(document.getElementById('song-bpm').value) || 120;
+                const msPerBeat = 60000 / bpm;
+                const msPerSnap = msPerBeat / (snapDivisor / 1);
+                time = Math.round(time / msPerSnap) * msPerSnap;
+            }
+
+            addNote(time);
+
+            currentTool = savedTool; // Restore tool
+        }
+
         function addNote(time) {
+            saveState(); // Save before adding
             const angle = parseInt(document.getElementById('note-angle').value) || 0;
 
             const note = {
@@ -939,7 +1237,9 @@
         }
 
         function selectNote(index) {
-            selectedNote = index;
+            selectedNote = null; // Clear single selection
+            selectedNotes.clear(); // Clear multi-selection
+            selectedNotes.add(index); // Add this one
             document.querySelectorAll('.note-marker').forEach(m => m.classList.remove('selected'));
             document.querySelector(`.note-marker[data-index="${index}"]`)?.classList.add('selected');
         }
@@ -951,8 +1251,9 @@
         }
 
         function deleteNote(index) {
+            saveState(); // Save before deleting
             notes.splice(index, 1);
-            selectedNote = null;
+            selectedNotes.clear(); // Clear selection after delete
             updateTimeline();
             drawPreview();
         }
@@ -1040,22 +1341,46 @@
                 if (note.type === 'spam') color = '#33ff66';
 
                 // Radius logic
-                let currentRadius;
-                if (isHoldDuration) {
-                    currentRadius = RING_RADIUS;
+                let startRadius, endRadius;
+                const progressStart = 1 - (timeUntil / approachTime);
+                startRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progressStart);
+
+                if (note.type === 'hold' && note.endTime) {
+                    const timeUntilEnd = note.endTime - currentTime;
+                    const progressEnd = 1 - (timeUntilEnd / approachTime);
+                    endRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progressEnd);
+
+                    // Clamping
+                    if (startRadius < 0) startRadius = 0;
+                    if (endRadius > NOTE_SPAWN_RADIUS) endRadius = NOTE_SPAWN_RADIUS;
+
+                    // Draw Hold Duration as a thick band
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, (startRadius + endRadius) / 2, 0, Math.PI * 2);
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = Math.abs(endRadius - startRadius);
+                    ctx.globalAlpha = 0.4;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
+
+                    // Draw edges for clarity
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, startRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, endRadius, 0, Math.PI * 2);
+                    ctx.stroke();
                 } else {
-                    const progress = 1 - (timeUntil / approachTime);
-                    currentRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progress);
+                    if (startRadius < 0) return;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, startRadius, 0, Math.PI * 2);
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = (note.type === 'spam') ? 2 : 4;
+                    if (note.type === 'spam') ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
                 }
-
-                if (currentRadius < 0) return;
-
-                // Draw the shrinking ring
-                ctx.beginPath();
-                ctx.arc(cx, cy, currentRadius, 0, Math.PI * 2);
-                ctx.strokeStyle = color;
-                ctx.lineWidth = (note.type === 'hold') ? 8 : 4; // Double thickness for holds (editor scale)
-                ctx.stroke();
             });
         }
 
@@ -1069,16 +1394,20 @@
                     togglePlay();
                     break;
                 case 'Digit1':
-                    selectTool('red');
+                    if (isRecording && isPlaying) { addNoteAtCurrentTime('red'); }
+                    else { selectTool('red'); }
                     break;
                 case 'Digit2':
-                    selectTool('blue');
+                    if (isRecording && isPlaying) { addNoteAtCurrentTime('blue'); }
+                    else { selectTool('blue'); }
                     break;
                 case 'Digit3':
-                    selectTool('hold');
+                    if (isRecording && isPlaying) { addNoteAtCurrentTime('hold'); }
+                    else { selectTool('hold'); }
                     break;
                 case 'Digit4':
-                    selectTool('spam');
+                    if (isRecording && isPlaying) { addNoteAtCurrentTime('spam'); }
+                    else { selectTool('spam'); }
                     break;
                 case 'Delete':
                 case 'Backspace':
@@ -1146,6 +1475,91 @@
             URL.revokeObjectURL(url);
         }
 
+        // ===== LIVE RECORDING =====
+        function toggleRecordMode() {
+            isRecording = !isRecording;
+            const btn = document.getElementById('record-btn');
+            if (isRecording) {
+                btn.style.background = '#ff3366';
+                btn.style.color = '#fff';
+                btn.textContent = '⏺ Recording...';
+            } else {
+                btn.style.background = '';
+                btn.style.color = '';
+                btn.textContent = '⏺ Record';
+            }
+        }
+
+        function handleKeyboard(e) {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePlay();
+                return;
+            }
+
+            // Live Recording Logic
+            if (isRecording && isPlaying && audio) {
+                // Ignore if key currently held
+                if (recordingKeys[e.code]) return;
+
+                const validKeys = ['KeyZ', 'KeyX', 'KeyC', 'KeyV']; // Example keys
+                if (validKeys.includes(e.code) || true) { // Allow any key for now? Or specific?
+                    recordingKeys[e.code] = audio.currentTime * 1000;
+                }
+            }
+        }
+
+        document.addEventListener('keyup', (e) => {
+            if (isRecording && isPlaying && audio && recordingKeys[e.code]) {
+                const startTime = recordingKeys[e.code];
+                const endTime = audio.currentTime * 1000;
+                const duration = endTime - startTime;
+
+                delete recordingKeys[e.code];
+
+                // Determine Input Type based on key? 
+                // For simplicity, let's say: Z/X = Red/Blue? Or just use current tool?
+                // User said "if i hold it adds hold note".
+
+                let type = currentTool;
+                if (type === 'hold' || type === 'spam') type = 'blue'; // Default to normal note color unless explicit
+
+                // Check duration for Auto-Hold
+                let finalNote = {
+                    time: startTime,
+                    type: type,
+                    angle: 0
+                };
+
+                if (duration > 200) { // If held for more than 200ms, make it a hold note
+                    finalNote.type = 'hold';
+                    finalNote.endTime = endTime;
+                }
+
+                // Apply Snapping?
+                // Probably better to record raw, but user asked for Play Placement.
+                // Let's add option or just raw. Most rhythm game editors use snapping or partial snapping.
+                // Let's snap the START time to nearest 1/16 or current snap setting?
+
+                const snapDivisor = parseInt(document.getElementById('snap-select').value);
+                if (snapDivisor > 0) {
+                    const bpm = parseInt(document.getElementById('song-bpm').value) || 120;
+                    const msPerBeat = 60000 / bpm;
+                    const msPerSnap = msPerBeat / (snapDivisor / 1);
+                    finalNote.time = Math.round(finalNote.time / msPerSnap) * msPerSnap;
+                    if (finalNote.endTime) {
+                        finalNote.endTime = Math.round(finalNote.endTime / msPerSnap) * msPerSnap;
+                    }
+                }
+
+                saveState(); // Save before adding recorded note
+                notes.push(finalNote);
+                notes.sort((a, b) => a.time - b.time);
+                updateTimeline();
+                drawPreview(finalNote.time);
+            }
+        });
+
         // ===== LOCAL DRAFTS =====
         function saveDraft() {
             const mapData = {
@@ -1184,6 +1598,78 @@
                 alert('Failed to load draft.');
             }
         }
+
+        // ===== CONTEXT MENU & SHORTCUTS =====
+        function deleteSelectedNotes() {
+            hideContextMenu();
+            if (selectedNotes.size === 0) return;
+            saveState(); // Save before delete
+            // Filter out selected notes
+            notes = notes.filter((_, index) => !selectedNotes.has(index));
+            selectedNotes.clear();
+            updateTimeline();
+        }
+
+        function copySelectedNotes() {
+            hideContextMenu();
+            copiedNotes = notes.filter((_, index) => selectedNotes.has(index)).map(n => ({ ...n })); // Deep copy
+        }
+
+        function pasteNotes() {
+            hideContextMenu();
+            if (copiedNotes.length === 0) return;
+            saveState(); // Save before paste
+            // Paste at current playhead or just offset?
+            // Let's offset by 1 beat (500ms approx)
+            const offset = 500;
+            copiedNotes.forEach(note => {
+                const newNote = { ...note };
+                newNote.time += offset;
+                if (newNote.endTime) newNote.endTime += offset;
+                notes.push(newNote);
+            });
+            notes.sort((a, b) => a.time - b.time);
+            updateTimeline();
+        }
+
+        function toggleNoteType() {
+            hideContextMenu();
+            saveState(); // Save before type change
+            selectedNotes.forEach(index => {
+                const note = notes[index];
+                if (note.type === 'red') note.type = 'blue';
+                else if (note.type === 'blue') note.type = 'hold';
+                else if (note.type === 'hold') note.type = 'spam';
+                else note.type = 'red';
+
+                // Add/Remove endTime if switching to/from hold
+                if (note.type === 'hold' && !note.endTime) note.endTime = note.time + 1000;
+                if (note.type !== 'hold') delete note.endTime;
+            });
+            updateTimeline();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return; // Ignore if typing in input
+
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                deleteSelectedNotes();
+            }
+            if (e.ctrlKey && e.code === 'KeyC') {
+                copySelectedNotes();
+            }
+            if (e.ctrlKey && e.code === 'KeyV') {
+                pasteNotes();
+            }
+            if (e.ctrlKey && e.code === 'KeyZ') {
+                e.preventDefault();
+                undo();
+            }
+            if (e.ctrlKey && e.code === 'KeyY') {
+                e.preventDefault();
+                redo();
+            }
+        });
     </script>
 </body>
 

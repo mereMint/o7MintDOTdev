@@ -110,6 +110,16 @@ pool.getConnection()
                     INDEX idx_user_game (username, game_id)
                 )
             `);
+            // Ensure Generic Daily Challenges table exists
+            await conn.query(`
+                CREATE TABLE IF NOT EXISTS daily_challenges (
+                    date_id DATE,
+                    game_id VARCHAR(50),
+                    challenge_data JSON NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (date_id, game_id)
+                )
+            `);
             console.log("[OK] Tables verified/created.");
 
             // Migrations: Ensure columns exist (for existing tables)
@@ -123,7 +133,7 @@ pool.getConnection()
                 await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(500) DEFAULT NULL");
                 await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255)");
                 await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS avatar VARCHAR(255)");
-                
+
                 // Migration for user_achievements: ensure id column exists
                 // Check if id column already exists before attempting migration
                 try {
@@ -148,7 +158,7 @@ pool.getConnection()
                 } catch (achMigErr) {
                     console.warn("user_achievements migration skipped:", achMigErr.message);
                 }
-                
+
                 console.log("[OK] Schema Migrations applied.");
             } catch (migErr) {
                 // Fallback for older versions or if syntax fails: verify manually
@@ -247,7 +257,7 @@ app.get('/api/posts', async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         // Try to get with avatar columns, fallback if not available
         try {
             const rows = await conn.query(`
@@ -310,7 +320,7 @@ app.post('/api/post', async (req, res) => {
         let conn;
         try {
             conn = await pool.getConnection();
-            
+
             // Ensure posts table has avatar columns and status column
             try {
                 await conn.query("ALTER TABLE posts ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255)");
@@ -318,8 +328,8 @@ app.post('/api/post', async (req, res) => {
                 await conn.query("ALTER TABLE posts ADD COLUMN IF NOT EXISTS status ENUM('pending', 'approved', 'rejected') DEFAULT 'approved'");
                 // Migrate legacy posts with NULL status to 'approved'
                 await conn.query("UPDATE posts SET status = 'approved' WHERE status IS NULL");
-            } catch (e) {}
-            
+            } catch (e) { }
+
             // Get user's discord info if not provided
             let userDiscordId = discord_id;
             let userAvatar = avatar;
@@ -330,8 +340,8 @@ app.post('/api/post', async (req, res) => {
                     userAvatar = userAvatar || userRes[0].avatar;
                 }
             }
-            
-            await conn.query("INSERT INTO posts (username, content, discord_id, avatar) VALUES (?, ?, ?, ?)", 
+
+            await conn.query("INSERT INTO posts (username, content, discord_id, avatar) VALUES (?, ?, ?, ?)",
                 [username, content, userDiscordId, userAvatar]);
             res.json({ success: true });
         } finally {
@@ -389,18 +399,18 @@ app.get('/api/games', (req, res) => {
 // GET /api/games/:gameId - Get single game details
 app.get('/api/games/:gameId', (req, res) => {
     const gameId = req.params.gameId;
-    
+
     // Validate gameId to prevent path traversal
     if (!/^[a-zA-Z0-9_-]+$/.test(gameId)) {
         return res.status(400).json({ error: "Invalid game ID" });
     }
-    
+
     const gameData = getGameData(gameId);
-    
+
     if (!gameData) {
         return res.status(404).json({ error: "Game not found" });
     }
-    
+
     res.json({
         id: gameId,
         name: gameData.name || gameId,
@@ -418,22 +428,22 @@ app.get('/api/games/:gameId', (req, res) => {
 app.put('/api/games/:gameId/achievements', adminMiddleware, (req, res) => {
     const gameId = req.params.gameId;
     const { achievements } = req.body;
-    
+
     // Validate gameId to prevent path traversal
     if (!/^[a-zA-Z0-9_-]+$/.test(gameId)) {
         return res.status(400).json({ error: "Invalid game ID" });
     }
-    
+
     if (!achievements || !Array.isArray(achievements)) {
         return res.status(400).json({ error: "Invalid achievements data" });
     }
-    
+
     const dataPath = path.join(__dirname, '../../games', gameId, 'data.json');
-    
+
     if (!fs.existsSync(dataPath)) {
         return res.status(404).json({ error: "Game not found" });
     }
-    
+
     try {
         const gameData = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
         gameData.achievements = achievements;
@@ -448,12 +458,12 @@ app.put('/api/games/:gameId/achievements', adminMiddleware, (req, res) => {
 // GET /api/games/:gameId/stats - Get game statistics (for devs)
 app.get('/api/games/:gameId/stats', async (req, res) => {
     const gameId = req.params.gameId;
-    
+
     // Validate gameId
     if (!/^[a-zA-Z0-9_-]+$/.test(gameId)) {
         return res.status(400).json({ error: "Invalid game ID" });
     }
-    
+
     if (useInMemory) {
         const gameScores = memoryScores.filter(s => s.game_id === gameId);
         const gameAch = memoryAchievements.filter(a => a.game_id === gameId);
@@ -465,11 +475,11 @@ app.get('/api/games/:gameId/stats', async (req, res) => {
             top_score: gameScores.length ? Math.max(...gameScores.map(s => s.score)) : 0
         });
     }
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         // Get score stats
         const scoreStats = await conn.query(`
             SELECT 
@@ -479,20 +489,20 @@ app.get('/api/games/:gameId/stats', async (req, res) => {
                 MAX(score) as top_score
             FROM scores WHERE game_id = ?
         `, [gameId]);
-        
+
         // Get achievement stats
         const achStats = await conn.query(`
             SELECT COUNT(*) as total_unlocks
             FROM user_achievements WHERE game_id = ?
         `, [gameId]);
-        
+
         // Get achievement breakdown
         const achBreakdown = await conn.query(`
             SELECT achievement_id, COUNT(*) as unlock_count
             FROM user_achievements WHERE game_id = ?
             GROUP BY achievement_id
         `, [gameId]);
-        
+
         const stats = scoreStats[0] || {};
         res.json({
             total_plays: Number(stats.total_plays) || 0,
@@ -638,7 +648,7 @@ app.post('/api/score', async (req, res) => {
                     userAvatar = userAvatar || userRes[0].avatar;
                 }
             }
-            
+
             await conn.query(
                 "INSERT INTO scores (game_id, username, score, board_id, discord_id, avatar) VALUES (?, ?, ?, ?, ?, ?)",
                 [game_id, user, score, board, userDiscordId || null, userAvatar || null]
@@ -791,12 +801,139 @@ app.post('/api/achievements/unlock', async (req, res) => {
                 res.json({ success: true, new_unlock: false });
             }
 
+        } catch (err) {
+            console.error("Achievement Unlock Error:", err);
+            res.status(500).json({ error: "Server error" });
         } finally {
             if (conn) conn.release();
         }
+    } catch (outerErr) {
+        console.error("Unlock Route Error:", outerErr);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// --- Generic Daily Challenge System ---
+
+// Helper: Server Delay
+const serverDelay = ms => new Promise(res => setTimeout(res, ms));
+
+// Helper: Sequel Check
+function isSequelTitle(title) {
+    if (!title) return false;
+    const t = title.toLowerCase();
+    const sequelPatterns = [
+        /season \d+/, /\d+(?:st|nd|rd|th) season/,
+        /part \d+/, /cour \d+/, /act \d+/,
+        /collection/, /movie \d+/
+    ];
+    return sequelPatterns.some(p => t.match(p));
+}
+
+// Generators registry
+const dailyGenerators = {
+    'anidle': async () => {
+        let attempts = 0;
+        while (attempts < 10) {
+            try {
+                // Fetch random page of popular anime
+                const page = Math.floor(Math.random() * 10) + 1;
+                // We allow TV and Movie, but filter heavily later
+                const listRes = await axios.get(`https://api.jikan.moe/v4/top/anime?page=${page}&filter=bypopularity&limit=25`);
+                const candidates = listRes.data.data || [];
+
+                if (candidates.length === 0) continue;
+
+                const shuffled = candidates.sort(() => 0.5 - Math.random());
+
+                for (const candidate of shuffled) {
+                    // Title Filter
+                    if (isSequelTitle(candidate.title) ||
+                        isSequelTitle(candidate.title_english) ||
+                        !candidate.approved) continue;
+
+                    await serverDelay(800);
+
+                    // Fetch Full Details
+                    const detailRes = await axios.get(`https://api.jikan.moe/v4/anime/${candidate.mal_id}/full`);
+                    const anime = detailRes.data.data;
+
+                    // Logic: Originals Only (No Prequels)
+                    const hasPrequel = anime.relations?.some(r => r.relation === 'Prequel');
+                    const hasParent = anime.relations?.some(r => r.relation === 'Parent story');
+
+                    if (!hasPrequel && !hasParent) return anime;
+                }
+            } catch (err) {
+                console.error("[Anidle] Gen Error:", err.message);
+                await serverDelay(1000);
+            }
+            attempts++;
+            await serverDelay(1000);
+        }
+        throw new Error("Failed to generate Anidle daily");
+    }
+    // Add other games here
+};
+
+let memoryDailyCache = {}; // { "game_id|YYYY-MM-DD": {data} }
+
+// GET /api/daily/:gameId
+app.get('/api/daily/:gameId', async (req, res) => {
+    const { gameId } = req.params;
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+    const cacheKey = `${gameId}|${today}`;
+
+    // 1. Check Memory Cache (Fastest)
+    if (memoryDailyCache[cacheKey]) {
+        return res.json(memoryDailyCache[cacheKey]);
+    }
+
+    // 2. Check Database / Generate
+    let conn;
+    try {
+        if (!useInMemory) {
+            conn = await pool.getConnection();
+
+            // Check DB
+            const rows = await conn.query(
+                "SELECT challenge_data FROM daily_challenges WHERE date_id = ? AND game_id = ?",
+                [today, gameId]
+            );
+
+            if (rows.length > 0) {
+                const data = rows[0].challenge_data;
+                memoryDailyCache[cacheKey] = data; // Cache it
+                return res.json(data);
+            }
+        }
+
+        // 3. Generate New Challenge
+        const generator = dailyGenerators[gameId];
+        if (!generator) {
+            return res.status(404).json({ error: "No daily generator for this game" });
+        }
+
+        console.log(`[Daily] Generating for ${gameId} on ${today}...`);
+        const newData = await generator();
+
+        // 4. Save to DB
+        if (!useInMemory && conn) {
+            await conn.query(
+                "INSERT IGNORE INTO daily_challenges (date_id, game_id, challenge_data) VALUES (?, ?, ?)",
+                [today, gameId, JSON.stringify(newData)]
+            );
+        }
+
+        memoryDailyCache[cacheKey] = newData;
+        return res.json(newData);
+
     } catch (err) {
-        console.error("Achievement Unlock Error:", err);
-        res.status(500).json({ error: "Server error" });
+        console.error("Daily API Error:", err);
+        res.status(500).json({ error: "Server error handling daily challenge" });
+    } finally {
+        if (conn) conn.release();
     }
 });
 
@@ -966,11 +1103,11 @@ app.get('/api/user/:username/stats', async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         // Get user data
         const userRes = await conn.query("SELECT points, decoration, bio, discord_id, avatar FROM users WHERE username = ?", [username]);
         const userData = userRes[0] || {};
-        
+
         // Calculate stats
         const stats = await conn.query(`
             SELECT 
@@ -982,7 +1119,7 @@ app.get('/api/user/:username/stats', async (req, res) => {
             FROM scores s
             WHERE s.username = ?
         `, [username]);
-        
+
         // Count achievements
         const achRes = await conn.query("SELECT COUNT(*) as count FROM user_achievements WHERE username = ?", [username]);
         const totalAchievements = Number(achRes[0]?.count) || 0;
@@ -1041,14 +1178,14 @@ app.get('/api/user/:username/profile', async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         // Get user data
         const userRes = await conn.query("SELECT points, decoration, bio, discord_id, avatar FROM users WHERE username = ?", [username]);
         const userData = userRes[0] || {};
-        
+
         // Get achievements
         const achRes = await conn.query("SELECT achievement_id, game_id, unlocked_at FROM user_achievements WHERE username = ?", [username]);
-        
+
         // Enrich achievements with game data
         const achievementsWithImages = achRes.map(a => {
             const gameData = getGameData(a.game_id);
@@ -1062,7 +1199,7 @@ app.get('/api/user/:username/profile', async (req, res) => {
                 points: achData?.points || 10
             };
         });
-        
+
         res.json({
             username,
             discord_id: userData.discord_id || null,
@@ -1093,11 +1230,11 @@ app.put('/api/user/:username/profile', async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         // Build update query dynamically
         const updates = [];
         const values = [];
-        
+
         if (decoration !== undefined) {
             updates.push("decoration = ?");
             values.push(decoration);
@@ -1106,14 +1243,14 @@ app.put('/api/user/:username/profile', async (req, res) => {
             updates.push("bio = ?");
             values.push(bio ? bio.substring(0, 500) : null); // Limit bio length
         }
-        
+
         if (updates.length === 0) {
             return res.status(400).json({ error: "No updates provided" });
         }
-        
+
         values.push(username);
         await conn.query(`UPDATE users SET ${updates.join(', ')} WHERE username = ?`, values);
-        
+
         res.json({ success: true });
     } catch (err) {
         console.error("Profile Update Error:", err);
@@ -1159,13 +1296,13 @@ app.post('/api/user/:username/decoration', async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         // Get user's current points and inventory
         const userRes = await conn.query("SELECT points, inventory FROM users WHERE username = ?", [username]);
         if (userRes.length === 0) {
             return res.status(404).json({ error: "User not found" });
         }
-        
+
         const user = userRes[0];
         const currentPoints = Number(user.points) || 0;
         let inventory = [];
@@ -1174,14 +1311,14 @@ app.post('/api/user/:username/decoration', async (req, res) => {
         } catch (e) {
             inventory = [];
         }
-        
+
         // Check if already owned or can afford
         const alreadyOwned = decoration_id === 'none' || inventory.includes(decoration_id);
-        
+
         if (!alreadyOwned && currentPoints < cost) {
             return res.status(400).json({ error: "Not enough points", required: cost, current: currentPoints });
         }
-        
+
         // If not owned, deduct points and add to inventory
         if (!alreadyOwned) {
             inventory.push(decoration_id);
@@ -1193,7 +1330,7 @@ app.post('/api/user/:username/decoration', async (req, res) => {
             // Just equip
             await conn.query("UPDATE users SET decoration = ? WHERE username = ?", [decoration_id === 'none' ? null : decoration_id, username]);
         }
-        
+
         res.json({ success: true, decoration: decoration_id, points_spent: alreadyOwned ? 0 : cost });
     } catch (err) {
         console.error("Decoration Error:", err);
@@ -1255,7 +1392,7 @@ app.delete('/api/admin/data/:table/:id', adminMiddleware, async (req, res) => {
 
     // Whitelist of allowed tables and their primary keys for security
     const allowedTables = {
-        'users': 'username',
+        'users': 'id',
         'posts': 'id',
         'scores': 'id',
         'user_achievements': 'id',
@@ -1277,10 +1414,10 @@ app.delete('/api/admin/data/:table/:id', adminMiddleware, async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         // Delete the row using parameterized query for the id value
         const result = await conn.query(`DELETE FROM ${tableName} WHERE ${pkColumn} = ?`, [id]);
-        
+
         if (result.affectedRows > 0) {
             res.json({ success: true, deleted: result.affectedRows });
         } else {
@@ -1299,7 +1436,7 @@ app.post('/api/admin/user/role', adminMiddleware, async (req, res) => {
     if (useInMemory) return res.status(400).json({ error: "Memory mode - role updates not available" });
 
     const { username, role } = req.body;
-    
+
     if (!username || !role) {
         return res.status(400).json({ error: "Username and role are required" });
     }
@@ -1312,7 +1449,7 @@ app.post('/api/admin/user/role', adminMiddleware, async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         // Check if user exists
         const userCheck = await conn.query("SELECT username FROM users WHERE username = ?", [username]);
         if (userCheck.length === 0) {
@@ -1321,7 +1458,7 @@ app.post('/api/admin/user/role', adminMiddleware, async (req, res) => {
 
         // Update user role
         await conn.query("UPDATE users SET role = ? WHERE username = ?", [role, username]);
-        
+
         res.json({ success: true, message: `Updated ${username} to ${role}` });
     } catch (err) {
         console.error("Admin Role Update Error:", err);
@@ -1378,7 +1515,7 @@ async function ensureExplainTables(conn) {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     `);
-    
+
     await conn.query(`
         CREATE TABLE IF NOT EXISTS explain_articles (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1396,7 +1533,7 @@ async function ensureExplainTables(conn) {
             INDEX idx_category (category_id)
         )
     `);
-    
+
     await conn.query(`
         CREATE TABLE IF NOT EXISTS explain_revisions (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1411,7 +1548,7 @@ async function ensureExplainTables(conn) {
             INDEX idx_article_status (article_id, status)
         )
     `);
-    
+
     await conn.query(`
         CREATE TABLE IF NOT EXISTS explain_rate_limits (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1421,7 +1558,7 @@ async function ensureExplainTables(conn) {
             INDEX idx_ip_action (ip_address, action_type, created_at)
         )
     `);
-    
+
     // Insert default categories if none exist
     const cats = await conn.query(`SELECT COUNT(*) as count FROM explain_categories`);
     if (Number(cats[0].count) === 0) {
@@ -1445,7 +1582,7 @@ app.get('/api/explain/categories', async (req, res) => {
             { id: 2, name: 'Gaming', description: 'Gaming topics', color: '#FF6B6B' }
         ]);
     }
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
@@ -1473,8 +1610,8 @@ app.post('/api/explain/categories', async (req, res) => {
     const descValue = description ? description.substring(0, 500) : '';
 
     if (useInMemory) {
-        return res.json({ 
-            success: true, 
+        return res.json({
+            success: true,
             category: { id: Date.now(), name: name.trim(), description: descValue, color: colorValue }
         });
     }
@@ -1499,13 +1636,13 @@ app.post('/api/explain/categories', async (req, res) => {
             [name.trim(), descValue, colorValue]
         );
 
-        res.json({ 
-            success: true, 
-            category: { 
-                id: Number(result.insertId), 
-                name: name.trim(), 
-                description: descValue, 
-                color: colorValue 
+        res.json({
+            success: true,
+            category: {
+                id: Number(result.insertId),
+                name: name.trim(),
+                description: descValue,
+                color: colorValue
             }
         });
     } catch (err) {
@@ -1521,35 +1658,35 @@ app.get('/api/explain/articles', async (req, res) => {
     const { category, search, sort, status } = req.query;
     const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = parseInt(req.query.offset) || 0;
-    
+
     if (useInMemory) {
         return res.json({ articles: [], total: 0 });
     }
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
         await ensureExplainTables(conn);
-        
+
         // Build WHERE conditions separately
         let whereClause = 'WHERE 1=1';
         const params = [];
-        
+
         // Only show approved articles to public (unless admin)
         const showStatus = status || 'approved';
         whereClause += ` AND a.status = ?`;
         params.push(showStatus);
-        
+
         if (category) {
             whereClause += ` AND a.category_id = ?`;
             params.push(category);
         }
-        
+
         if (search) {
             whereClause += ` AND (a.title LIKE ? OR a.content LIKE ?)`;
             params.push(`%${search}%`, `%${search}%`);
         }
-        
+
         // Build count query separately
         const countQuery = `
             SELECT COUNT(*) as total
@@ -1559,7 +1696,7 @@ app.get('/api/explain/articles', async (req, res) => {
         `;
         const countResult = await conn.query(countQuery, params);
         const total = Number(countResult[0].total);
-        
+
         // Build main query
         let query = `
             SELECT a.*, c.name as category_name, c.color as category_color
@@ -1567,7 +1704,7 @@ app.get('/api/explain/articles', async (req, res) => {
             LEFT JOIN explain_categories c ON a.category_id = c.id
             ${whereClause}
         `;
-        
+
         // Sort
         switch (sort) {
             case 'popular':
@@ -1579,10 +1716,10 @@ app.get('/api/explain/articles', async (req, res) => {
             default:
                 query += ` ORDER BY a.created_at DESC`;
         }
-        
+
         query += ` LIMIT ? OFFSET ?`;
         const queryParams = [...params, limit, offset];
-        
+
         const rows = await conn.query(query, queryParams);
         res.json({ articles: rows, total });
     } catch (err) {
@@ -1596,16 +1733,16 @@ app.get('/api/explain/articles', async (req, res) => {
 // GET /api/explain/articles/trending - Get trending/popular articles
 app.get('/api/explain/articles/trending', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
-    
+
     if (useInMemory) {
         return res.json([]);
     }
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
         await ensureExplainTables(conn);
-        
+
         const rows = await conn.query(`
             SELECT a.*, c.name as category_name, c.color as category_color
             FROM explain_articles a
@@ -1614,7 +1751,7 @@ app.get('/api/explain/articles/trending', async (req, res) => {
             ORDER BY a.views DESC, a.updated_at DESC
             LIMIT ?
         `, [limit]);
-        
+
         res.json(rows);
     } catch (err) {
         console.error('Error fetching trending:', err);
@@ -1627,34 +1764,34 @@ app.get('/api/explain/articles/trending', async (req, res) => {
 // GET /api/explain/article/:slug - Get single article by slug
 app.get('/api/explain/article/:slug', async (req, res) => {
     const { slug } = req.params;
-    
+
     if (!/^[a-z0-9-]+$/.test(slug)) {
         return res.status(400).json({ error: 'Invalid slug' });
     }
-    
+
     if (useInMemory) {
         return res.status(404).json({ error: 'Article not found' });
     }
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
         await ensureExplainTables(conn);
-        
+
         const rows = await conn.query(`
             SELECT a.*, c.name as category_name, c.color as category_color
             FROM explain_articles a
             LEFT JOIN explain_categories c ON a.category_id = c.id
             WHERE a.slug = ? AND a.status = 'approved'
         `, [slug]);
-        
+
         if (rows.length === 0) {
             return res.status(404).json({ error: 'Article not found' });
         }
-        
+
         // Increment view count
         await conn.query(`UPDATE explain_articles SET views = views + 1 WHERE slug = ?`, [slug]);
-        
+
         res.json(rows[0]);
     } catch (err) {
         console.error('Error fetching article:', err);
@@ -1667,7 +1804,7 @@ app.get('/api/explain/article/:slug', async (req, res) => {
 // POST /api/explain/article - Create new article (requires moderation)
 app.post('/api/explain/article', async (req, res) => {
     const { title, content, category_id, author } = req.body;
-    
+
     // Validation
     if (!title || title.length < 3 || title.length > 255) {
         return res.status(400).json({ error: 'Title must be 3-255 characters' });
@@ -1678,25 +1815,25 @@ app.post('/api/explain/article', async (req, res) => {
     if (containsBadWord(title) || containsBadWord(content)) {
         return res.status(400).json({ error: 'Inappropriate content detected' });
     }
-    
+
     const authorName = author && author.length <= 50 ? author : 'Anonymous';
-    
+
     if (useInMemory) {
         return res.json({ success: true, message: 'Article submitted for review', slug: generateSlug(title) });
     }
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
         await ensureExplainTables(conn);
-        
+
         // Rate limiting
         const ip = req.ip || req.connection.remoteAddress;
         const canCreate = await checkRateLimit(conn, ip, 'create', 3, 60); // 3 articles per hour
         if (!canCreate) {
             return res.status(429).json({ error: 'Too many submissions. Please wait before creating more articles.' });
         }
-        
+
         // Generate unique slug with max iteration limit
         let slug = generateSlug(title);
         let slugExists = true;
@@ -1712,18 +1849,18 @@ app.post('/api/explain/article', async (req, res) => {
                 suffix++;
             }
         }
-        
+
         if (slugExists) {
             return res.status(400).json({ error: 'Unable to generate unique slug. Please try a different title.' });
         }
-        
+
         await conn.query(`
             INSERT INTO explain_articles (slug, title, content, category_id, author, status)
             VALUES (?, ?, ?, ?, ?, 'pending')
         `, [slug, title, content, category_id || null, authorName]);
-        
+
         await recordRateLimit(conn, ip, 'create');
-        
+
         res.json({ success: true, message: 'Article submitted for review', slug });
     } catch (err) {
         console.error('Error creating article:', err);
@@ -1737,7 +1874,7 @@ app.post('/api/explain/article', async (req, res) => {
 app.post('/api/explain/article/:slug/edit', async (req, res) => {
     const { slug } = req.params;
     const { content, editor, edit_summary } = req.body;
-    
+
     if (!/^[a-z0-9-]+$/.test(slug)) {
         return res.status(400).json({ error: 'Invalid slug' });
     }
@@ -1747,38 +1884,38 @@ app.post('/api/explain/article/:slug/edit', async (req, res) => {
     if (containsBadWord(content) || (edit_summary && containsBadWord(edit_summary))) {
         return res.status(400).json({ error: 'Inappropriate content detected' });
     }
-    
+
     const editorName = editor && editor.length <= 50 ? editor : 'Anonymous';
-    
+
     if (useInMemory) {
         return res.json({ success: true, message: 'Edit submitted for review' });
     }
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
         await ensureExplainTables(conn);
-        
+
         // Check article exists
         const articles = await conn.query(`SELECT id FROM explain_articles WHERE slug = ? AND status = 'approved'`, [slug]);
         if (articles.length === 0) {
             return res.status(404).json({ error: 'Article not found' });
         }
-        
+
         // Rate limiting
         const ip = req.ip || req.connection.remoteAddress;
         const canEdit = await checkRateLimit(conn, ip, 'edit', 10, 60); // 10 edits per hour
         if (!canEdit) {
             return res.status(429).json({ error: 'Too many edits. Please wait before submitting more.' });
         }
-        
+
         await conn.query(`
             INSERT INTO explain_revisions (article_id, content, editor, edit_summary, status)
             VALUES (?, ?, ?, ?, 'pending')
         `, [articles[0].id, content, editorName, edit_summary || null]);
-        
+
         await recordRateLimit(conn, ip, 'edit');
-        
+
         res.json({ success: true, message: 'Edit submitted for review' });
     } catch (err) {
         console.error('Error submitting edit:', err);
@@ -1795,12 +1932,12 @@ app.get('/api/admin/explain/pending', adminMiddleware, async (req, res) => {
     if (useInMemory) {
         return res.json({ articles: [], revisions: [] });
     }
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
         await ensureExplainTables(conn);
-        
+
         const articles = await conn.query(`
             SELECT a.*, c.name as category_name
             FROM explain_articles a
@@ -1808,7 +1945,7 @@ app.get('/api/admin/explain/pending', adminMiddleware, async (req, res) => {
             WHERE a.status = 'pending'
             ORDER BY a.created_at ASC
         `);
-        
+
         const revisions = await conn.query(`
             SELECT r.*, a.title, a.slug
             FROM explain_revisions r
@@ -1816,7 +1953,7 @@ app.get('/api/admin/explain/pending', adminMiddleware, async (req, res) => {
             WHERE r.status = 'pending'
             ORDER BY r.created_at ASC
         `);
-        
+
         res.json({ articles, revisions });
     } catch (err) {
         console.error('Error fetching pending:', err);
@@ -1829,7 +1966,7 @@ app.get('/api/admin/explain/pending', adminMiddleware, async (req, res) => {
 // POST /api/admin/explain/article/:id/approve - Approve article
 app.post('/api/admin/explain/article/:id/approve', adminMiddleware, async (req, res) => {
     const { id } = req.params;
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
@@ -1846,7 +1983,7 @@ app.post('/api/admin/explain/article/:id/approve', adminMiddleware, async (req, 
 // POST /api/admin/explain/article/:id/reject - Reject article
 app.post('/api/admin/explain/article/:id/reject', adminMiddleware, async (req, res) => {
     const { id } = req.params;
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
@@ -1864,27 +2001,27 @@ app.post('/api/admin/explain/article/:id/reject', adminMiddleware, async (req, r
 app.post('/api/admin/explain/revision/:id/approve', adminMiddleware, async (req, res) => {
     const { id } = req.params;
     const reviewer = req.body.reviewer || 'Admin';
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         // Get the revision
         const revisions = await conn.query(`SELECT * FROM explain_revisions WHERE id = ?`, [id]);
         if (revisions.length === 0) {
             return res.status(404).json({ error: 'Revision not found' });
         }
-        
+
         const revision = revisions[0];
-        
+
         // Apply the edit to the article
-        await conn.query(`UPDATE explain_articles SET content = ?, updated_at = NOW() WHERE id = ?`, 
+        await conn.query(`UPDATE explain_articles SET content = ?, updated_at = NOW() WHERE id = ?`,
             [revision.content, revision.article_id]);
-        
+
         // Mark revision as approved
         await conn.query(`UPDATE explain_revisions SET status = 'approved', reviewed_by = ?, reviewed_at = NOW() WHERE id = ?`,
             [reviewer, id]);
-        
+
         res.json({ success: true });
     } catch (err) {
         console.error('Error approving revision:', err);
@@ -1898,7 +2035,7 @@ app.post('/api/admin/explain/revision/:id/approve', adminMiddleware, async (req,
 app.post('/api/admin/explain/revision/:id/reject', adminMiddleware, async (req, res) => {
     const { id } = req.params;
     const reviewer = req.body.reviewer || 'Admin';
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
@@ -2004,7 +2141,7 @@ app.get('/api/user/:username/full-profile', async (req, res) => {
             if (userData.privacy_settings) {
                 privacy = JSON.parse(userData.privacy_settings);
             }
-        } catch (e) {}
+        } catch (e) { }
 
         // Check if viewer is the profile owner
         const isOwner = requestingUser === username;
@@ -2030,7 +2167,7 @@ app.get('/api/user/:username/full-profile', async (req, res) => {
         try {
             const articlesRes = await conn.query("SELECT COUNT(*) as count FROM explain_articles WHERE author = ? AND status = 'approved'", [username]);
             articlesCount = Number(articlesRes[0]?.count) || 0;
-        } catch (e) {}
+        } catch (e) { }
 
         // Get achievements with images if allowed
         let achievements = [];
@@ -2309,7 +2446,7 @@ app.post('/api/friends/decline', async (req, res) => {
 // GET /api/users/search - Search for users
 app.get('/api/users/search', async (req, res) => {
     const { q } = req.query;
-    
+
     if (!q || q.length < 2) {
         return res.status(400).json({ error: "Search query too short" });
     }
@@ -2606,7 +2743,7 @@ app.post('/api/multiplayer/session/:sessionId/action', async (req, res) => {
         let currentData = {};
         try {
             currentData = sessions[0].current_data ? JSON.parse(sessions[0].current_data) : {};
-        } catch (e) {}
+        } catch (e) { }
 
         // Add action to history
         if (!currentData.actions) currentData.actions = [];
@@ -2675,9 +2812,9 @@ app.post('/api/multiplayer/session/:sessionId/end', async (req, res) => {
         if (sessions.length > 0 && sessions[0].current_data) {
             try {
                 currentData = JSON.parse(sessions[0].current_data);
-            } catch (e) {}
+            } catch (e) { }
         }
-        
+
         currentData.winner = winner;
         currentData.final_data = final_data;
         currentData.ended_at = new Date().toISOString();
@@ -2703,7 +2840,7 @@ app.post('/api/multiplayer/session/:sessionId/end', async (req, res) => {
 // Middleware to check moderator role
 const moderatorMiddleware = async (req, res, next) => {
     const username = req.body.moderator_username || req.query.moderator_username;
-    
+
     if (!username) {
         return res.status(401).json({ error: "Moderator username required" });
     }
@@ -2716,7 +2853,7 @@ const moderatorMiddleware = async (req, res, next) => {
     try {
         conn = await pool.getConnection();
         const userRes = await conn.query("SELECT role FROM users WHERE username = ?", [username]);
-        
+
         if (userRes.length === 0) {
             return res.status(404).json({ error: "User not found" });
         }
@@ -2738,7 +2875,7 @@ const moderatorMiddleware = async (req, res, next) => {
 // POST /api/moderator/article/:id/approve - Moderator approve article
 app.post('/api/moderator/article/:id/approve', moderatorMiddleware, async (req, res) => {
     const { id } = req.params;
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
@@ -2755,7 +2892,7 @@ app.post('/api/moderator/article/:id/approve', moderatorMiddleware, async (req, 
 // POST /api/moderator/article/:id/reject - Moderator reject article
 app.post('/api/moderator/article/:id/reject', moderatorMiddleware, async (req, res) => {
     const { id } = req.params;
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
@@ -2817,7 +2954,7 @@ app.get('/api/moderator/posts/pending', moderatorMiddleware, async (req, res) =>
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         const posts = await conn.query(`
             SELECT p.*, u.discord_id, u.avatar
             FROM posts p
@@ -2825,7 +2962,7 @@ app.get('/api/moderator/posts/pending', moderatorMiddleware, async (req, res) =>
             WHERE p.status = 'pending'
             ORDER BY p.created_at ASC
         `);
-        
+
         res.json(posts);
     } catch (err) {
         console.error('Get pending posts error:', err);
@@ -2838,7 +2975,7 @@ app.get('/api/moderator/posts/pending', moderatorMiddleware, async (req, res) =>
 // POST /api/moderator/post/:id/approve - Approve a post
 app.post('/api/moderator/post/:id/approve', moderatorMiddleware, async (req, res) => {
     const { id } = req.params;
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
@@ -2855,7 +2992,7 @@ app.post('/api/moderator/post/:id/approve', moderatorMiddleware, async (req, res
 // POST /api/moderator/post/:id/reject - Reject a post
 app.post('/api/moderator/post/:id/reject', moderatorMiddleware, async (req, res) => {
     const { id } = req.params;
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
@@ -2872,12 +3009,12 @@ app.post('/api/moderator/post/:id/reject', moderatorMiddleware, async (req, res)
 // DELETE /api/moderator/post/:id - Delete a post (moderator)
 app.delete('/api/moderator/post/:id', moderatorMiddleware, async (req, res) => {
     const { id } = req.params;
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
         const result = await conn.query(`DELETE FROM posts WHERE id = ?`, [id]);
-        
+
         if (result.affectedRows > 0) {
             res.json({ success: true });
         } else {
@@ -2896,7 +3033,7 @@ app.get('/api/moderator/posts/all', moderatorMiddleware, async (req, res) => {
     const { status } = req.query;
     const limit = parseInt(req.query.limit) || 50;
     const offset = parseInt(req.query.offset) || 0;
-    
+
     if (useInMemory) {
         return res.json([]);
     }
@@ -2904,22 +3041,22 @@ app.get('/api/moderator/posts/all', moderatorMiddleware, async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         let query = `
             SELECT p.*, u.discord_id, u.avatar
             FROM posts p
             LEFT JOIN users u ON p.username = u.username
         `;
         const params = [];
-        
+
         if (status && ['pending', 'approved', 'rejected'].includes(status)) {
             query += ` WHERE p.status = ?`;
             params.push(status);
         }
-        
+
         query += ` ORDER BY p.created_at DESC LIMIT ? OFFSET ?`;
         params.push(limit, offset);
-        
+
         const posts = await conn.query(query, params);
         res.json(posts);
     } catch (err) {
@@ -2978,7 +3115,7 @@ app.get('/api/rhythm/maps', (req, res) => {
 app.post('/api/rhythm/pp', async (req, res) => {
     try {
         const { username, song_id, score, pp, accuracy, max_combo } = req.body;
-        
+
         if (!username || !song_id || pp === undefined) {
             return res.status(400).json({ error: "Missing required fields" });
         }
@@ -2995,10 +3132,10 @@ app.post('/api/rhythm/pp', async (req, res) => {
 
         if (useInMemory) {
             // Check if user has a better score on this song
-            const existingIdx = memoryRhythmPP.findIndex(r => 
+            const existingIdx = memoryRhythmPP.findIndex(r =>
                 r.username === username && r.song_id === song_id
             );
-            
+
             if (existingIdx >= 0) {
                 // Only update if new PP is higher
                 if (ppRecord.pp > memoryRhythmPP[existingIdx].pp) {
@@ -3007,14 +3144,14 @@ app.post('/api/rhythm/pp', async (req, res) => {
             } else {
                 memoryRhythmPP.push(ppRecord);
             }
-            
+
             return res.json({ success: true, mode: "memory" });
         }
 
         let conn;
         try {
             conn = await pool.getConnection();
-            
+
             // Ensure rhythm_pp table exists
             await conn.query(`
                 CREATE TABLE IF NOT EXISTS rhythm_pp (
@@ -3030,7 +3167,7 @@ app.post('/api/rhythm/pp', async (req, res) => {
                     INDEX idx_pp (pp DESC)
                 )
             `);
-            
+
             // Upsert - only update all stats when new PP is higher than existing
             // This preserves the best PP score per song for each user
             await conn.query(`
@@ -3043,7 +3180,7 @@ app.post('/api/rhythm/pp', async (req, res) => {
                     max_combo = IF(VALUES(pp) > pp, VALUES(max_combo), max_combo),
                     created_at = IF(VALUES(pp) > pp, NOW(), created_at)
             `, [username, song_id, ppRecord.score, ppRecord.pp, ppRecord.accuracy, ppRecord.max_combo]);
-            
+
             res.json({ success: true });
         } finally {
             if (conn) conn.release();
@@ -3068,18 +3205,18 @@ app.get('/api/rhythm/pp/leaderboard', async (req, res) => {
             userPP[r.username].total_pp += r.pp;
             userPP[r.username].play_count++;
         });
-        
+
         const leaderboard = Object.values(userPP)
             .sort((a, b) => b.total_pp - a.total_pp)
             .slice(0, limit);
-        
+
         return res.json(leaderboard);
     }
 
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         const rows = await conn.query(`
             SELECT 
                 r.username,
@@ -3093,7 +3230,7 @@ app.get('/api/rhythm/pp/leaderboard', async (req, res) => {
             ORDER BY total_pp DESC
             LIMIT ?
         `, [limit]);
-        
+
         res.json(rows);
     } catch (err) {
         console.error("PP Leaderboard Error:", err);
@@ -3111,9 +3248,9 @@ app.get('/api/rhythm/pp/user/:username', async (req, res) => {
         const userScores = memoryRhythmPP
             .filter(r => r.username === username)
             .sort((a, b) => b.pp - a.pp);
-        
+
         const totalPP = userScores.reduce((sum, r) => sum + r.pp, 0);
-        
+
         return res.json({
             username,
             total_pp: totalPP,
@@ -3124,16 +3261,16 @@ app.get('/api/rhythm/pp/user/:username', async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         const scores = await conn.query(`
             SELECT song_id, score, pp, accuracy, max_combo, created_at
             FROM rhythm_pp
             WHERE username = ?
             ORDER BY pp DESC
         `, [username]);
-        
+
         const totalPP = scores.reduce((sum, r) => sum + Number(r.pp), 0);
-        
+
         res.json({
             username,
             total_pp: totalPP,
@@ -3157,14 +3294,14 @@ app.get('/api/rhythm/pp/song/:songId', async (req, res) => {
             .filter(r => r.song_id === songId)
             .sort((a, b) => b.score - a.score)
             .slice(0, limit);
-        
+
         return res.json(songScores);
     }
 
     let conn;
     try {
         conn = await pool.getConnection();
-        
+
         const rows = await conn.query(`
             SELECT 
                 r.username,
@@ -3181,7 +3318,7 @@ app.get('/api/rhythm/pp/song/:songId', async (req, res) => {
             ORDER BY r.score DESC
             LIMIT ?
         `, [songId, limit]);
-        
+
         res.json(rows);
     } catch (err) {
         console.error("Song Leaderboard Error:", err);
@@ -3225,26 +3362,26 @@ async function fetchAnimeFromJikan(page = 1) {
         // Fetch top anime by score, TV only, ordered by popularity
         const url = `${JIKAN_API_BASE}/top/anime?type=tv&filter=bypopularity&page=${page}&limit=25`;
         const response = await axios.get(url, { timeout: 10000 });
-        
+
         if (!response.data || !response.data.data) {
             return [];
         }
-        
+
         const animeList = response.data.data;
         const transformedAnime = [];
-        
+
         for (const anime of animeList) {
             // Skip sequels and alternatives
             if (isSequelOrAlternative(anime)) continue;
-            
+
             // Extract studio name
-            const studio = anime.studios && anime.studios.length > 0 
-                ? anime.studios[0].name 
+            const studio = anime.studios && anime.studios.length > 0
+                ? anime.studios[0].name
                 : 'Unknown';
-            
+
             // Extract genres
             const genres = (anime.genres || []).map(g => g.name);
-            
+
             // Extract themes as tags (primary) and demographics as tags (secondary)
             const tags = [];
             if (anime.themes) {
@@ -3253,12 +3390,12 @@ async function fetchAnimeFromJikan(page = 1) {
             if (anime.demographics) {
                 anime.demographics.forEach(d => tags.push({ name: d.name, primary: false }));
             }
-            
+
             // Get release year
-            const releaseDate = anime.aired?.from 
-                ? new Date(anime.aired.from).getFullYear().toString() 
+            const releaseDate = anime.aired?.from
+                ? new Date(anime.aired.from).getFullYear().toString()
                 : 'Unknown';
-            
+
             transformedAnime.push({
                 mal_id: anime.mal_id,
                 title: anime.title,
@@ -3274,7 +3411,7 @@ async function fetchAnimeFromJikan(page = 1) {
                 main_character: null // Will be fetched separately if needed
             });
         }
-        
+
         return transformedAnime;
     } catch (error) {
         console.error(`Error fetching anime from Jikan (page ${page}):`, error.message);
@@ -3287,7 +3424,7 @@ async function fetchMainCharacter(malId) {
     try {
         const url = `${JIKAN_API_BASE}/anime/${malId}/characters`;
         const response = await axios.get(url, { timeout: 10000 });
-        
+
         if (response.data && response.data.data && response.data.data.length > 0) {
             // Get the first main character or the most favorited one
             const mainChar = response.data.data.find(c => c.role === 'Main') || response.data.data[0];
@@ -3309,16 +3446,16 @@ async function fetchMainCharacter(malId) {
 async function refreshAnidleCache() {
     console.log('[Anidle] Refreshing anime cache from Jikan API...');
     const allAnime = [];
-    
+
     // Fetch first 4 pages (100 anime, after filtering should be ~50-70)
     for (let page = 1; page <= 4; page++) {
         const anime = await fetchAnimeFromJikan(page);
         allAnime.push(...anime);
-        
+
         // Respect Jikan rate limit (3 requests per second)
         if (page < 4) await delay(400);
     }
-    
+
     if (allAnime.length > 0) {
         anidleAnimeCache = allAnime;
         anidleCacheLastUpdate = Date.now();
@@ -3365,11 +3502,11 @@ async function getAnidleValidAnime() {
     // Check if cache needs refresh
     const now = Date.now();
     const cacheExpired = !anidleCacheLastUpdate || (now - anidleCacheLastUpdate) > ANIDLE_CACHE_DURATION;
-    
+
     if (cacheExpired || anidleAnimeCache.length === 0) {
         await refreshAnidleCache();
     }
-    
+
     return anidleAnimeCache;
 }
 
@@ -3379,7 +3516,7 @@ async function getAnidleDailyAnime() {
     if (animeList.length === 0) {
         return null;
     }
-    
+
     const today = new Date();
     const dateString = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
     // Simple hash of date string
@@ -3426,7 +3563,7 @@ app.get('/api/anidle/random', async (req, res) => {
         if (animeList.length === 0) {
             return res.status(503).json({ error: "Anime data not available. Please try again later." });
         }
-        
+
         const index = Math.floor(Math.random() * animeList.length);
         const anime = animeList[index];
         res.json({
@@ -3468,34 +3605,34 @@ app.get('/api/anidle/anime-list', async (req, res) => {
 // POST /api/anidle/guess - Check a guess
 app.post('/api/anidle/guess', async (req, res) => {
     const { guess, target_id, mode } = req.body;
-    
+
     if (!guess || !target_id) {
         return res.status(400).json({ error: "Missing guess or target" });
     }
-    
+
     try {
         const animeList = await getAnidleValidAnime();
-        
+
         // Find guessed anime
-        const guessedAnime = animeList.find(a => 
+        const guessedAnime = animeList.find(a =>
             a.title.toLowerCase() === guess.toLowerCase() ||
             (a.title_english && a.title_english.toLowerCase() === guess.toLowerCase())
         );
-        
+
         if (!guessedAnime) {
             return res.status(400).json({ error: "Anime not found in database" });
         }
-        
+
         // Find target anime
         const targetAnime = animeList.find(a => a.mal_id === target_id);
-        
+
         if (!targetAnime) {
             return res.status(400).json({ error: "Target anime not found" });
         }
-        
+
         // Check if correct
         const isCorrect = guessedAnime.mal_id === targetAnime.mal_id;
-        
+
         // Compare properties
         const comparison = {
             score_match: guessedAnime.score === targetAnime.score,
@@ -3503,16 +3640,16 @@ app.post('/api/anidle/guess', async (req, res) => {
             studio_match: guessedAnime.studio === targetAnime.studio,
             source_match: guessedAnime.source === targetAnime.source,
             release_match: guessedAnime.release_date === targetAnime.release_date,
-            release_direction: parseInt(guessedAnime.release_date) < parseInt(targetAnime.release_date) ? '↑' : 
-                             (parseInt(guessedAnime.release_date) > parseInt(targetAnime.release_date) ? '↓' : '')
+            release_direction: parseInt(guessedAnime.release_date) < parseInt(targetAnime.release_date) ? '↑' :
+                (parseInt(guessedAnime.release_date) > parseInt(targetAnime.release_date) ? '↓' : '')
         };
-        
+
         // Compare genres
         const guessGenres = guessedAnime.genres || [];
         const targetGenres = targetAnime.genres || [];
         const correctGenres = guessGenres.filter(g => targetGenres.includes(g));
         const wrongGenres = guessGenres.filter(g => !targetGenres.includes(g));
-        
+
         comparison.genres_match = {
             correct: correctGenres.length,
             total: targetGenres.length
@@ -3521,18 +3658,18 @@ app.post('/api/anidle/guess', async (req, res) => {
             correct: correctGenres,
             wrong: wrongGenres
         };
-        
+
         // Compare tags
         const guessTags = (guessedAnime.tags || []).map(t => t.name || t);
         const targetTags = targetAnime.tags || [];
         const targetTagNames = targetTags.map(t => t.name || t);
         const targetPrimaryTags = targetTags.filter(t => t.primary).map(t => t.name || t);
         const targetSecondaryTags = targetTags.filter(t => !t.primary).map(t => t.name || t);
-        
+
         const primaryMatches = guessTags.filter(t => targetPrimaryTags.includes(t));
         const secondaryMatches = guessTags.filter(t => targetSecondaryTags.includes(t));
         const wrongTags = guessTags.filter(t => !targetTagNames.includes(t));
-        
+
         comparison.tags_match = {
             primary: primaryMatches.length,
             secondary: secondaryMatches.length
@@ -3542,7 +3679,7 @@ app.post('/api/anidle/guess', async (req, res) => {
             secondary: secondaryMatches,
             wrong: wrongTags
         };
-        
+
         res.json({
             correct: isCorrect,
             guessed_anime: {
@@ -3571,16 +3708,16 @@ app.post('/api/anidle/guess', async (req, res) => {
 // GET /api/anidle/check-daily - Check if user has completed today's daily
 app.get('/api/anidle/check-daily', async (req, res) => {
     const { username } = req.query;
-    
+
     if (!username) {
         return res.status(400).json({ error: "Username required" });
     }
-    
+
     const today = new Date().toISOString().split('T')[0];
-    
+
     if (useInMemory) {
         // Check memory scores for today
-        const todayScores = memoryScores.filter(s => 
+        const todayScores = memoryScores.filter(s =>
             s.game_id === 'anidle' &&
             s.board_id === 'daily' &&
             s.username === username &&
@@ -3588,7 +3725,7 @@ app.get('/api/anidle/check-daily', async (req, res) => {
         );
         return res.json({ completed: todayScores.length > 0 });
     }
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
@@ -3599,7 +3736,7 @@ app.get('/api/anidle/check-daily', async (req, res) => {
             AND username = ?
             AND DATE(created_at) = ?
         `, [username, today]);
-        
+
         res.json({ completed: Number(result[0].count) > 0 });
     } catch (err) {
         console.error("Check daily error:", err);
@@ -3613,10 +3750,10 @@ app.get('/api/anidle/check-daily', async (req, res) => {
 app.get('/api/anidle/daily-leaderboard', async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const limit = parseInt(req.query.limit) || 10;
-    
+
     if (useInMemory) {
         const todayScores = memoryScores
-            .filter(s => 
+            .filter(s =>
                 s.game_id === 'anidle' &&
                 s.board_id === 'daily' &&
                 s.created_at.toISOString().split('T')[0] === today
@@ -3625,7 +3762,7 @@ app.get('/api/anidle/daily-leaderboard', async (req, res) => {
             .slice(0, limit);
         return res.json(todayScores);
     }
-    
+
     let conn;
     try {
         conn = await pool.getConnection();
@@ -3639,7 +3776,7 @@ app.get('/api/anidle/daily-leaderboard', async (req, res) => {
             ORDER BY s.score DESC
             LIMIT ?
         `, [today, limit]);
-        
+
         res.json(rows);
     } catch (err) {
         console.error("Daily leaderboard error:", err);
@@ -3653,8 +3790,8 @@ app.get('/api/anidle/daily-leaderboard', async (req, res) => {
 app.post('/api/anidle/refresh-cache', adminMiddleware, async (req, res) => {
     try {
         await refreshAnidleCache();
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             count: anidleAnimeCache.length,
             message: `Cache refreshed with ${anidleAnimeCache.length} anime`
         });
@@ -3676,7 +3813,7 @@ app.get('/api/anidle/cache-status', (req, res) => {
 // Start Server
 app.listen(PORT, async () => {
     console.log(`Server running at http://localhost:${PORT}`);
-    
+
     // Initialize anime cache on startup
     console.log('[Anidle] Initializing anime cache...');
     try {

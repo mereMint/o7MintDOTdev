@@ -49,11 +49,12 @@ let judgmentCounts = { perfect: 0, great: 0, good: 0, miss: 0 };
 // Visual settings
 const CENTER_X = () => canvas.width / 2;
 const CENTER_Y = () => canvas.height / 2;
-const RING_RADIUS = 120;
-const RING_THICKNESS = 15;
+const RING_RADIUS = 60; // The target hit area radius
+// const RING_THICKNESS = 15; // Removed
 const NOTE_SPAWN_RADIUS = 400;
-const NOTE_SIZE = 35;
-let APPROACH_TIME = 1500; // ms for note to reach center (now configurable)
+const NOTE_SIZE = 20;
+let APPROACH_TIME = 1500; // MS to reach center (will be driven by AR)
+let AR = 5; // Approach Rate (0-10)
 
 // Timing windows (in ms)
 const TIMING = {
@@ -62,6 +63,12 @@ const TIMING = {
     GOOD: 150,
     MISS: 200
 };
+
+// Health System
+let maxHealth = 100;
+let currentHealth = 100;
+const HEALTH_DRAIN = 10;
+const HEALTH_GAIN = 5;
 
 // ===== INITIALIZATION =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -94,6 +101,13 @@ function resizeCanvas() {
 }
 
 // ===== SCREEN MANAGEMENT =====
+function failGame() {
+    audio.pause();
+    currentState = GameState.MENU; // Or FAIL state
+    alert("Game Over!");
+    showScreen('menu-screen'); // Assuming showMenu() means showing the menu screen
+}
+
 function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     const screen = document.getElementById(screenId);
@@ -572,6 +586,17 @@ async function startGame() {
     }, 1000);
 }
 
+function updateAR(val) {
+    AR = val;
+    // AR formula: 1800ms at AR0, 450ms at AR10? Or simple scale.
+    // Let's use: 1800 - (120 * AR)
+    // AR 0 = 1800ms
+    // AR 5 = 1200ms
+    // AR 10 = 600ms
+    APPROACH_TIME = Math.max(450, 1800 - (120 * AR));
+    console.log(`AR: ${AR}, Approach Time: ${APPROACH_TIME}ms`);
+}
+
 function resetGameState() {
     score = 0;
     combo = 0;
@@ -579,6 +604,7 @@ function resetGameState() {
     totalHits = 0;
     accuracy = 100;
     judgmentCounts = { perfect: 0, great: 0, good: 0, miss: 0 };
+    currentHealth = 100; // Reset Health
 
     // Load notes from map
     notes = currentMap.notes.map(n => ({
@@ -588,6 +614,9 @@ function resetGameState() {
         holdProgress: 0,
         spamCount: 0
     }));
+
+    // Apply AR if defined in song data, else use default/settings
+    // updateAR(songData.ar || 5); -- (If we add AR to map data later)
 
     activeHolds = [];
     updateHUD();
@@ -665,33 +694,45 @@ function drawCenterRing() {
     const cx = CENTER_X();
     const cy = CENTER_Y();
 
-    // Hit Area (Black Circle)
+    // Pulse Ring on Beat
+    // BPM = 120 (approx 500ms). Use audio time or perf time.
+    // Let's use performance.now() for visual pulse
+    const beatPulse = Math.sin(performance.now() / 200) * 2 + 0; // +/- 2px
+    const pulsedRadius = RING_RADIUS + beatPulse;
+
+    // Draw Health Bar (Fading Fill)
     ctx.beginPath();
-    ctx.arc(cx, cy, RING_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = '#000000'; // Black fit area
+    ctx.arc(cx, cy, pulsedRadius - 2, 0, Math.PI * 2);
+    const healthOpacity = Math.max(0, currentHealth / maxHealth) * 0.5;
+    ctx.fillStyle = `rgba(255, 51, 102, ${healthOpacity})`;
     ctx.fill();
 
-    // Ring border (Dark Grey/White border for visibility)
+    // Hit Area (Black Circle)
     ctx.beginPath();
-    ctx.arc(cx, cy, RING_RADIUS, 0, Math.PI * 2);
+    ctx.arc(cx, cy, pulsedRadius, 0, Math.PI * 2);
+    ctx.fillStyle = '#000000';
+    ctx.fill();
+
+    // Ring border
+    ctx.beginPath();
+    ctx.arc(cx, cy, pulsedRadius, 0, Math.PI * 2);
     ctx.strokeStyle = '#444';
     ctx.lineWidth = 2;
     ctx.stroke();
 
     // Hit feedback (Inner glow)
     if (combo > 0) {
-        // Subtle pulse for feedback
         const intensity = Math.min(combo / 50, 1);
         ctx.beginPath();
-        ctx.arc(cx, cy, RING_RADIUS - 5, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(51, 204, 255, ${intensity * 0.5})`; // Blue glow
+        ctx.arc(cx, cy, pulsedRadius - 5, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(51, 204, 255, ${intensity * 0.5})`;
         ctx.lineWidth = 4;
         ctx.stroke();
     }
 
-    // Explicit Goal Line (Always visible white/grey thin line on top of black)
+    // Goal Line
     ctx.beginPath();
-    ctx.arc(cx, cy, RING_RADIUS, 0, Math.PI * 2);
+    ctx.arc(cx, cy, pulsedRadius, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 1;
     ctx.stroke();
@@ -723,33 +764,50 @@ function drawNotes(currentTime) {
             color = '#33ccff'; // Blue
         }
 
-        // Shrinking Circle Logic
-        // Progress from 0 (spawn) to 1 (hit)
-        // We want the ring to start at spawn radius and shrink to RING_RADIUS (hit area) at progress 1
+        // Radius logic
+        let startRadius, endRadius;
+        const progressStart = 1 - (timeUntilHit / APPROACH_TIME);
+        startRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progressStart);
 
-        // However, usually visuals are: Inner circle is the note, Outer ring is the approach.
-        // The prompt says "they shrink towards the hit area".
-        // Let's model it as:
-        // 1. A ring that starts huge and shrinks to the size of the Hit Area.
-        // 2. When it matches the Hit Area size, that's the hit time.
+        if (note.type === 'hold' && note.endTime) {
+            const timeUntilEnd = note.endTime - currentTime;
+            const progressEnd = 1 - (timeUntilEnd / APPROACH_TIME);
+            endRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progressEnd);
 
-        // Calculate current radius based on time until hit
-        let currentRadius;
-        if (isHoldActive) {
-            currentRadius = RING_RADIUS;
+            // Clamp for drawing
+            let drawStart = Math.max(0, startRadius);
+            let drawEnd = Math.min(NOTE_SPAWN_RADIUS, endRadius);
+
+            if (drawStart < drawEnd) {
+                // Draw the duration band
+                ctx.beginPath();
+                ctx.arc(cx, cy, (drawStart + drawEnd) / 2, 0, Math.PI * 2);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = Math.abs(drawEnd - drawStart);
+                ctx.globalAlpha = 0.4;
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+
+                // Draw edges
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(cx, cy, drawStart, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(cx, cy, drawEnd, 0, Math.PI * 2);
+                ctx.stroke();
+            }
         } else {
-            const progress = 1 - (timeUntilHit / APPROACH_TIME);
-            currentRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progress);
+            if (startRadius < 0) return;
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, startRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = (note.type === 'spam') ? 2 : 8;
+            if (note.type === 'spam') ctx.setLineDash([10, 5]);
+            ctx.stroke();
+            ctx.setLineDash([]);
         }
-
-        if (currentRadius < 0) return; // Should not happen with valid logic
-
-        // Draw the shrinking ring
-        ctx.beginPath();
-        ctx.arc(cx, cy, currentRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = (note.type === 'hold') ? 16 : 8; // Double thickness for holds
-        ctx.stroke();
 
         // Hold Note specifics
         if (note.type === 'hold' && note.endTime) {
@@ -803,7 +861,7 @@ function updateNotes(currentTime) {
             note.hit = true;
             processJudgment('perfect', note, true);
             // Visual Flash for Hold End
-            createHitEffect(0, 0, 'perfect');
+            // createHitEffect(0, 0, 'perfect'); // This function is not defined in the provided code
             return false;
         }
         return true;
@@ -963,9 +1021,15 @@ function processJudgment(judgment, note, isHold = false) {
         miss: 0
     };
 
+    // Health Logic
     if (judgment === 'miss') {
+        currentHealth -= HEALTH_DRAIN;
         combo = 0;
+        if (currentHealth <= 0) {
+            failGame(); // This function is not defined in the provided code
+        }
     } else {
+        currentHealth = Math.min(maxHealth, currentHealth + HEALTH_GAIN);
         combo++;
         maxCombo = Math.max(maxCombo, combo);
 

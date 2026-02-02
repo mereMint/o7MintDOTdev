@@ -5,7 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Anidle - Guess the Anime</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=1.2">
+    <!-- KaTeX for Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 </head>
 
 <body>
@@ -79,6 +82,8 @@
                 <div id="autocomplete-list" class="autocomplete-items"></div>
             </div>
             <button id="guess-btn" onclick="submitGuess()">Guess!</button>
+            <button id="skip-btn" onclick="skipToHint()" class="secondary-btn">Skip to Hint (-<span
+                    id="skip-cost">5</span> Tries)</button>
         </div>
 
         <!-- Guess History -->
@@ -113,7 +118,8 @@
 
     <button onclick="window.history.back()" class="floating-back-btn">← Back</button>
 
-    <script src="game.js"></script>
+    <script src="game.js?v=1.2"></script>
+    </script>
 </body>
 
 </html>
