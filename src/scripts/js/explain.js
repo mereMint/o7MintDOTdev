@@ -14,28 +14,28 @@ function parseExplainSyntax(content) {
     const codeBlocks = [];
     html = html.replace(/```([\s\S]*?)```/g, (match, code) => {
         codeBlocks.push(code.trim());
-        return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+        return `%%CODE_BLOCK_${codeBlocks.length - 1}%%`;
     });
     
     // Store inline code and replace with placeholders
     const inlineCodes = [];
     html = html.replace(/`([^`]+)`/g, (match, code) => {
         inlineCodes.push(code);
-        return `__INLINE_CODE_${inlineCodes.length - 1}__`;
+        return `%%INLINE_CODE_${inlineCodes.length - 1}%%`;
     });
     
     // Store LaTeX blocks and replace with placeholders
     const latexBlocks = [];
     html = html.replace(/\$\$([\s\S]+?)\$\$/g, (match, latex) => {
         latexBlocks.push(latex.trim());
-        return `__LATEX_BLOCK_${latexBlocks.length - 1}__`;
+        return `%%LATEX_BLOCK_${latexBlocks.length - 1}%%`;
     });
     
     // Store inline LaTeX and replace with placeholders
     const inlineLatex = [];
     html = html.replace(/\$([^$\n]+)\$/g, (match, latex) => {
         inlineLatex.push(latex);
-        return `__INLINE_LATEX_${inlineLatex.length - 1}__`;
+        return `%%INLINE_LATEX_${inlineLatex.length - 1}%%`;
     });
     
     // Now escape HTML
@@ -111,26 +111,26 @@ function parseExplainSyntax(content) {
     // Restore code blocks
     codeBlocks.forEach((code, i) => {
         const escapedCode = escapeHtml(code);
-        html = html.replace(`__CODE_BLOCK_${i}__`, `<pre><code>${escapedCode}</code></pre>`);
+        html = html.replace(`%%CODE_BLOCK_${i}%%`, `<pre><code>${escapedCode}</code></pre>`);
     });
     
     // Restore inline code
     inlineCodes.forEach((code, i) => {
         const escapedCode = escapeHtml(code);
-        html = html.replace(`__INLINE_CODE_${i}__`, `<code>${escapedCode}</code>`);
+        html = html.replace(`%%INLINE_CODE_${i}%%`, `<code>${escapedCode}</code>`);
     });
     
     // Restore LaTeX blocks - render with KaTeX if available
     latexBlocks.forEach((latex, i) => {
         const rendered = renderLatex(latex, true);
-        html = html.replace(`<p>__LATEX_BLOCK_${i}__</p>`, `<div class="latex-block">${rendered}</div>`);
-        html = html.replace(`__LATEX_BLOCK_${i}__`, `<div class="latex-block">${rendered}</div>`);
+        html = html.replace(`<p>%%LATEX_BLOCK_${i}%%</p>`, `<div class="latex-block">${rendered}</div>`);
+        html = html.replace(`%%LATEX_BLOCK_${i}%%`, `<div class="latex-block">${rendered}</div>`);
     });
     
     // Restore inline LaTeX
     inlineLatex.forEach((latex, i) => {
         const rendered = renderLatex(latex, false);
-        html = html.replace(`__INLINE_LATEX_${i}__`, `<span class="latex-inline">${rendered}</span>`);
+        html = html.replace(`%%INLINE_LATEX_${i}%%`, `<span class="latex-inline">${rendered}</span>`);
     });
     
     // Fix any remaining paragraph issues around divs
@@ -375,7 +375,46 @@ function renderCategorySelect(categories, selectedId = null) {
                 ${cat.name}
             </option>
         `).join('')}
+        <option value="__new__">+ Create new category...</option>
     `;
+    
+    // Add change listener for creating new category
+    select.addEventListener('change', async function() {
+        if (this.value === '__new__') {
+            const newCatName = prompt('Enter the name for your new category:');
+            if (newCatName && newCatName.trim().length >= 2) {
+                const result = await createCategory(newCatName.trim());
+                if (result.success && result.category) {
+                    // Reload categories and select the new one
+                    const updatedCategories = await fetchCategories();
+                    renderCategorySelect(updatedCategories, result.category.id);
+                    showMessage(`Category "${result.category.name}" created!`, 'success');
+                } else {
+                    showMessage(result.error || 'Failed to create category', 'error');
+                    this.value = '';
+                }
+            } else if (newCatName !== null) {
+                showMessage('Category name must be at least 2 characters', 'error');
+                this.value = '';
+            } else {
+                this.value = '';
+            }
+        }
+    });
+}
+
+async function createCategory(name, description = '', color = '#1DCD9F') {
+    try {
+        const res = await fetch(`${API_BASE}/categories`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description, color })
+        });
+        return await res.json();
+    } catch (err) {
+        console.error('Error creating category:', err);
+        return { error: 'Network error' };
+    }
 }
 
 function showMessage(message, type = 'success') {
