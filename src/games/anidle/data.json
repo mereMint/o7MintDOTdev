@@ -1,0 +1,66 @@
+{
+    "name": "Anidle",
+    "description": "Guess the anime from clues like MAL score, studio, genres, release date, source, and tags! You have 21 tries - get hints at try 10 (blurred cover), try 15 (synopsis), and try 20 (popular character). Daily challenges and unlimited mode available!",
+    "genre": "Puzzle",
+    "settings": {
+        "achievements": true,
+        "leaderboard": {
+            "key": "daily",
+            "title": "Today's Best"
+        },
+        "phone": true
+    },
+    "images": [
+        "logo.svg"
+    ],
+    "achievements": [
+        {
+            "id": "first_guess",
+            "title": "First Guess",
+            "description": "Correctly guess an anime for the first time.",
+            "image": "logo.svg",
+            "secret": false,
+            "points": 50
+        },
+        {
+            "id": "perfect_score",
+            "title": "Perfect Score",
+            "description": "Guess the anime on your first try with maximum points.",
+            "image": "logo.svg",
+            "secret": false,
+            "points": 500
+        },
+        {
+            "id": "daily_streak_7",
+            "title": "Week Warrior",
+            "description": "Complete 7 daily challenges.",
+            "image": "logo.svg",
+            "secret": false,
+            "points": 200
+        },
+        {
+            "id": "no_hints",
+            "title": "No Hints Needed",
+            "description": "Guess correctly before any hints are revealed (before try 10).",
+            "image": "logo.svg",
+            "secret": false,
+            "points": 150
+        },
+        {
+            "id": "anime_master",
+            "title": "Anime Master",
+            "description": "Correctly guess 50 different anime.",
+            "image": "logo.svg",
+            "secret": false,
+            "points": 300
+        },
+        {
+            "id": "last_chance",
+            "title": "Last Chance",
+            "description": "Guess correctly on your final (21st) try.",
+            "image": "logo.svg",
+            "secret": true,
+            "points": 100
+        }
+    ]
+}
