@@ -2930,6 +2930,266 @@ app.get('/api/moderator/posts/all', moderatorMiddleware, async (req, res) => {
     }
 });
 
+// =============================================
+// Rhythm Circle Game API Routes
+// =============================================
+
+// In-memory storage for rhythm game PP scores
+let memoryRhythmPP = [];
+
+// GET /api/rhythm/maps - Scan for rhythm game maps
+app.get('/api/rhythm/maps', (req, res) => {
+    const mapsDir = path.join(__dirname, '../../games/rhythm_circle/maps');
+    if (!fs.existsSync(mapsDir)) {
+        return res.json([]);
+    }
+
+    try {
+        const songs = fs.readdirSync(mapsDir).map(folder => {
+            const mapPath = path.join(mapsDir, folder, 'map.json');
+            if (fs.existsSync(mapPath)) {
+                try {
+                    const data = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
+                    return {
+                        id: folder,
+                        title: data.title || folder,
+                        artist: data.artist || 'Unknown',
+                        difficulty: data.difficulty || 'Normal',
+                        difficultyLevel: data.difficultyLevel || 3,
+                        bpm: data.bpm || 120,
+                        noteCount: data.notes ? data.notes.length : 0,
+                        path: `/src/games/rhythm_circle/maps/${folder}`
+                    };
+                } catch (e) {
+                    return null;
+                }
+            }
+            return null;
+        }).filter(s => s !== null);
+
+        res.json(songs);
+    } catch (err) {
+        console.error("Error scanning rhythm maps:", err);
+        res.status(500).json({ error: "Failed to scan maps" });
+    }
+});
+
+// POST /api/rhythm/pp - Submit PP score for rhythm game
+app.post('/api/rhythm/pp', async (req, res) => {
+    try {
+        const { username, song_id, score, pp, accuracy, max_combo } = req.body;
+        
+        if (!username || !song_id || pp === undefined) {
+            return res.status(400).json({ error: "Missing required fields" });
+        }
+
+        const ppRecord = {
+            username,
+            song_id,
+            score: parseInt(score) || 0,
+            pp: parseInt(pp) || 0,
+            accuracy: parseFloat(accuracy) || 0,
+            max_combo: parseInt(max_combo) || 0,
+            created_at: new Date()
+        };
+
+        if (useInMemory) {
+            // Check if user has a better score on this song
+            const existingIdx = memoryRhythmPP.findIndex(r => 
+                r.username === username && r.song_id === song_id
+            );
+            
+            if (existingIdx >= 0) {
+                // Only update if new PP is higher
+                if (ppRecord.pp > memoryRhythmPP[existingIdx].pp) {
+                    memoryRhythmPP[existingIdx] = ppRecord;
+                }
+            } else {
+                memoryRhythmPP.push(ppRecord);
+            }
+            
+            return res.json({ success: true, mode: "memory" });
+        }
+
+        let conn;
+        try {
+            conn = await pool.getConnection();
+            
+            // Ensure rhythm_pp table exists
+            await conn.query(`
+                CREATE TABLE IF NOT EXISTS rhythm_pp (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(255) NOT NULL,
+                    song_id VARCHAR(100) NOT NULL,
+                    score INT DEFAULT 0,
+                    pp INT DEFAULT 0,
+                    accuracy DECIMAL(5,2) DEFAULT 0,
+                    max_combo INT DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY unique_user_song (username, song_id),
+                    INDEX idx_pp (pp DESC)
+                )
+            `);
+            
+            // Upsert - only update if new PP is higher
+            await conn.query(`
+                INSERT INTO rhythm_pp (username, song_id, score, pp, accuracy, max_combo)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    score = IF(VALUES(pp) > pp, VALUES(score), score),
+                    pp = IF(VALUES(pp) > pp, VALUES(pp), pp),
+                    accuracy = IF(VALUES(pp) > pp, VALUES(accuracy), accuracy),
+                    max_combo = IF(VALUES(pp) > pp, VALUES(max_combo), max_combo),
+                    created_at = IF(VALUES(pp) > pp, NOW(), created_at)
+            `, [username, song_id, ppRecord.score, ppRecord.pp, ppRecord.accuracy, ppRecord.max_combo]);
+            
+            res.json({ success: true });
+        } finally {
+            if (conn) conn.release();
+        }
+    } catch (err) {
+        console.error("Rhythm PP Error:", err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+// GET /api/rhythm/pp/leaderboard - Get PP leaderboard
+app.get('/api/rhythm/pp/leaderboard', async (req, res) => {
+    const limit = parseInt(req.query.limit) || 10;
+
+    if (useInMemory) {
+        // Calculate total PP per user
+        const userPP = {};
+        memoryRhythmPP.forEach(r => {
+            if (!userPP[r.username]) {
+                userPP[r.username] = { username: r.username, total_pp: 0, play_count: 0 };
+            }
+            userPP[r.username].total_pp += r.pp;
+            userPP[r.username].play_count++;
+        });
+        
+        const leaderboard = Object.values(userPP)
+            .sort((a, b) => b.total_pp - a.total_pp)
+            .slice(0, limit);
+        
+        return res.json(leaderboard);
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        
+        const rows = await conn.query(`
+            SELECT 
+                r.username,
+                SUM(r.pp) as total_pp,
+                COUNT(*) as play_count,
+                u.discord_id,
+                u.avatar
+            FROM rhythm_pp r
+            LEFT JOIN users u ON r.username = u.username
+            GROUP BY r.username
+            ORDER BY total_pp DESC
+            LIMIT ?
+        `, [limit]);
+        
+        res.json(rows);
+    } catch (err) {
+        console.error("PP Leaderboard Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/rhythm/pp/user/:username - Get user's PP scores
+app.get('/api/rhythm/pp/user/:username', async (req, res) => {
+    const { username } = req.params;
+
+    if (useInMemory) {
+        const userScores = memoryRhythmPP
+            .filter(r => r.username === username)
+            .sort((a, b) => b.pp - a.pp);
+        
+        const totalPP = userScores.reduce((sum, r) => sum + r.pp, 0);
+        
+        return res.json({
+            username,
+            total_pp: totalPP,
+            scores: userScores
+        });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        
+        const scores = await conn.query(`
+            SELECT song_id, score, pp, accuracy, max_combo, created_at
+            FROM rhythm_pp
+            WHERE username = ?
+            ORDER BY pp DESC
+        `, [username]);
+        
+        const totalPP = scores.reduce((sum, r) => sum + Number(r.pp), 0);
+        
+        res.json({
+            username,
+            total_pp: totalPP,
+            scores
+        });
+    } catch (err) {
+        console.error("User PP Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/rhythm/pp/song/:songId - Get leaderboard for a specific song
+app.get('/api/rhythm/pp/song/:songId', async (req, res) => {
+    const { songId } = req.params;
+    const limit = parseInt(req.query.limit) || 10;
+
+    if (useInMemory) {
+        const songScores = memoryRhythmPP
+            .filter(r => r.song_id === songId)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, limit);
+        
+        return res.json(songScores);
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        
+        const rows = await conn.query(`
+            SELECT 
+                r.username,
+                r.score,
+                r.pp,
+                r.accuracy,
+                r.max_combo,
+                r.created_at,
+                u.discord_id,
+                u.avatar
+            FROM rhythm_pp r
+            LEFT JOIN users u ON r.username = u.username
+            WHERE r.song_id = ?
+            ORDER BY r.score DESC
+            LIMIT ?
+        `, [songId, limit]);
+        
+        res.json(rows);
+    } catch (err) {
+        console.error("Song Leaderboard Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
 // Start Server
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rhythm Circle</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- Main Menu Screen -->
+    <div id="menu-screen" class="screen active">
+        <div class="menu-container">
+            <h1 class="game-title">Rhythm Circle</h1>
+            <div class="circular-menu">
+                <div class="menu-center">
+                    <span id="selected-option">Play</span>
+                </div>
+                <div class="menu-options">
+                    <div class="menu-option" data-action="play" data-angle="0">
+                        <span>Play</span>
+                    </div>
+                    <div class="menu-option" data-action="settings" data-angle="90">
+                        <span>Settings</span>
+                    </div>
+                    <div class="menu-option" data-action="editor" data-angle="180">
+                        <span>Editor</span>
+                    </div>
+                    <div class="menu-option" data-action="back" data-angle="270">
+                        <span>Back</span>
+                    </div>
+                </div>
+            </div>
+            <p class="hint">Use mouse or arrow keys to navigate</p>
+        </div>
+    </div>
+
+    <!-- Song Select Screen -->
+    <div id="song-select-screen" class="screen">
+        <div class="song-select-container">
+            <h2>Select Song</h2>
+            <div class="song-carousel">
+                <button class="carousel-btn prev" onclick="rotateSongs(-1)">◀</button>
+                <div class="song-list" id="song-list">
+                    <!-- Songs will be injected here -->
+                    <div class="loading">Loading songs...</div>
+                </div>
+                <button class="carousel-btn next" onclick="rotateSongs(1)">▶</button>
+            </div>
+            <div class="song-info" id="song-info">
+                <h3 id="song-title">-</h3>
+                <p id="song-artist">-</p>
+                <p id="song-difficulty">Difficulty: -</p>
+            </div>
+            <div class="song-actions">
+                <button class="btn primary" onclick="startGame()">Start</button>
+                <button class="btn secondary" onclick="showScreen('menu-screen')">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Screen -->
+    <div id="settings-screen" class="screen">
+        <div class="settings-container">
+            <h2>Settings</h2>
+            <div class="setting-group">
+                <label for="audio-offset">Audio Offset (ms)</label>
+                <input type="range" id="audio-offset" min="-200" max="200" value="0">
+                <span id="offset-value">0ms</span>
+            </div>
+            <div class="setting-group">
+                <label for="key-red">Red Note Key</label>
+                <button class="key-bind" id="key-red" data-key="KeyD">D</button>
+            </div>
+            <div class="setting-group">
+                <label for="key-blue">Blue Note Key</label>
+                <button class="key-bind" id="key-blue" data-key="KeyK">K</button>
+            </div>
+            <div class="setting-group">
+                <label for="mouse-key">Mouse Button</label>
+                <select id="mouse-key">
+                    <option value="red">Red Notes</option>
+                    <option value="blue">Blue Notes</option>
+                    <option value="none">Disabled</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label for="volume">Master Volume</label>
+                <input type="range" id="volume" min="0" max="100" value="80">
+                <span id="volume-value">80%</span>
+            </div>
+            <div class="setting-actions">
+                <button class="btn primary" onclick="saveSettings()">Save</button>
+                <button class="btn secondary" onclick="showScreen('menu-screen')">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen">
+        <canvas id="game-canvas"></canvas>
+        <div class="game-hud">
+            <div class="hud-left">
+                <div class="score-display">
+                    <span class="label">Score</span>
+                    <span id="score">0</span>
+                </div>
+                <div class="combo-display">
+                    <span class="label">Combo</span>
+                    <span id="combo">0</span>
+                </div>
+            </div>
+            <div class="hud-center">
+                <div id="judgment" class="judgment"></div>
+            </div>
+            <div class="hud-right">
+                <div class="accuracy-display">
+                    <span class="label">Accuracy</span>
+                    <span id="accuracy">100.00%</span>
+                </div>
+            </div>
+        </div>
+        <div id="pause-overlay" class="overlay hidden">
+            <div class="overlay-content">
+                <h2>Paused</h2>
+                <button class="btn primary" onclick="resumeGame()">Resume</button>
+                <button class="btn secondary" onclick="restartGame()">Restart</button>
+                <button class="btn secondary" onclick="exitToMenu()">Exit</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Screen -->
+    <div id="results-screen" class="screen">
+        <div class="results-container">
+            <h2 id="result-title">Results</h2>
+            <div class="result-grade" id="result-grade">S</div>
+            <div class="result-stats">
+                <div class="stat">
+                    <span class="stat-label">Score</span>
+                    <span class="stat-value" id="result-score">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Accuracy</span>
+                    <span class="stat-value" id="result-accuracy">0%</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Max Combo</span>
+                    <span class="stat-value" id="result-combo">0</span>
+                </div>
+                <div class="stat pp">
+                    <span class="stat-label">PP Earned</span>
+                    <span class="stat-value" id="result-pp">+0</span>
+                </div>
+            </div>
+            <div class="result-breakdown">
+                <div class="judgment-count perfect">Perfect: <span id="count-perfect">0</span></div>
+                <div class="judgment-count great">Great: <span id="count-great">0</span></div>
+                <div class="judgment-count good">Good: <span id="count-good">0</span></div>
+                <div class="judgment-count miss">Miss: <span id="count-miss">0</span></div>
+            </div>
+            <div class="result-actions">
+                <button class="btn primary" onclick="restartGame()">Retry</button>
+                <button class="btn secondary" onclick="showScreen('song-select-screen')">Song Select</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+
+</html>
