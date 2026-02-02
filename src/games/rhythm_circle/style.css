@@ -604,6 +604,142 @@ body {
     padding: 40px;
 }
 
+/* ===== BROWSE MAPS ===== */
+.browse-container {
+    text-align: center;
+    width: 90%;
+    max-width: 900px;
+}
+
+.browse-container h2 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+    color: #33ccff;
+}
+
+.browse-info {
+    color: #888;
+    margin-bottom: 30px;
+    font-size: 1rem;
+}
+
+.browse-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 15px;
+    margin-bottom: 30px;
+}
+
+.browse-card {
+    background: linear-gradient(135deg, #1a1a3a 0%, #2a2a4a 100%);
+    border-radius: 15px;
+    padding: 20px;
+    text-align: left;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    position: relative;
+}
+
+.browse-card:hover {
+    border-color: #33ccff;
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(51, 204, 255, 0.2);
+}
+
+.browse-card.downloaded {
+    border-color: #33cc66;
+}
+
+.browse-card .map-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.1rem;
+    margin-bottom: 5px;
+    color: #fff;
+}
+
+.browse-card .map-artist {
+    color: #888;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.browse-card .map-diff {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-bottom: 15px;
+}
+
+.browse-card .map-diff.easy { background: #33cc66; color: #000; }
+.browse-card .map-diff.normal { background: #33ccff; color: #000; }
+.browse-card .map-diff.hard { background: #ff9933; color: #000; }
+.browse-card .map-diff.expert { background: #ff3366; color: #fff; }
+
+.browse-card .download-btn {
+    width: 100%;
+    padding: 10px;
+    background: #33ccff;
+    border: none;
+    border-radius: 8px;
+    color: #000;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.browse-card .download-btn:hover {
+    background: #66ddff;
+}
+
+.browse-card .download-btn.downloaded {
+    background: #33cc66;
+}
+
+.browse-card .download-btn:disabled {
+    background: #444;
+    color: #888;
+    cursor: not-allowed;
+}
+
+.browse-card .delete-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 25px;
+    height: 25px;
+    background: rgba(255, 51, 102, 0.8);
+    border: none;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 0.9rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s;
+}
+
+.browse-card:hover .delete-btn {
+    opacity: 1;
+}
+
+.browse-card .delete-btn:hover {
+    background: #ff3366;
+}
+
+.browse-actions {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .game-title {
