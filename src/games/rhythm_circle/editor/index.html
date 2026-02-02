@@ -586,6 +586,7 @@
         let backgroundFilename = '';
         let isDraggingPlayhead = false;
         let isDraggingNote = false;
+        let wasDragging = false; // Flag to prevent click after drag
         let draggedNoteIndex = -1;
 
         const previewCanvas = document.getElementById('preview-canvas');
@@ -644,6 +645,12 @@
             });
 
             document.addEventListener('mouseup', () => {
+                if (isDraggingPlayhead || isDraggingNote) {
+                    wasDragging = true;
+                    // Reset flag after a short delay to allow click event to be ignored
+                    setTimeout(() => wasDragging = false, 50);
+                }
+
                 if (isDraggingPlayhead) {
                     isDraggingPlayhead = false;
                     document.body.style.cursor = '';
@@ -888,8 +895,8 @@
         }
 
         function handleTimelineClick(e) {
-            // Prevent placing note if dragging something
-            if (isDraggingPlayhead || isDraggingNote) return;
+            // Prevent placing note if dragging something or just finished dragging
+            if (isDraggingPlayhead || isDraggingNote || wasDragging) return;
             // Also prevent if clicking a note marker (handled by note click/drag)
             if (e.target.classList.contains('note-marker')) return;
 
