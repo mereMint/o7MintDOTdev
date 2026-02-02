@@ -501,8 +501,12 @@
             // Keyboard shortcuts
             document.addEventListener('keydown', handleKeyboard);
 
-            // Playback update
-            setInterval(updatePlayback, 16);
+            // Playback update using requestAnimationFrame for better performance
+            function playbackLoop() {
+                updatePlayback();
+                requestAnimationFrame(playbackLoop);
+            }
+            requestAnimationFrame(playbackLoop);
         }
 
         // ===== TOOL SELECTION =====

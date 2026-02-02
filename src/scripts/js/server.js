@@ -3031,7 +3031,8 @@ app.post('/api/rhythm/pp', async (req, res) => {
                 )
             `);
             
-            // Upsert - only update if new PP is higher
+            // Upsert - only update all stats when new PP is higher than existing
+            // This preserves the best PP score per song for each user
             await conn.query(`
                 INSERT INTO rhythm_pp (username, song_id, score, pp, accuracy, max_combo)
                 VALUES (?, ?, ?, ?, ?, ?)

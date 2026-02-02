@@ -609,8 +609,8 @@ function updateNotes(currentTime) {
     
     // Update active holds
     activeHolds = activeHolds.filter(note => {
-        const currentTime = getCurrentTime();
-        if (currentTime >= note.endTime) {
+        const holdTime = getCurrentTime();
+        if (holdTime >= note.endTime) {
             // Hold completed successfully
             note.hit = true;
             processJudgment('perfect', note, true);
@@ -681,11 +681,11 @@ function hitNote(inputType) {
     notes.forEach(note => {
         if (note.hit || note.missed) return;
         
-        // Check type match (spam notes can be hit by either)
-        const typeMatch = note.type === inputType || note.type === 'spam' || note.type === 'hold';
-        if (!typeMatch && note.type !== 'red' && note.type !== 'blue') return;
+        // Check type match - spam/hold notes can be hit by either key, 
+        // red notes only by red input, blue notes only by blue input
         if (note.type === 'red' && inputType !== 'red') return;
         if (note.type === 'blue' && inputType !== 'blue') return;
+        // spam and hold notes accept any input type
         
         const timeDiff = Math.abs(currentTime - note.time);
         if (timeDiff < closestDiff && timeDiff <= TIMING.MISS) {
