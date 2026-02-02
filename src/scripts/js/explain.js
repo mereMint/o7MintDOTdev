@@ -364,6 +364,9 @@ function renderArticleView(article) {
     `;
 }
 
+// Track if category select listener is attached
+let categorySelectListenerAttached = false;
+
 function renderCategorySelect(categories, selectedId = null) {
     const select = document.getElementById('category-select');
     if (!select) return;
@@ -378,29 +381,40 @@ function renderCategorySelect(categories, selectedId = null) {
         <option value="__new__">+ Create new category...</option>
     `;
     
-    // Add change listener for creating new category
-    select.addEventListener('change', async function() {
-        if (this.value === '__new__') {
-            const newCatName = prompt('Enter the name for your new category:');
-            if (newCatName && newCatName.trim().length >= 2) {
-                const result = await createCategory(newCatName.trim());
-                if (result.success && result.category) {
-                    // Reload categories and select the new one
-                    const updatedCategories = await fetchCategories();
-                    renderCategorySelect(updatedCategories, result.category.id);
-                    showMessage(`Category "${result.category.name}" created!`, 'success');
-                } else {
-                    showMessage(result.error || 'Failed to create category', 'error');
-                    this.value = '';
-                }
-            } else if (newCatName !== null) {
-                showMessage('Category name must be at least 2 characters', 'error');
-                this.value = '';
+    // Set the selected value after rendering if provided
+    if (selectedId) {
+        select.value = selectedId;
+    }
+    
+    // Only attach listener once
+    if (!categorySelectListenerAttached) {
+        categorySelectListenerAttached = true;
+        select.addEventListener('change', handleCategorySelectChange);
+    }
+}
+
+async function handleCategorySelectChange(e) {
+    const select = e.target;
+    if (select.value === '__new__') {
+        const newCatName = prompt('Enter the name for your new category:');
+        if (newCatName && newCatName.trim().length >= 2) {
+            const result = await createCategory(newCatName.trim());
+            if (result.success && result.category) {
+                // Reload categories and select the new one
+                const updatedCategories = await fetchCategories();
+                renderCategorySelect(updatedCategories, result.category.id);
+                showMessage(`Category "${result.category.name}" created!`, 'success');
             } else {
-                this.value = '';
+                showMessage(result.error || 'Failed to create category', 'error');
+                select.value = '';
             }
+        } else if (newCatName !== null) {
+            showMessage('Category name must be at least 2 characters', 'error');
+            select.value = '';
+        } else {
+            select.value = '';
         }
-    });
+    }
 }
 
 async function createCategory(name, description = '', color = '#1DCD9F') {
