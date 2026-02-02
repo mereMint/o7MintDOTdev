@@ -1808,20 +1808,30 @@ app.post('/api/admin/explain/revision/:id/reject', adminMiddleware, async (req, 
 // Extended User Profile API
 // =============================================
 
-// Ensure new columns exist
+// Track initialization state
+let extendedColumnsInitialized = false;
+let friendsTableInitialized = false;
+let multiplayerTablesInitialized = false;
+
+// Ensure new columns exist (runs only once)
 async function ensureUserExtendedColumns(conn) {
+    if (extendedColumnsInitialized) return;
     try {
         await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role ENUM('user', 'moderator', 'admin', 'owner') DEFAULT 'user'");
         await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS favorite_game VARCHAR(50) DEFAULT NULL");
         await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_online TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
         await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_settings JSON DEFAULT NULL");
+        extendedColumnsInitialized = true;
+        console.log("✅ Extended user columns initialized.");
     } catch (err) {
         console.warn("Extended user columns migration warning:", err.message);
+        extendedColumnsInitialized = true; // Don't retry on error
     }
 }
 
-// Ensure friends table exists
+// Ensure friends table exists (runs only once)
 async function ensureFriendsTable(conn) {
+    if (friendsTableInitialized) return;
     await conn.query(`
         CREATE TABLE IF NOT EXISTS friends (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1834,6 +1844,8 @@ async function ensureFriendsTable(conn) {
             INDEX idx_user2 (user2)
         )
     `);
+    friendsTableInitialized = true;
+    console.log("✅ Friends table initialized.");
 }
 
 // GET /api/user/:username/full-profile - Get complete user profile with all stats
@@ -2220,8 +2232,9 @@ app.get('/api/users/search', async (req, res) => {
 // Multiplayer API
 // =============================================
 
-// Ensure multiplayer tables exist
+// Ensure multiplayer tables exist (runs only once)
 async function ensureMultiplayerTables(conn) {
+    if (multiplayerTablesInitialized) return;
     await conn.query(`
         CREATE TABLE IF NOT EXISTS game_sessions (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -2266,6 +2279,8 @@ async function ensureMultiplayerTables(conn) {
             INDEX idx_session (session_id)
         )
     `);
+    multiplayerTablesInitialized = true;
+    console.log("✅ Multiplayer tables initialized.");
 }
 
 // POST /api/multiplayer/session - Create a new game session
