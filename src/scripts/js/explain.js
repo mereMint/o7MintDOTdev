@@ -10,32 +10,32 @@ function parseExplainSyntax(content) {
     let html = content;
     
     // First, handle code blocks (before escaping HTML)
-    // Store code blocks and replace with placeholders
+    // Store code blocks and replace with placeholders (using format without underscores to avoid markdown conflicts)
     const codeBlocks = [];
     html = html.replace(/```([\s\S]*?)```/g, (match, code) => {
         codeBlocks.push(code.trim());
-        return `%%CODE_BLOCK_${codeBlocks.length - 1}%%`;
+        return `@@CODEBLOCK${codeBlocks.length - 1}@@`;
     });
     
     // Store inline code and replace with placeholders
     const inlineCodes = [];
     html = html.replace(/`([^`]+)`/g, (match, code) => {
         inlineCodes.push(code);
-        return `%%INLINE_CODE_${inlineCodes.length - 1}%%`;
+        return `@@INLINECODE${inlineCodes.length - 1}@@`;
     });
     
     // Store LaTeX blocks and replace with placeholders
     const latexBlocks = [];
     html = html.replace(/\$\$([\s\S]+?)\$\$/g, (match, latex) => {
         latexBlocks.push(latex.trim());
-        return `%%LATEX_BLOCK_${latexBlocks.length - 1}%%`;
+        return `@@LATEXBLOCK${latexBlocks.length - 1}@@`;
     });
     
     // Store inline LaTeX and replace with placeholders
     const inlineLatex = [];
     html = html.replace(/\$([^$\n]+)\$/g, (match, latex) => {
         inlineLatex.push(latex);
-        return `%%INLINE_LATEX_${inlineLatex.length - 1}%%`;
+        return `@@INLINELATEX${inlineLatex.length - 1}@@`;
     });
     
     // Now escape HTML
@@ -111,26 +111,26 @@ function parseExplainSyntax(content) {
     // Restore code blocks
     codeBlocks.forEach((code, i) => {
         const escapedCode = escapeHtml(code);
-        html = html.replace(`%%CODE_BLOCK_${i}%%`, `<pre><code>${escapedCode}</code></pre>`);
+        html = html.replace(`@@CODEBLOCK${i}@@`, `<pre><code>${escapedCode}</code></pre>`);
     });
     
     // Restore inline code
     inlineCodes.forEach((code, i) => {
         const escapedCode = escapeHtml(code);
-        html = html.replace(`%%INLINE_CODE_${i}%%`, `<code>${escapedCode}</code>`);
+        html = html.replace(`@@INLINECODE${i}@@`, `<code>${escapedCode}</code>`);
     });
     
     // Restore LaTeX blocks - render with KaTeX if available
     latexBlocks.forEach((latex, i) => {
         const rendered = renderLatex(latex, true);
-        html = html.replace(`<p>%%LATEX_BLOCK_${i}%%</p>`, `<div class="latex-block">${rendered}</div>`);
-        html = html.replace(`%%LATEX_BLOCK_${i}%%`, `<div class="latex-block">${rendered}</div>`);
+        html = html.replace(`<p>@@LATEXBLOCK${i}@@</p>`, `<div class="latex-block">${rendered}</div>`);
+        html = html.replace(`@@LATEXBLOCK${i}@@`, `<div class="latex-block">${rendered}</div>`);
     });
     
     // Restore inline LaTeX
     inlineLatex.forEach((latex, i) => {
         const rendered = renderLatex(latex, false);
-        html = html.replace(`%%INLINE_LATEX_${i}%%`, `<span class="latex-inline">${rendered}</span>`);
+        html = html.replace(`@@INLINELATEX${i}@@`, `<span class="latex-inline">${rendered}</span>`);
     });
     
     // Fix any remaining paragraph issues around divs
