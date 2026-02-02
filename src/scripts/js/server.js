@@ -1251,7 +1251,7 @@ async function checkRateLimit(conn, ip, actionType, maxActions = 5, windowMinute
          WHERE ip_address = ? AND action_type = ? AND created_at > ?`,
         [ip, actionType, cutoff]
     );
-    return result[0].count < maxActions;
+    return Number(result[0].count) < maxActions;
 }
 
 async function recordRateLimit(conn, ip, actionType) {
@@ -1332,7 +1332,7 @@ async function ensureExplainTables(conn) {
     
     // Insert default categories if none exist
     const cats = await conn.query(`SELECT COUNT(*) as count FROM explain_categories`);
-    if (cats[0].count === 0) {
+    if (Number(cats[0].count) === 0) {
         await conn.query(`
             INSERT INTO explain_categories (name, description, color) VALUES
             ('General', 'General topics and miscellaneous articles', '#1DCD9F'),
@@ -1410,7 +1410,7 @@ app.get('/api/explain/articles', async (req, res) => {
             ${whereClause}
         `;
         const countResult = await conn.query(countQuery, params);
-        const total = countResult[0].total;
+        const total = Number(countResult[0].total);
         
         // Build main query
         let query = `

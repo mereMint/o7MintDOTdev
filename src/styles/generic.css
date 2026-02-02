@@ -98,6 +98,16 @@ nav li.dropdown > a::after {
     margin-top: 10px;
 }
 
+/* Invisible bridge to prevent dropdown from closing when moving cursor */
+.dropdown-menu::after {
+    content: '';
+    position: absolute;
+    top: -18px;
+    left: 0;
+    right: 0;
+    height: 18px;
+}
+
 .dropdown-menu::before {
     content: '';
     position: absolute;
