@@ -138,51 +138,53 @@ nav li.dropdown:hover .dropdown-menu {
 /* Mobile Navigation */
 @media (max-width: 768px) {
     nav {
-        width: 90%;
-        padding: 15px;
-        border-radius: 20px;
+        width: 95%;
+        padding: 10px 20px;
+        border-radius: 50px; /* Keep pill shape */
     }
 
     nav ul {
-        flex-direction: column;
-        /* Stack links vertically */
-        align-items: center;
+        flex-direction: row; /* Keep horizontal */
+        flex-wrap: wrap;     /* Allow wrap if needed, but prefer single line */
+        justify-content: center;
         gap: 15px;
     }
 
     nav a {
-        font-size: 1.1rem;
-        display: block;
-        /* Larger touch target */
+        font-size: 0.9rem; /* Slightly smaller text */
         padding: 5px;
     }
 
     /* Mobile Dropdown */
     .dropdown-menu {
-        position: static;
-        transform: none;
-        background-color: transparent;
-        box-shadow: none;
-        margin-top: 5px;
-        padding: 0;
-        min-width: auto;
+        /* Keep absolute positioning for dropdowns so they don't push content */
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: #2a2a2a;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        margin-top: 10px;
+        padding: 10px 0;
+        min-width: 140px;
+        display: none; /* Hidden by default */
     }
 
     .dropdown-menu::before {
-        display: none;
+        display: block; /* Show arrow */
     }
 
     .dropdown-menu a {
-        padding: 5px 10px;
-        font-size: 0.95rem;
+        padding: 8px 15px;
+        font-size: 0.9rem;
     }
 
     .dropdown-menu a:hover {
-        background-color: transparent;
+        background-color: #333;
     }
 
-    nav li.dropdown:hover .dropdown-menu,
-    nav li.dropdown .dropdown-menu {
+    /* Show on hover (or tap on mobile often triggers hover state) */
+    nav li.dropdown:hover .dropdown-menu {
         display: block;
     }
 }
