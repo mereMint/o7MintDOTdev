@@ -19,9 +19,14 @@ function parseExplainSyntax(content) {
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
     
-    // Italic: *text* or _text_
-    html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
-    html = html.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em>$1</em>');
+    // Italic: *text* or _text_ (using simpler patterns for browser compatibility)
+    // Match single asterisk/underscore that's not adjacent to another
+    html = html.replace(/(?:^|[^*])\*([^*\n]+)\*(?:[^*]|$)/g, (match, p1) => {
+        return match.replace(`*${p1}*`, `<em>${p1}</em>`);
+    });
+    html = html.replace(/(?:^|[^_])_([^_\n]+)_(?:[^_]|$)/g, (match, p1) => {
+        return match.replace(`_${p1}_`, `<em>${p1}</em>`);
+    });
     
     // Colored text: {color:red}text{/color}
     html = html.replace(/\{color:(red|green|blue|yellow|purple|orange)\}(.+?)\{\/color\}/g, 
@@ -50,12 +55,19 @@ function parseExplainSyntax(content) {
     // Merge consecutive blockquotes
     html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
     
-    // Unordered lists: - item or * item
-    html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+    // Ordered lists: 1. item (process first to mark them differently)
+    html = html.replace(/^(\d+)\. (.+)$/gm, '<oli>$2</oli>');
     
-    // Ordered lists: 1. item
-    html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+    // Unordered lists: - item or * item
+    html = html.replace(/^[-*] (.+)$/gm, '<uli>$1</uli>');
+    
+    // Wrap consecutive list items in appropriate tags
+    html = html.replace(/(<uli>.*<\/uli>\n?)+/g, (match) => {
+        return '<ul>' + match.replace(/<\/?uli>/g, (tag) => tag === '<uli>' ? '<li>' : '</li>') + '</ul>';
+    });
+    html = html.replace(/(<oli>.*<\/oli>\n?)+/g, (match) => {
+        return '<ol>' + match.replace(/<\/?oli>/g, (tag) => tag === '<oli>' ? '<li>' : '</li>') + '</ol>';
+    });
     
     // Horizontal rule: ---
     html = html.replace(/^---$/gm, '<hr>');

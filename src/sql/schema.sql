@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS explain_categories (
 );
 
 -- Articles (Main content)
+-- Note: FULLTEXT index requires InnoDB engine (MariaDB 10.0.5+ / MySQL 5.6+)
 CREATE TABLE IF NOT EXISTS explain_articles (
     id INT AUTO_INCREMENT PRIMARY KEY,
     slug VARCHAR(255) NOT NULL UNIQUE,
@@ -90,7 +91,7 @@ CREATE TABLE IF NOT EXISTS explain_articles (
     INDEX idx_views (views DESC),
     INDEX idx_category (category_id),
     FULLTEXT INDEX idx_search (title, content)
-);
+) ENGINE=InnoDB;
 
 -- Article Edit History (For revisions and moderation)
 CREATE TABLE IF NOT EXISTS explain_revisions (

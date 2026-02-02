@@ -1347,33 +1347,42 @@ app.get('/api/explain/articles', async (req, res) => {
         conn = await pool.getConnection();
         await ensureExplainTables(conn);
         
-        let query = `
-            SELECT a.*, c.name as category_name, c.color as category_color
-            FROM explain_articles a
-            LEFT JOIN explain_categories c ON a.category_id = c.id
-            WHERE 1=1
-        `;
+        // Build WHERE conditions separately
+        let whereClause = 'WHERE 1=1';
         const params = [];
         
         // Only show approved articles to public (unless admin)
         const showStatus = status || 'approved';
-        query += ` AND a.status = ?`;
+        whereClause += ` AND a.status = ?`;
         params.push(showStatus);
         
         if (category) {
-            query += ` AND a.category_id = ?`;
+            whereClause += ` AND a.category_id = ?`;
             params.push(category);
         }
         
         if (search) {
-            query += ` AND (a.title LIKE ? OR a.content LIKE ?)`;
+            whereClause += ` AND (a.title LIKE ? OR a.content LIKE ?)`;
             params.push(`%${search}%`, `%${search}%`);
         }
         
-        // Count total
-        const countQuery = query.replace('SELECT a.*, c.name as category_name, c.color as category_color', 'SELECT COUNT(*) as total');
+        // Build count query separately
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM explain_articles a
+            LEFT JOIN explain_categories c ON a.category_id = c.id
+            ${whereClause}
+        `;
         const countResult = await conn.query(countQuery, params);
         const total = countResult[0].total;
+        
+        // Build main query
+        let query = `
+            SELECT a.*, c.name as category_name, c.color as category_color
+            FROM explain_articles a
+            LEFT JOIN explain_categories c ON a.category_id = c.id
+            ${whereClause}
+        `;
         
         // Sort
         switch (sort) {
@@ -1388,9 +1397,9 @@ app.get('/api/explain/articles', async (req, res) => {
         }
         
         query += ` LIMIT ? OFFSET ?`;
-        params.push(limit, offset);
+        const queryParams = [...params, limit, offset];
         
-        const rows = await conn.query(query, params);
+        const rows = await conn.query(query, queryParams);
         res.json({ articles: rows, total });
     } catch (err) {
         console.error('Error fetching articles:', err);
@@ -1504,18 +1513,24 @@ app.post('/api/explain/article', async (req, res) => {
             return res.status(429).json({ error: 'Too many submissions. Please wait before creating more articles.' });
         }
         
-        // Generate unique slug
+        // Generate unique slug with max iteration limit
         let slug = generateSlug(title);
         let slugExists = true;
         let suffix = 0;
-        while (slugExists) {
-            const existing = await conn.query(`SELECT id FROM explain_articles WHERE slug = ?`, [slug + (suffix ? `-${suffix}` : '')]);
+        const maxIterations = 100;
+        while (slugExists && suffix < maxIterations) {
+            const testSlug = slug + (suffix ? `-${suffix}` : '');
+            const existing = await conn.query(`SELECT id FROM explain_articles WHERE slug = ?`, [testSlug]);
             if (existing.length === 0) {
-                slug = slug + (suffix ? `-${suffix}` : '');
+                slug = testSlug;
                 slugExists = false;
             } else {
                 suffix++;
             }
+        }
+        
+        if (slugExists) {
+            return res.status(400).json({ error: 'Unable to generate unique slug. Please try a different title.' });
         }
         
         await conn.query(`
