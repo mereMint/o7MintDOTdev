@@ -3191,7 +3191,497 @@ app.get('/api/rhythm/pp/song/:songId', async (req, res) => {
     }
 });
 
+// =============================================
+// Anidle Game API
+// =============================================
+
+// Anime data cache - fetched from Jikan API (MyAnimeList)
+let anidleAnimeCache = [];
+let anidleCacheLastUpdate = null;
+const ANIDLE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const JIKAN_API_BASE = 'https://api.jikan.moe/v4';
+
+// Helper to delay between API calls (Jikan has rate limits)
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Check if anime is a sequel/alternative based on title patterns
+function isSequelOrAlternative(anime) {
+    const title = (anime.title || '').toLowerCase();
+    const sequelPatterns = [
+        'season 2', 'season 3', 'season 4', 'season 5', 'season 6',
+        '2nd season', '3rd season', '4th season', '5th season',
+        'part 2', 'part 3', 'part ii', 'part iii', 'part iv',
+        'the final', 'final season', 'cour 2',
+        ': r2', ': shippuuden', ': shippuden',
+        'movie', 'ova', 'special', 'recap',
+        ' ii', ' iii', ' iv', ' 2:', ' 3:', ' 4:'
+    ];
+    return sequelPatterns.some(pattern => title.includes(pattern));
+}
+
+// Fetch anime from Jikan API and transform to our format
+async function fetchAnimeFromJikan(page = 1) {
+    try {
+        // Fetch top anime by score, TV only, ordered by popularity
+        const url = `${JIKAN_API_BASE}/top/anime?type=tv&filter=bypopularity&page=${page}&limit=25`;
+        const response = await axios.get(url, { timeout: 10000 });
+        
+        if (!response.data || !response.data.data) {
+            return [];
+        }
+        
+        const animeList = response.data.data;
+        const transformedAnime = [];
+        
+        for (const anime of animeList) {
+            // Skip sequels and alternatives
+            if (isSequelOrAlternative(anime)) continue;
+            
+            // Extract studio name
+            const studio = anime.studios && anime.studios.length > 0 
+                ? anime.studios[0].name 
+                : 'Unknown';
+            
+            // Extract genres
+            const genres = (anime.genres || []).map(g => g.name);
+            
+            // Extract themes as tags (primary) and demographics as tags (secondary)
+            const tags = [];
+            if (anime.themes) {
+                anime.themes.forEach(t => tags.push({ name: t.name, primary: true }));
+            }
+            if (anime.demographics) {
+                anime.demographics.forEach(d => tags.push({ name: d.name, primary: false }));
+            }
+            
+            // Get release year
+            const releaseDate = anime.aired?.from 
+                ? new Date(anime.aired.from).getFullYear().toString() 
+                : 'Unknown';
+            
+            transformedAnime.push({
+                mal_id: anime.mal_id,
+                title: anime.title,
+                title_english: anime.title_english || anime.title,
+                score: anime.score || 0,
+                studio: studio,
+                genres: genres,
+                release_date: releaseDate,
+                source: anime.source || 'Unknown',
+                tags: tags.slice(0, 6), // Limit to 6 tags
+                image: anime.images?.jpg?.image_url || anime.images?.jpg?.large_image_url,
+                synopsis: anime.synopsis ? anime.synopsis.substring(0, 300) + '...' : 'No synopsis available.',
+                main_character: null // Will be fetched separately if needed
+            });
+        }
+        
+        return transformedAnime;
+    } catch (error) {
+        console.error(`Error fetching anime from Jikan (page ${page}):`, error.message);
+        return [];
+    }
+}
+
+// Fetch main character for an anime
+async function fetchMainCharacter(malId) {
+    try {
+        const url = `${JIKAN_API_BASE}/anime/${malId}/characters`;
+        const response = await axios.get(url, { timeout: 10000 });
+        
+        if (response.data && response.data.data && response.data.data.length > 0) {
+            // Get the first main character or the most favorited one
+            const mainChar = response.data.data.find(c => c.role === 'Main') || response.data.data[0];
+            if (mainChar && mainChar.character) {
+                return {
+                    name: mainChar.character.name,
+                    image: mainChar.character.images?.jpg?.image_url
+                };
+            }
+        }
+        return null;
+    } catch (error) {
+        console.error(`Error fetching character for anime ${malId}:`, error.message);
+        return null;
+    }
+}
+
+// Initialize or refresh the anime cache
+async function refreshAnidleCache() {
+    console.log('[Anidle] Refreshing anime cache from Jikan API...');
+    const allAnime = [];
+    
+    // Fetch first 4 pages (100 anime, after filtering should be ~50-70)
+    for (let page = 1; page <= 4; page++) {
+        const anime = await fetchAnimeFromJikan(page);
+        allAnime.push(...anime);
+        
+        // Respect Jikan rate limit (3 requests per second)
+        if (page < 4) await delay(400);
+    }
+    
+    if (allAnime.length > 0) {
+        anidleAnimeCache = allAnime;
+        anidleCacheLastUpdate = Date.now();
+        console.log(`[Anidle] Cache refreshed with ${allAnime.length} anime`);
+    } else if (anidleAnimeCache.length === 0) {
+        // Use fallback data if API is unreachable and cache is empty
+        console.warn('[Anidle] Failed to fetch from API, using fallback data');
+        anidleAnimeCache = getAnidleFallbackData();
+        anidleCacheLastUpdate = Date.now();
+        console.log(`[Anidle] Loaded ${anidleAnimeCache.length} anime from fallback`);
+    } else {
+        console.warn('[Anidle] Failed to fetch anime, using existing cache');
+    }
+}
+
+// Fallback anime data in case API is unreachable
+function getAnidleFallbackData() {
+    return [
+        { mal_id: 5114, title: "Fullmetal Alchemist: Brotherhood", title_english: "Fullmetal Alchemist: Brotherhood", score: 9.10, studio: "Bones", genres: ["Action", "Adventure", "Drama", "Fantasy"], release_date: "2009", source: "Manga", tags: [{ name: "Military", primary: true }, { name: "Shounen", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1223/96541.jpg", synopsis: "Two brothers search for the Philosopher's Stone to restore their bodies after a failed alchemy experiment.", main_character: { name: "Edward Elric", image: "https://cdn.myanimelist.net/images/characters/9/72533.jpg" } },
+        { mal_id: 1535, title: "Death Note", title_english: "Death Note", score: 8.62, studio: "Madhouse", genres: ["Supernatural", "Suspense"], release_date: "2006", source: "Manga", tags: [{ name: "Psychological", primary: true }, { name: "Shounen", primary: false }], image: "https://cdn.myanimelist.net/images/anime/9/9453.jpg", synopsis: "Light Yagami finds a notebook that kills anyone whose name is written in it.", main_character: { name: "Light Yagami", image: "https://cdn.myanimelist.net/images/characters/2/84177.jpg" } },
+        { mal_id: 16498, title: "Shingeki no Kyojin", title_english: "Attack on Titan", score: 8.54, studio: "Wit Studio", genres: ["Action", "Drama", "Fantasy", "Mystery"], release_date: "2013", source: "Manga", tags: [{ name: "Military", primary: true }, { name: "Shounen", primary: false }], image: "https://cdn.myanimelist.net/images/anime/10/47347.jpg", synopsis: "Humanity lives within enormous walled cities to protect themselves from Titans.", main_character: { name: "Eren Yeager", image: "https://cdn.myanimelist.net/images/characters/10/216895.jpg" } },
+        { mal_id: 11061, title: "Hunter x Hunter (2011)", title_english: "Hunter x Hunter", score: 9.04, studio: "Madhouse", genres: ["Action", "Adventure", "Fantasy"], release_date: "2011", source: "Manga", tags: [{ name: "Shounen", primary: true }, { name: "Adventure", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1337/99013.jpg", synopsis: "Gon Freecss discovers his father is a legendary Hunter and sets out to become one himself.", main_character: { name: "Gon Freecss", image: "https://cdn.myanimelist.net/images/characters/11/174517.jpg" } },
+        { mal_id: 9253, title: "Steins;Gate", title_english: "Steins;Gate", score: 9.08, studio: "White Fox", genres: ["Drama", "Sci-Fi", "Suspense"], release_date: "2011", source: "Visual novel", tags: [{ name: "Time Travel", primary: true }, { name: "Thriller", primary: true }], image: "https://cdn.myanimelist.net/images/anime/5/73199.jpg", synopsis: "A self-proclaimed mad scientist discovers he can send messages to the past.", main_character: { name: "Rintarou Okabe", image: "https://cdn.myanimelist.net/images/characters/6/122643.jpg" } },
+        { mal_id: 38000, title: "Kimetsu no Yaiba", title_english: "Demon Slayer", score: 8.45, studio: "ufotable", genres: ["Action", "Fantasy"], release_date: "2019", source: "Manga", tags: [{ name: "Historical", primary: true }, { name: "Shounen", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1286/99889.jpg", synopsis: "Tanjiro Kamado becomes a demon slayer to avenge his family and cure his sister.", main_character: { name: "Tanjiro Kamado", image: "https://cdn.myanimelist.net/images/characters/6/386735.jpg" } },
+        { mal_id: 40748, title: "Jujutsu Kaisen", title_english: "Jujutsu Kaisen", score: 8.60, studio: "MAPPA", genres: ["Action", "Fantasy"], release_date: "2020", source: "Manga", tags: [{ name: "School", primary: true }, { name: "Supernatural", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1171/109222.jpg", synopsis: "Yuji Itadori swallows a cursed finger and becomes host to a powerful curse.", main_character: { name: "Yuji Itadori", image: "https://cdn.myanimelist.net/images/characters/6/467646.jpg" } },
+        { mal_id: 21, title: "One Piece", title_english: "One Piece", score: 8.71, studio: "Toei Animation", genres: ["Action", "Adventure", "Fantasy"], release_date: "1999", source: "Manga", tags: [{ name: "Pirates", primary: true }, { name: "Shounen", primary: false }], image: "https://cdn.myanimelist.net/images/anime/6/73245.jpg", synopsis: "Monkey D. Luffy sets out to become the King of Pirates.", main_character: { name: "Monkey D. Luffy", image: "https://cdn.myanimelist.net/images/characters/9/310307.jpg" } },
+        { mal_id: 1735, title: "Naruto", title_english: "Naruto", score: 8.00, studio: "Pierrot", genres: ["Action", "Adventure", "Fantasy"], release_date: "2002", source: "Manga", tags: [{ name: "Ninja", primary: true }, { name: "Shounen", primary: false }], image: "https://cdn.myanimelist.net/images/anime/13/17405.jpg", synopsis: "Naruto Uzumaki dreams of becoming the Hokage.", main_character: { name: "Naruto Uzumaki", image: "https://cdn.myanimelist.net/images/characters/2/284121.jpg" } },
+        { mal_id: 31964, title: "Boku no Hero Academia", title_english: "My Hero Academia", score: 7.95, studio: "Bones", genres: ["Action", "Comedy"], release_date: "2016", source: "Manga", tags: [{ name: "Superhero", primary: true }, { name: "School", primary: true }], image: "https://cdn.myanimelist.net/images/anime/10/78745.jpg", synopsis: "Izuku Midoriya dreams of becoming a hero in a world where superpowers are common.", main_character: { name: "Izuku Midoriya", image: "https://cdn.myanimelist.net/images/characters/7/299404.jpg" } },
+        { mal_id: 40456, title: "Spy x Family", title_english: "Spy x Family", score: 8.51, studio: "Wit Studio", genres: ["Action", "Comedy"], release_date: "2022", source: "Manga", tags: [{ name: "Family", primary: true }, { name: "Espionage", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1441/122795.jpg", synopsis: "A spy must create a fake family to complete his mission.", main_character: { name: "Anya Forger", image: "https://cdn.myanimelist.net/images/characters/8/461346.jpg" } },
+        { mal_id: 48583, title: "Chainsaw Man", title_english: "Chainsaw Man", score: 8.54, studio: "MAPPA", genres: ["Action", "Fantasy"], release_date: "2022", source: "Manga", tags: [{ name: "Gore", primary: true }, { name: "Supernatural", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1806/126216.jpg", synopsis: "Denji becomes a devil hunter after merging with his chainsaw devil pet.", main_character: { name: "Denji", image: "https://cdn.myanimelist.net/images/characters/3/489135.jpg" } },
+        { mal_id: 32281, title: "Kimi no Na wa.", title_english: "Your Name", score: 8.83, studio: "CoMix Wave Films", genres: ["Drama", "Romance", "Supernatural"], release_date: "2016", source: "Original", tags: [{ name: "Time", primary: true }, { name: "Romance", primary: false }], image: "https://cdn.myanimelist.net/images/anime/5/87048.jpg", synopsis: "Two teenagers discover they are swapping bodies.", main_character: { name: "Mitsuha Miyamizu", image: "https://cdn.myanimelist.net/images/characters/14/316108.jpg" } },
+        { mal_id: 37521, title: "Vinland Saga", title_english: "Vinland Saga", score: 8.72, studio: "Wit Studio", genres: ["Action", "Adventure", "Drama"], release_date: "2019", source: "Manga", tags: [{ name: "Vikings", primary: true }, { name: "Historical", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1500/103005.jpg", synopsis: "Thorfinn seeks revenge in the Viking era.", main_character: { name: "Thorfinn", image: "https://cdn.myanimelist.net/images/characters/9/379687.jpg" } },
+        { mal_id: 20583, title: "Haikyuu!!", title_english: "Haikyu!!", score: 8.44, studio: "Production I.G", genres: ["Sports"], release_date: "2014", source: "Manga", tags: [{ name: "Volleyball", primary: true }, { name: "Team", primary: true }], image: "https://cdn.myanimelist.net/images/anime/7/76014.jpg", synopsis: "Shoyo Hinata joins a high school volleyball team.", main_character: { name: "Shouyou Hinata", image: "https://cdn.myanimelist.net/images/characters/11/280453.jpg" } },
+        { mal_id: 1, title: "Cowboy Bebop", title_english: "Cowboy Bebop", score: 8.75, studio: "Sunrise", genres: ["Action", "Adventure", "Sci-Fi"], release_date: "1998", source: "Original", tags: [{ name: "Space", primary: true }, { name: "Adult Cast", primary: false }], image: "https://cdn.myanimelist.net/images/anime/4/19644.jpg", synopsis: "Bounty hunters travel through space catching criminals.", main_character: { name: "Spike Spiegel", image: "https://cdn.myanimelist.net/images/characters/4/50197.jpg" } },
+        { mal_id: 30831, title: "Kono Subarashii Sekai ni Shukufuku wo!", title_english: "KONOSUBA", score: 8.11, studio: "Studio Deen", genres: ["Adventure", "Comedy", "Fantasy"], release_date: "2016", source: "Light novel", tags: [{ name: "Isekai", primary: true }, { name: "Parody", primary: true }], image: "https://cdn.myanimelist.net/images/anime/8/77831.jpg", synopsis: "A teenager is reincarnated in a fantasy world with a useless goddess.", main_character: { name: "Kazuma Satou", image: "https://cdn.myanimelist.net/images/characters/13/291295.jpg" } },
+        { mal_id: 22535, title: "Kiseijuu: Sei no Kakuritsu", title_english: "Parasyte -the maxim-", score: 8.35, studio: "Madhouse", genres: ["Action", "Horror", "Sci-Fi"], release_date: "2014", source: "Manga", tags: [{ name: "Gore", primary: true }, { name: "Psychological", primary: false }], image: "https://cdn.myanimelist.net/images/anime/3/73178.jpg", synopsis: "Shinichi's hand is taken over by a parasitic alien.", main_character: { name: "Shinichi Izumi", image: "https://cdn.myanimelist.net/images/characters/2/264549.jpg" } },
+        { mal_id: 52299, title: "Oshi no Ko", title_english: "Oshi No Ko", score: 8.55, studio: "Doga Kobo", genres: ["Drama", "Supernatural"], release_date: "2023", source: "Manga", tags: [{ name: "Idol", primary: true }, { name: "Reincarnation", primary: true }], image: "https://cdn.myanimelist.net/images/anime/1812/134736.jpg", synopsis: "A doctor reincarnated as the child of his favorite idol.", main_character: { name: "Aqua Hoshino", image: "https://cdn.myanimelist.net/images/characters/6/506389.jpg" } },
+        { mal_id: 50265, title: "Bocchi the Rock!", title_english: "Bocchi the Rock!", score: 8.77, studio: "CloverWorks", genres: ["Comedy"], release_date: "2022", source: "Manga", tags: [{ name: "Music", primary: true }, { name: "CGDCT", primary: false }], image: "https://cdn.myanimelist.net/images/anime/1448/127956.jpg", synopsis: "A socially anxious girl joins a rock band.", main_character: { name: "Hitori Gotou", image: "https://cdn.myanimelist.net/images/characters/16/497656.jpg" } }
+    ];
+}
+
+// Get valid anime list (with cache check)
+async function getAnidleValidAnime() {
+    // Check if cache needs refresh
+    const now = Date.now();
+    const cacheExpired = !anidleCacheLastUpdate || (now - anidleCacheLastUpdate) > ANIDLE_CACHE_DURATION;
+    
+    if (cacheExpired || anidleAnimeCache.length === 0) {
+        await refreshAnidleCache();
+    }
+    
+    return anidleAnimeCache;
+}
+
+// Get today's daily anime (deterministic based on date)
+async function getAnidleDailyAnime() {
+    const animeList = await getAnidleValidAnime();
+    if (animeList.length === 0) {
+        return null;
+    }
+    
+    const today = new Date();
+    const dateString = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+    // Simple hash of date string
+    let hash = 0;
+    for (let i = 0; i < dateString.length; i++) {
+        const char = dateString.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+    const index = Math.abs(hash) % animeList.length;
+    return animeList[index];
+}
+
+// GET /api/anidle/daily - Get today's anime for the daily challenge
+app.get('/api/anidle/daily', async (req, res) => {
+    try {
+        const anime = await getAnidleDailyAnime();
+        if (!anime) {
+            return res.status(503).json({ error: "Anime data not available. Please try again later." });
+        }
+        // Don't send the title to the client!
+        res.json({
+            mal_id: anime.mal_id,
+            score: anime.score,
+            studio: anime.studio,
+            genres: anime.genres,
+            release_date: anime.release_date,
+            source: anime.source,
+            tags: anime.tags,
+            image: anime.image,
+            synopsis: anime.synopsis,
+            main_character: anime.main_character
+        });
+    } catch (err) {
+        console.error("Daily anime error:", err);
+        res.status(500).json({ error: "Failed to get daily anime" });
+    }
+});
+
+// GET /api/anidle/random - Get a random anime for unlimited mode
+app.get('/api/anidle/random', async (req, res) => {
+    try {
+        const animeList = await getAnidleValidAnime();
+        if (animeList.length === 0) {
+            return res.status(503).json({ error: "Anime data not available. Please try again later." });
+        }
+        
+        const index = Math.floor(Math.random() * animeList.length);
+        const anime = animeList[index];
+        res.json({
+            mal_id: anime.mal_id,
+            score: anime.score,
+            studio: anime.studio,
+            genres: anime.genres,
+            release_date: anime.release_date,
+            source: anime.source,
+            tags: anime.tags,
+            image: anime.image,
+            synopsis: anime.synopsis,
+            main_character: anime.main_character
+        });
+    } catch (err) {
+        console.error("Random anime error:", err);
+        res.status(500).json({ error: "Failed to get random anime" });
+    }
+});
+
+// GET /api/anidle/anime-list - Get list of anime for autocomplete
+app.get('/api/anidle/anime-list', async (req, res) => {
+    try {
+        const animeList = await getAnidleValidAnime();
+        // Return only necessary fields for autocomplete
+        const list = animeList.map(anime => ({
+            mal_id: anime.mal_id,
+            title: anime.title,
+            title_english: anime.title_english,
+            image: anime.image
+        }));
+        res.json(list);
+    } catch (err) {
+        console.error("Anime list error:", err);
+        res.status(500).json({ error: "Failed to get anime list" });
+    }
+});
+
+// POST /api/anidle/guess - Check a guess
+app.post('/api/anidle/guess', async (req, res) => {
+    const { guess, target_id, mode } = req.body;
+    
+    if (!guess || !target_id) {
+        return res.status(400).json({ error: "Missing guess or target" });
+    }
+    
+    try {
+        const animeList = await getAnidleValidAnime();
+        
+        // Find guessed anime
+        const guessedAnime = animeList.find(a => 
+            a.title.toLowerCase() === guess.toLowerCase() ||
+            (a.title_english && a.title_english.toLowerCase() === guess.toLowerCase())
+        );
+        
+        if (!guessedAnime) {
+            return res.status(400).json({ error: "Anime not found in database" });
+        }
+        
+        // Find target anime
+        const targetAnime = animeList.find(a => a.mal_id === target_id);
+        
+        if (!targetAnime) {
+            return res.status(400).json({ error: "Target anime not found" });
+        }
+        
+        // Check if correct
+        const isCorrect = guessedAnime.mal_id === targetAnime.mal_id;
+        
+        // Compare properties
+        const comparison = {
+            score_match: guessedAnime.score === targetAnime.score,
+            score_direction: guessedAnime.score < targetAnime.score ? '↑' : (guessedAnime.score > targetAnime.score ? '↓' : ''),
+            studio_match: guessedAnime.studio === targetAnime.studio,
+            source_match: guessedAnime.source === targetAnime.source,
+            release_match: guessedAnime.release_date === targetAnime.release_date,
+            release_direction: parseInt(guessedAnime.release_date) < parseInt(targetAnime.release_date) ? '↑' : 
+                             (parseInt(guessedAnime.release_date) > parseInt(targetAnime.release_date) ? '↓' : '')
+        };
+        
+        // Compare genres
+        const guessGenres = guessedAnime.genres || [];
+        const targetGenres = targetAnime.genres || [];
+        const correctGenres = guessGenres.filter(g => targetGenres.includes(g));
+        const wrongGenres = guessGenres.filter(g => !targetGenres.includes(g));
+        
+        comparison.genres_match = {
+            correct: correctGenres.length,
+            total: targetGenres.length
+        };
+        comparison.genres_details = {
+            correct: correctGenres,
+            wrong: wrongGenres
+        };
+        
+        // Compare tags
+        const guessTags = (guessedAnime.tags || []).map(t => t.name || t);
+        const targetTags = targetAnime.tags || [];
+        const targetTagNames = targetTags.map(t => t.name || t);
+        const targetPrimaryTags = targetTags.filter(t => t.primary).map(t => t.name || t);
+        const targetSecondaryTags = targetTags.filter(t => !t.primary).map(t => t.name || t);
+        
+        const primaryMatches = guessTags.filter(t => targetPrimaryTags.includes(t));
+        const secondaryMatches = guessTags.filter(t => targetSecondaryTags.includes(t));
+        const wrongTags = guessTags.filter(t => !targetTagNames.includes(t));
+        
+        comparison.tags_match = {
+            primary: primaryMatches.length,
+            secondary: secondaryMatches.length
+        };
+        comparison.tags_details = {
+            primary: primaryMatches,
+            secondary: secondaryMatches,
+            wrong: wrongTags
+        };
+        
+        res.json({
+            correct: isCorrect,
+            guessed_anime: {
+                mal_id: guessedAnime.mal_id,
+                title: guessedAnime.title,
+                name: guessedAnime.title,
+                score: guessedAnime.score,
+                studio: guessedAnime.studio,
+                genres: guessedAnime.genres,
+                release_date: guessedAnime.release_date,
+                source: guessedAnime.source,
+                tags: guessedAnime.tags
+            },
+            comparison: comparison,
+            target_anime: isCorrect ? {
+                title: targetAnime.title,
+                image: targetAnime.image
+            } : null
+        });
+    } catch (err) {
+        console.error("Guess error:", err);
+        res.status(500).json({ error: "Failed to process guess" });
+    }
+});
+
+// GET /api/anidle/check-daily - Check if user has completed today's daily
+app.get('/api/anidle/check-daily', async (req, res) => {
+    const { username } = req.query;
+    
+    if (!username) {
+        return res.status(400).json({ error: "Username required" });
+    }
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (useInMemory) {
+        // Check memory scores for today
+        const todayScores = memoryScores.filter(s => 
+            s.game_id === 'anidle' &&
+            s.board_id === 'daily' &&
+            s.username === username &&
+            s.created_at.toISOString().split('T')[0] === today
+        );
+        return res.json({ completed: todayScores.length > 0 });
+    }
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const result = await conn.query(`
+            SELECT COUNT(*) as count FROM scores 
+            WHERE game_id = 'anidle' 
+            AND board_id = 'daily'
+            AND username = ?
+            AND DATE(created_at) = ?
+        `, [username, today]);
+        
+        res.json({ completed: Number(result[0].count) > 0 });
+    } catch (err) {
+        console.error("Check daily error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/anidle/daily-leaderboard - Get today's leaderboard
+app.get('/api/anidle/daily-leaderboard', async (req, res) => {
+    const today = new Date().toISOString().split('T')[0];
+    const limit = parseInt(req.query.limit) || 10;
+    
+    if (useInMemory) {
+        const todayScores = memoryScores
+            .filter(s => 
+                s.game_id === 'anidle' &&
+                s.board_id === 'daily' &&
+                s.created_at.toISOString().split('T')[0] === today
+            )
+            .sort((a, b) => b.score - a.score)
+            .slice(0, limit);
+        return res.json(todayScores);
+    }
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const rows = await conn.query(`
+            SELECT s.username, s.score, s.created_at, u.discord_id, u.avatar
+            FROM scores s
+            LEFT JOIN users u ON s.username = u.username
+            WHERE s.game_id = 'anidle' 
+            AND s.board_id = 'daily'
+            AND DATE(s.created_at) = ?
+            ORDER BY s.score DESC
+            LIMIT ?
+        `, [today, limit]);
+        
+        res.json(rows);
+    } catch (err) {
+        console.error("Daily leaderboard error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/anidle/refresh-cache - Force refresh anime cache (admin only)
+app.post('/api/anidle/refresh-cache', adminMiddleware, async (req, res) => {
+    try {
+        await refreshAnidleCache();
+        res.json({ 
+            success: true, 
+            count: anidleAnimeCache.length,
+            message: `Cache refreshed with ${anidleAnimeCache.length} anime`
+        });
+    } catch (err) {
+        console.error("Cache refresh error:", err);
+        res.status(500).json({ error: "Failed to refresh cache" });
+    }
+});
+
+// GET /api/anidle/cache-status - Get cache status
+app.get('/api/anidle/cache-status', (req, res) => {
+    res.json({
+        count: anidleAnimeCache.length,
+        lastUpdate: anidleCacheLastUpdate ? new Date(anidleCacheLastUpdate).toISOString() : null,
+        cacheAge: anidleCacheLastUpdate ? Math.floor((Date.now() - anidleCacheLastUpdate) / 1000 / 60) + ' minutes' : 'never'
+    });
+});
+
 // Start Server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`Server running at http://localhost:${PORT}`);
+    
+    // Initialize anime cache on startup
+    console.log('[Anidle] Initializing anime cache...');
+    try {
+        await refreshAnidleCache();
+    } catch (err) {
+        console.error('[Anidle] Failed to initialize cache on startup:', err.message);
+    }
 });

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anidle - Guess the Anime</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="user-display">Player: Loading...</div>
+    <div id="timer-display">Time: 0:00</div>
+
+    <div id="game-container">
+        <div id="header">
+            <h1>🎌 Anidle</h1>
+            <p>Guess the anime from the clues!</p>
+        </div>
+
+        <!-- Mode Selection -->
+        <div id="mode-selection">
+            <button id="daily-btn" class="mode-btn active" onclick="selectMode('daily')">📅 Daily</button>
+            <button id="unlimited-btn" class="mode-btn" onclick="selectMode('unlimited')">♾️ Unlimited</button>
+        </div>
+
+        <!-- Clues Display -->
+        <div id="clues-container">
+            <div class="clue-row">
+                <span class="clue-label">MAL Score:</span>
+                <span id="clue-score" class="clue-value">?</span>
+            </div>
+            <div class="clue-row">
+                <span class="clue-label">Studio:</span>
+                <span id="clue-studio" class="clue-value">?</span>
+            </div>
+            <div class="clue-row">
+                <span class="clue-label">Genres:</span>
+                <div id="clue-genres" class="clue-tags">?</div>
+            </div>
+            <div class="clue-row">
+                <span class="clue-label">Release:</span>
+                <span id="clue-release" class="clue-value">?</span>
+            </div>
+            <div class="clue-row">
+                <span class="clue-label">Source:</span>
+                <span id="clue-source" class="clue-value">?</span>
+            </div>
+            <div class="clue-row">
+                <span class="clue-label">Tags:</span>
+                <div id="clue-tags" class="clue-tags">?</div>
+            </div>
+        </div>
+
+        <!-- Hints Section (revealed progressively) -->
+        <div id="hints-container" style="display: none;">
+            <div id="hint-cover" class="hint-section" style="display: none;">
+                <h3>📷 Cover (Blurred)</h3>
+                <img id="anime-cover" src="" alt="Anime Cover" class="blurred-cover">
+            </div>
+            <div id="hint-synopsis" class="hint-section" style="display: none;">
+                <h3>📖 Synopsis</h3>
+                <p id="anime-synopsis"></p>
+            </div>
+            <div id="hint-character" class="hint-section" style="display: none;">
+                <h3>👤 Most Popular Character</h3>
+                <div id="character-info">
+                    <img id="character-image" src="" alt="Character">
+                    <span id="character-name"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Guess Input -->
+        <div id="guess-section">
+            <div id="tries-display">Tries: <span id="tries-count">21</span> / 21</div>
+            <div id="input-container">
+                <input type="text" id="guess-input" placeholder="Type anime name..." autocomplete="off">
+                <div id="autocomplete-list" class="autocomplete-items"></div>
+            </div>
+            <button id="guess-btn" onclick="submitGuess()">Guess!</button>
+        </div>
+
+        <!-- Guess History -->
+        <div id="history-container">
+            <h3>Your Guesses</h3>
+            <div id="guess-history"></div>
+        </div>
+
+        <!-- Result Screen -->
+        <div id="result-screen" style="display: none;">
+            <div id="result-content">
+                <h2 id="result-title"></h2>
+                <div id="result-anime">
+                    <img id="result-cover" src="" alt="Anime Cover">
+                    <div id="result-info">
+                        <h3 id="result-name"></h3>
+                        <p id="result-details"></p>
+                    </div>
+                </div>
+                <div id="result-score">
+                    <span>Score: </span><span id="final-score">0</span>
+                </div>
+                <div id="result-breakdown">
+                    <p>Tries used: <span id="tries-used">0</span></p>
+                    <p>Time taken: <span id="time-taken">0:00</span></p>
+                </div>
+                <button id="play-again-btn" onclick="playAgain()" style="display: none;">Play Again (Unlimited)</button>
+                <button onclick="window.history.back()" class="back-btn">Back to Hub</button>
+            </div>
+        </div>
+    </div>
+
+    <button onclick="window.history.back()" class="floating-back-btn">← Back</button>
+
+    <script src="game.js"></script>
+</body>
+
+</html>
