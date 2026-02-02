@@ -6,9 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="../styles/generic.css?v=26">
     <link rel="stylesheet" href="../styles/explain.css?v=2">
-    <!-- KaTeX for LaTeX rendering -->
+    <!-- KaTeX for LaTeX rendering - with fallback CDN -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+    <!-- Fallback to cdnjs if jsdelivr fails -->
+    <script>
+        if (typeof katex === 'undefined') {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js" crossorigin="anonymous"><\/script>');
+        }
+    </script>
     <title>Article - Explain-TM</title>
 </head>
 
