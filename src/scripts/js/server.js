@@ -307,6 +307,12 @@ app.get('/api/games', (req, res) => {
 // GET /api/games/:gameId - Get single game details
 app.get('/api/games/:gameId', (req, res) => {
     const gameId = req.params.gameId;
+    
+    // Validate gameId to prevent path traversal
+    if (!/^[a-zA-Z0-9_-]+$/.test(gameId)) {
+        return res.status(400).json({ error: "Invalid game ID" });
+    }
+    
     const gameData = getGameData(gameId);
     
     if (!gameData) {
@@ -330,6 +336,11 @@ app.get('/api/games/:gameId', (req, res) => {
 app.put('/api/games/:gameId/achievements', adminMiddleware, (req, res) => {
     const gameId = req.params.gameId;
     const { achievements } = req.body;
+    
+    // Validate gameId to prevent path traversal
+    if (!/^[a-zA-Z0-9_-]+$/.test(gameId)) {
+        return res.status(400).json({ error: "Invalid game ID" });
+    }
     
     if (!achievements || !Array.isArray(achievements)) {
         return res.status(400).json({ error: "Invalid achievements data" });
@@ -355,6 +366,11 @@ app.put('/api/games/:gameId/achievements', adminMiddleware, (req, res) => {
 // GET /api/games/:gameId/stats - Get game statistics (for devs)
 app.get('/api/games/:gameId/stats', async (req, res) => {
     const gameId = req.params.gameId;
+    
+    // Validate gameId
+    if (!/^[a-zA-Z0-9_-]+$/.test(gameId)) {
+        return res.status(400).json({ error: "Invalid game ID" });
+    }
     
     if (useInMemory) {
         const gameScores = memoryScores.filter(s => s.game_id === gameId);
@@ -1099,7 +1115,7 @@ app.post('/api/user/:username/decoration', async (req, res) => {
 // --- Admin Endpoints (Localhost Only) ---
 
 app.get('/api/admin/tables', adminMiddleware, async (req, res) => {
-    if (useInMemory) return res.json([{ name: "Memory Mode (No Tables)" }]);
+    if (useInMemory) return res.json(["Memory Mode (No Tables)"]);
 
     let conn;
     try {
@@ -1146,24 +1162,30 @@ app.delete('/api/admin/data/:table/:id', adminMiddleware, async (req, res) => {
     const tableName = req.params.table;
     const id = req.params.id;
 
+    // Whitelist of allowed tables and their primary keys for security
+    const allowedTables = {
+        'users': 'username',
+        'posts': 'id',
+        'scores': 'id',
+        'user_achievements': 'id',
+        'saved_games': 'id'
+    };
+
     // Basic sanitization: only allow alphanumeric + underscore
     if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
         return res.status(400).json({ error: "Invalid table name" });
     }
 
+    // Check if table is in whitelist
+    if (!allowedTables[tableName]) {
+        return res.status(400).json({ error: "Table not allowed for deletion" });
+    }
+
+    const pkColumn = allowedTables[tableName];
+
     let conn;
     try {
         conn = await pool.getConnection();
-        
-        // Get the primary key column name for this table
-        const columnsRes = await conn.query(`SHOW COLUMNS FROM ${tableName}`);
-        const primaryKeyCol = columnsRes.find(c => c.Key === 'PRI');
-        
-        if (!primaryKeyCol) {
-            return res.status(400).json({ error: "Table has no primary key" });
-        }
-        
-        const pkColumn = primaryKeyCol.Field;
         
         // Delete the row using parameterized query for the id value
         const result = await conn.query(`DELETE FROM ${tableName} WHERE ${pkColumn} = ?`, [id]);

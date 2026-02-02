@@ -168,8 +168,9 @@ async function loadProfileStats() {
         let decorationOverlay = '';
         if (stats.decoration) {
             const deco = decorations.find(d => d.id === stats.decoration);
-            if (deco && deco.image) {
-                decorationOverlay = `<img src="${deco.image}" class="profile-decoration" style="position: absolute; top: -10px; left: -10px; width: 100px; height: 100px; pointer-events: none;" onerror="this.style.display='none'">`;
+            // Validate decoration image URL starts with expected path
+            if (deco && deco.image && deco.image.startsWith('/src/assets/')) {
+                decorationOverlay = `<img src="${escapeHtml(deco.image)}" class="profile-decoration" style="position: absolute; top: -10px; left: -10px; width: 100px; height: 100px; pointer-events: none;" onerror="this.style.display='none'">`;
             }
         }
 
@@ -181,7 +182,10 @@ async function loadProfileStats() {
                     <h3 style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px; color: #1DCD9F;">Achievements (${achievements.length})</h3>
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 10px;">
                         ${achievements.map(a => {
-                            const imgSrc = a.image ? `/src/games/${a.game_id}/${a.image}` : '../assets/imgs/const.png';
+                            // Sanitize game_id and image to prevent path traversal
+                            const safeGameId = a.game_id ? a.game_id.replace(/[^a-zA-Z0-9_-]/g, '') : '';
+                            const safeImage = a.image ? a.image.replace(/[^a-zA-Z0-9_.-]/g, '') : '';
+                            const imgSrc = safeImage ? `/src/games/${safeGameId}/${safeImage}` : '../assets/imgs/const.png';
                             return `
                                 <div style="background: #222; padding: 8px; border-radius: 5px; text-align: center; font-size: 0.65rem; color: #aaa; border: 1px solid #1DCD9F;" title="${a.game_name}: ${a.title}\n${a.description}\n+${a.points} points">
                                     <img src="${imgSrc}" style="width: 40px; height: 40px; border-radius: 5px; object-fit: cover;" onerror="this.src='../assets/imgs/const.png'">
