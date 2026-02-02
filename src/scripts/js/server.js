@@ -1203,6 +1203,517 @@ app.delete('/api/admin/data/:table/:id', adminMiddleware, async (req, res) => {
     }
 });
 
+// =============================================
+// Explain-TM Wiki API Routes
+// =============================================
+
+// Rate limit helper for anti-spam
+async function checkRateLimit(conn, ip, actionType, maxActions = 5, windowMinutes = 60) {
+    const cutoff = new Date(Date.now() - windowMinutes * 60 * 1000);
+    const result = await conn.query(
+        `SELECT COUNT(*) as count FROM explain_rate_limits 
+         WHERE ip_address = ? AND action_type = ? AND created_at > ?`,
+        [ip, actionType, cutoff]
+    );
+    return result[0].count < maxActions;
+}
+
+async function recordRateLimit(conn, ip, actionType) {
+    await conn.query(
+        `INSERT INTO explain_rate_limits (ip_address, action_type) VALUES (?, ?)`,
+        [ip, actionType]
+    );
+    // Cleanup old entries
+    await conn.query(
+        `DELETE FROM explain_rate_limits WHERE created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)`
+    );
+}
+
+// Generate slug from title
+function generateSlug(title) {
+    return title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .substring(0, 100);
+}
+
+// Ensure Explain-TM tables exist
+async function ensureExplainTables(conn) {
+    await conn.query(`
+        CREATE TABLE IF NOT EXISTS explain_categories (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL UNIQUE,
+            description VARCHAR(500),
+            color VARCHAR(7) DEFAULT '#1DCD9F',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+    
+    await conn.query(`
+        CREATE TABLE IF NOT EXISTS explain_articles (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            slug VARCHAR(255) NOT NULL UNIQUE,
+            title VARCHAR(255) NOT NULL,
+            content TEXT NOT NULL,
+            category_id INT,
+            author VARCHAR(255) NOT NULL,
+            views INT DEFAULT 0,
+            status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_status (status),
+            INDEX idx_views (views DESC),
+            INDEX idx_category (category_id)
+        )
+    `);
+    
+    await conn.query(`
+        CREATE TABLE IF NOT EXISTS explain_revisions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            article_id INT NOT NULL,
+            content TEXT NOT NULL,
+            editor VARCHAR(255) NOT NULL,
+            edit_summary VARCHAR(500),
+            status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+            reviewed_by VARCHAR(255),
+            reviewed_at TIMESTAMP NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_article_status (article_id, status)
+        )
+    `);
+    
+    await conn.query(`
+        CREATE TABLE IF NOT EXISTS explain_rate_limits (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ip_address VARCHAR(45) NOT NULL,
+            action_type ENUM('create', 'edit') NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_ip_action (ip_address, action_type, created_at)
+        )
+    `);
+    
+    // Insert default categories if none exist
+    const cats = await conn.query(`SELECT COUNT(*) as count FROM explain_categories`);
+    if (cats[0].count === 0) {
+        await conn.query(`
+            INSERT INTO explain_categories (name, description, color) VALUES
+            ('General', 'General topics and miscellaneous articles', '#1DCD9F'),
+            ('Gaming', 'Video games, game mechanics, and gaming culture', '#FF6B6B'),
+            ('Technology', 'Tech, programming, and digital topics', '#4ECDC4'),
+            ('Science', 'Scientific concepts and discoveries', '#45B7D1'),
+            ('Culture', 'Internet culture, memes, and trends', '#96CEB4'),
+            ('Tutorial', 'How-to guides and tutorials', '#FFEAA7')
+        `);
+    }
+}
+
+// GET /api/explain/categories - Get all categories
+app.get('/api/explain/categories', async (req, res) => {
+    if (useInMemory) {
+        return res.json([
+            { id: 1, name: 'General', description: 'General topics', color: '#1DCD9F' },
+            { id: 2, name: 'Gaming', description: 'Gaming topics', color: '#FF6B6B' }
+        ]);
+    }
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureExplainTables(conn);
+        const rows = await conn.query(`SELECT * FROM explain_categories ORDER BY name`);
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching categories:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/explain/articles - Get articles (with filters)
+app.get('/api/explain/articles', async (req, res) => {
+    const { category, search, sort, status } = req.query;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const offset = parseInt(req.query.offset) || 0;
+    
+    if (useInMemory) {
+        return res.json({ articles: [], total: 0 });
+    }
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureExplainTables(conn);
+        
+        let query = `
+            SELECT a.*, c.name as category_name, c.color as category_color
+            FROM explain_articles a
+            LEFT JOIN explain_categories c ON a.category_id = c.id
+            WHERE 1=1
+        `;
+        const params = [];
+        
+        // Only show approved articles to public (unless admin)
+        const showStatus = status || 'approved';
+        query += ` AND a.status = ?`;
+        params.push(showStatus);
+        
+        if (category) {
+            query += ` AND a.category_id = ?`;
+            params.push(category);
+        }
+        
+        if (search) {
+            query += ` AND (a.title LIKE ? OR a.content LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`);
+        }
+        
+        // Count total
+        const countQuery = query.replace('SELECT a.*, c.name as category_name, c.color as category_color', 'SELECT COUNT(*) as total');
+        const countResult = await conn.query(countQuery, params);
+        const total = countResult[0].total;
+        
+        // Sort
+        switch (sort) {
+            case 'popular':
+                query += ` ORDER BY a.views DESC, a.created_at DESC`;
+                break;
+            case 'oldest':
+                query += ` ORDER BY a.created_at ASC`;
+                break;
+            default:
+                query += ` ORDER BY a.created_at DESC`;
+        }
+        
+        query += ` LIMIT ? OFFSET ?`;
+        params.push(limit, offset);
+        
+        const rows = await conn.query(query, params);
+        res.json({ articles: rows, total });
+    } catch (err) {
+        console.error('Error fetching articles:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/explain/articles/trending - Get trending/popular articles
+app.get('/api/explain/articles/trending', async (req, res) => {
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    
+    if (useInMemory) {
+        return res.json([]);
+    }
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureExplainTables(conn);
+        
+        const rows = await conn.query(`
+            SELECT a.*, c.name as category_name, c.color as category_color
+            FROM explain_articles a
+            LEFT JOIN explain_categories c ON a.category_id = c.id
+            WHERE a.status = 'approved'
+            ORDER BY a.views DESC, a.updated_at DESC
+            LIMIT ?
+        `, [limit]);
+        
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching trending:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/explain/article/:slug - Get single article by slug
+app.get('/api/explain/article/:slug', async (req, res) => {
+    const { slug } = req.params;
+    
+    if (!/^[a-z0-9-]+$/.test(slug)) {
+        return res.status(400).json({ error: 'Invalid slug' });
+    }
+    
+    if (useInMemory) {
+        return res.status(404).json({ error: 'Article not found' });
+    }
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureExplainTables(conn);
+        
+        const rows = await conn.query(`
+            SELECT a.*, c.name as category_name, c.color as category_color
+            FROM explain_articles a
+            LEFT JOIN explain_categories c ON a.category_id = c.id
+            WHERE a.slug = ? AND a.status = 'approved'
+        `, [slug]);
+        
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Article not found' });
+        }
+        
+        // Increment view count
+        await conn.query(`UPDATE explain_articles SET views = views + 1 WHERE slug = ?`, [slug]);
+        
+        res.json(rows[0]);
+    } catch (err) {
+        console.error('Error fetching article:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/explain/article - Create new article (requires moderation)
+app.post('/api/explain/article', async (req, res) => {
+    const { title, content, category_id, author } = req.body;
+    
+    // Validation
+    if (!title || title.length < 3 || title.length > 255) {
+        return res.status(400).json({ error: 'Title must be 3-255 characters' });
+    }
+    if (!content || content.length < 10 || content.length > 50000) {
+        return res.status(400).json({ error: 'Content must be 10-50000 characters' });
+    }
+    if (containsBadWord(title) || containsBadWord(content)) {
+        return res.status(400).json({ error: 'Inappropriate content detected' });
+    }
+    
+    const authorName = author && author.length <= 50 ? author : 'Anonymous';
+    
+    if (useInMemory) {
+        return res.json({ success: true, message: 'Article submitted for review', slug: generateSlug(title) });
+    }
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureExplainTables(conn);
+        
+        // Rate limiting
+        const ip = req.ip || req.connection.remoteAddress;
+        const canCreate = await checkRateLimit(conn, ip, 'create', 3, 60); // 3 articles per hour
+        if (!canCreate) {
+            return res.status(429).json({ error: 'Too many submissions. Please wait before creating more articles.' });
+        }
+        
+        // Generate unique slug
+        let slug = generateSlug(title);
+        let slugExists = true;
+        let suffix = 0;
+        while (slugExists) {
+            const existing = await conn.query(`SELECT id FROM explain_articles WHERE slug = ?`, [slug + (suffix ? `-${suffix}` : '')]);
+            if (existing.length === 0) {
+                slug = slug + (suffix ? `-${suffix}` : '');
+                slugExists = false;
+            } else {
+                suffix++;
+            }
+        }
+        
+        await conn.query(`
+            INSERT INTO explain_articles (slug, title, content, category_id, author, status)
+            VALUES (?, ?, ?, ?, ?, 'pending')
+        `, [slug, title, content, category_id || null, authorName]);
+        
+        await recordRateLimit(conn, ip, 'create');
+        
+        res.json({ success: true, message: 'Article submitted for review', slug });
+    } catch (err) {
+        console.error('Error creating article:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/explain/article/:slug/edit - Submit edit for review
+app.post('/api/explain/article/:slug/edit', async (req, res) => {
+    const { slug } = req.params;
+    const { content, editor, edit_summary } = req.body;
+    
+    if (!/^[a-z0-9-]+$/.test(slug)) {
+        return res.status(400).json({ error: 'Invalid slug' });
+    }
+    if (!content || content.length < 10 || content.length > 50000) {
+        return res.status(400).json({ error: 'Content must be 10-50000 characters' });
+    }
+    if (containsBadWord(content) || (edit_summary && containsBadWord(edit_summary))) {
+        return res.status(400).json({ error: 'Inappropriate content detected' });
+    }
+    
+    const editorName = editor && editor.length <= 50 ? editor : 'Anonymous';
+    
+    if (useInMemory) {
+        return res.json({ success: true, message: 'Edit submitted for review' });
+    }
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureExplainTables(conn);
+        
+        // Check article exists
+        const articles = await conn.query(`SELECT id FROM explain_articles WHERE slug = ? AND status = 'approved'`, [slug]);
+        if (articles.length === 0) {
+            return res.status(404).json({ error: 'Article not found' });
+        }
+        
+        // Rate limiting
+        const ip = req.ip || req.connection.remoteAddress;
+        const canEdit = await checkRateLimit(conn, ip, 'edit', 10, 60); // 10 edits per hour
+        if (!canEdit) {
+            return res.status(429).json({ error: 'Too many edits. Please wait before submitting more.' });
+        }
+        
+        await conn.query(`
+            INSERT INTO explain_revisions (article_id, content, editor, edit_summary, status)
+            VALUES (?, ?, ?, ?, 'pending')
+        `, [articles[0].id, content, editorName, edit_summary || null]);
+        
+        await recordRateLimit(conn, ip, 'edit');
+        
+        res.json({ success: true, message: 'Edit submitted for review' });
+    } catch (err) {
+        console.error('Error submitting edit:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// --- Admin Routes for Explain-TM (Localhost Only) ---
+
+// GET /api/admin/explain/pending - Get pending articles and edits
+app.get('/api/admin/explain/pending', adminMiddleware, async (req, res) => {
+    if (useInMemory) {
+        return res.json({ articles: [], revisions: [] });
+    }
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureExplainTables(conn);
+        
+        const articles = await conn.query(`
+            SELECT a.*, c.name as category_name
+            FROM explain_articles a
+            LEFT JOIN explain_categories c ON a.category_id = c.id
+            WHERE a.status = 'pending'
+            ORDER BY a.created_at ASC
+        `);
+        
+        const revisions = await conn.query(`
+            SELECT r.*, a.title, a.slug
+            FROM explain_revisions r
+            JOIN explain_articles a ON r.article_id = a.id
+            WHERE r.status = 'pending'
+            ORDER BY r.created_at ASC
+        `);
+        
+        res.json({ articles, revisions });
+    } catch (err) {
+        console.error('Error fetching pending:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/admin/explain/article/:id/approve - Approve article
+app.post('/api/admin/explain/article/:id/approve', adminMiddleware, async (req, res) => {
+    const { id } = req.params;
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query(`UPDATE explain_articles SET status = 'approved' WHERE id = ?`, [id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error approving article:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/admin/explain/article/:id/reject - Reject article
+app.post('/api/admin/explain/article/:id/reject', adminMiddleware, async (req, res) => {
+    const { id } = req.params;
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query(`UPDATE explain_articles SET status = 'rejected' WHERE id = ?`, [id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error rejecting article:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/admin/explain/revision/:id/approve - Approve revision (applies edit)
+app.post('/api/admin/explain/revision/:id/approve', adminMiddleware, async (req, res) => {
+    const { id } = req.params;
+    const reviewer = req.body.reviewer || 'Admin';
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        
+        // Get the revision
+        const revisions = await conn.query(`SELECT * FROM explain_revisions WHERE id = ?`, [id]);
+        if (revisions.length === 0) {
+            return res.status(404).json({ error: 'Revision not found' });
+        }
+        
+        const revision = revisions[0];
+        
+        // Apply the edit to the article
+        await conn.query(`UPDATE explain_articles SET content = ?, updated_at = NOW() WHERE id = ?`, 
+            [revision.content, revision.article_id]);
+        
+        // Mark revision as approved
+        await conn.query(`UPDATE explain_revisions SET status = 'approved', reviewed_by = ?, reviewed_at = NOW() WHERE id = ?`,
+            [reviewer, id]);
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error approving revision:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/admin/explain/revision/:id/reject - Reject revision
+app.post('/api/admin/explain/revision/:id/reject', adminMiddleware, async (req, res) => {
+    const { id } = req.params;
+    const reviewer = req.body.reviewer || 'Admin';
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query(`UPDATE explain_revisions SET status = 'rejected', reviewed_by = ?, reviewed_at = NOW() WHERE id = ?`,
+            [reviewer, id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error rejecting revision:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
 // Start Server
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);

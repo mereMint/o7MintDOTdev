@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../styles/generic.css?v=25">
+    <link rel="stylesheet" href="../styles/explain.css?v=1">
+    <title>Edit Article - Explain-TM</title>
+</head>
+
+<body>
+    <header>
+        <nav>
+            <ul>
+                <li><a href="../../index.html">Home</a></li>
+                <li><a href="GameHub.html">Games</a></li>
+                <li><a href="Store.html">Store</a></li>
+                <li class="dropdown">
+                    <a href="#">Socials</a>
+                    <ul class="dropdown-menu">
+                        <li><a href="Profile.html">Profile</a></li>
+                        <li><a href="Post.html">Sh*tpost</a></li>
+                        <li><a href="Links.html">Links</a></li>
+                        <li><a href="Credits.html">Credits</a></li>
+                    </ul>
+                </li>
+                <li class="dropdown">
+                    <a href="#">Other</a>
+                    <ul class="dropdown-menu">
+                        <li><a href="Art.html">Art</a></li>
+                        <li><a href="Explain-TM.html">Explain-TM</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+    </header>
+
+    <div class="explain-container">
+        <div class="explain-header">
+            <h1>Edit Article</h1>
+            <p>Editing: <span id="article-title" style="color: #1DCD9F;">Loading...</span></p>
+        </div>
+
+        <!-- Status Message -->
+        <div id="status-message" class="status-message" style="display: none;"></div>
+
+        <form id="edit-form" class="article-form">
+            <div class="form-group">
+                <label for="editor-input">Your Name</label>
+                <input type="text" id="editor-input" placeholder="Your name (optional)" maxlength="50">
+            </div>
+
+            <div class="form-group">
+                <label for="summary-input">Edit Summary</label>
+                <input type="text" id="summary-input" placeholder="Brief description of your changes..." maxlength="500">
+            </div>
+
+            <div class="form-group">
+                <label for="content-input">Content *</label>
+                <textarea id="content-input" placeholder="Article content..." 
+                          required minlength="10" maxlength="50000"></textarea>
+                
+                <div class="syntax-help">
+                    <h4>📝 Formatting Syntax</h4>
+                    <p>
+                        <code># Heading 1</code> <code>## Heading 2</code> <code>### Heading 3</code><br>
+                        <code>**bold**</code> or <code>__bold__</code><br>
+                        <code>*italic*</code> or <code>_italic_</code><br>
+                        <code>`inline code`</code><br>
+                        <code>```code block```</code><br>
+                        <code>[link text](url)</code><br>
+                        <code>![image alt](image url)</code><br>
+                        <code>{color:red}colored text{/color}</code> (red, green, blue, yellow, purple, orange)<br>
+                        <code>$inline math$</code> <code>$$block math$$</code><br>
+                        <code>> blockquote</code><br>
+                        <code>- list item</code><br>
+                        <code>---</code> (horizontal rule)
+                    </p>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Preview</label>
+                <div id="preview-container" class="article-content" 
+                     style="background: #111; border: 1px solid #333; border-radius: 8px; padding: 20px; min-height: 100px;">
+                    <p style="color: #555;">Loading preview...</p>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 15px; justify-content: space-between; align-items: center;">
+                <a href="javascript:history.back()" class="btn btn-secondary">← Cancel</a>
+                <button type="submit" class="btn-submit">Submit Edit for Review</button>
+            </div>
+
+            <p style="color: #666; font-size: 0.9rem; margin-top: 15px; text-align: center;">
+                ⚠️ All edits require moderator approval before being applied.
+            </p>
+        </form>
+    </div>
+
+    <script src="../scripts/js/explain.js?v=1"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', initEditPage);
+    </script>
+</body>
+
+</html>

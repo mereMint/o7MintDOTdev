@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="../styles/generic.css?v=24">
-    <link rel="stylesheet" href="../styles/const.css?v=24">
+    <link rel="stylesheet" href="../styles/generic.css?v=25">
+    <link rel="stylesheet" href="../styles/explain.css?v=1">
     <title>Explain-TM - o7m.dev</title>
 </head>
 
@@ -36,12 +36,53 @@
         </nav>
     </header>
 
-    <div id="top-wip-container">
-        <div id="main-title">
-            <h1 id="txt">WIP</h1>
+    <div class="explain-container">
+        <!-- Header -->
+        <div class="explain-header">
+            <h1>Explain-TM</h1>
+            <p>A wiki for all things — from gaming to science, memes to tutorials.</p>
         </div>
-        <img src="../assets/imgs/const.png">
+
+        <!-- Search -->
+        <div class="search-container">
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Search articles...">
+                <button id="search-btn">Search</button>
+            </div>
+        </div>
+
+        <!-- Category Tabs -->
+        <div id="category-tabs" class="category-tabs">
+            <span class="loading">Loading categories...</span>
+        </div>
+
+        <!-- Trending Section -->
+        <div class="trending-section">
+            <h2>🔥 Trending Articles</h2>
+            <div id="trending-articles" class="articles-grid">
+                <div class="loading" style="grid-column: 1 / -1;">Loading...</div>
+            </div>
+        </div>
+
+        <!-- All Articles -->
+        <div class="all-articles-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: #1DCD9F; margin: 0;">📚 All Articles</h2>
+                <button class="btn btn-primary" onclick="showCreateForm()">+ Create Article</button>
+            </div>
+            <div id="articles-grid" class="articles-grid">
+                <div class="loading" style="grid-column: 1 / -1;">Loading articles...</div>
+            </div>
+        </div>
+
+        <!-- Status Message -->
+        <div id="status-message" class="status-message" style="display: none;"></div>
     </div>
+
+    <script src="../scripts/js/explain.js?v=1"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', initWikiHome);
+    </script>
 </body>
 
 </html>
