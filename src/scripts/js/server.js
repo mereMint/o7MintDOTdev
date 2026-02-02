@@ -1396,7 +1396,12 @@ app.delete('/api/admin/data/:table/:id', adminMiddleware, async (req, res) => {
         'posts': 'id',
         'scores': 'id',
         'user_achievements': 'id',
-        'saved_games': 'id'
+        'saved_games': 'id',
+        'rhythm_pp': 'id',
+        'explain_articles': 'id',
+        'explain_revisions': 'id',
+        'explain_categories': 'id',
+        'explain_rate_limits': 'id'
     };
 
     // Basic sanitization: only allow alphanumeric + underscore

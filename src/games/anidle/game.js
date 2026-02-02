@@ -632,17 +632,45 @@ function updateAccumulatedClues(comparison) {
         document.getElementById('clue-source').textContent = anime.source || 'Unknown';
     }
 
-    // Reveal Genres
-    if (comparison.genres_details && comparison.genres_details.correct) {
+    // Reveal Genres (Correct & Wrong)
+    if (comparison.genres_details) {
         const container = document.getElementById('clue-genres');
         if (container.textContent.trim() === '?') container.innerHTML = '';
 
-        comparison.genres_details.correct.forEach(genre => {
-            const exists = Array.from(container.children).some(c => c.textContent === genre);
+        // Add correct genres
+        (comparison.genres_details.correct || []).forEach(genre => {
+            const exists = Array.from(container.children).some(c => c.textContent === genre && c.classList.contains('correct'));
             if (!exists) {
                 const tag = document.createElement('span');
                 tag.className = 'tag correct';
                 tag.textContent = genre;
+                container.appendChild(tag);
+            }
+        });
+
+        // Add wrong genres
+        (comparison.genres_details.wrong || []).forEach(genre => {
+            const exists = Array.from(container.children).some(c => c.textContent === genre && c.classList.contains('wrong'));
+            if (!exists) {
+                const tag = document.createElement('span');
+                tag.className = 'tag wrong';
+                tag.textContent = genre;
+                container.appendChild(tag);
+            }
+        });
+    }
+
+    // Reveal Tags (Themes/Demographics) as Yellow Tags
+    if (comparison.tags_details && comparison.tags_details.primary) {
+        const container = document.getElementById('clue-tags');
+        if (container.textContent.trim() === '?') container.innerHTML = '';
+
+        comparison.tags_details.primary.forEach(t => {
+            const exists = Array.from(container.children).some(c => c.textContent === t);
+            if (!exists) {
+                const tag = document.createElement('span');
+                tag.className = 'tag partial'; // Yellow
+                tag.textContent = t;
                 container.appendChild(tag);
             }
         });
@@ -657,12 +685,11 @@ function checkHints() {
         document.getElementById('hints-container').style.display = 'block';
 
         // Show blurred cover at try 10
-        if (triesUsed >= 10) {
-            document.getElementById('hint-cover').style.display = 'block';
-            const coverImg = document.getElementById('anime-cover');
-            coverImg.src = gameState.targetAnime.image || '/src/assets/imgs/const.png';
-            coverImg.onerror = function () { this.src = '/src/assets/imgs/const.png'; };
-        }
+        document.getElementById('hint-cover').style.display = 'block';
+        const coverImg = document.getElementById('anime-cover');
+        coverImg.src = gameState.targetAnime.image || gameState.targetAnime.images?.jpg?.large_image_url || gameState.targetAnime.images?.jpg?.image_url || '/src/assets/imgs/const.png';
+        coverImg.onerror = function () { this.src = '/src/assets/imgs/const.png'; };
+
 
         // Show synopsis at try 15
         if (triesUsed >= 15) {
@@ -763,7 +790,7 @@ function endGame(won) {
 
     // Show score
     document.getElementById('final-score').textContent = score;
-    document.getElementById('tries-used').innerText = `${gameState.maxTries - gameState.tries}<br><span>Tries</span>`;
+    document.getElementById('tries-used').innerHTML = `${gameState.maxTries - gameState.tries}<br><span>Tries</span>`;
 
     const mins = Math.floor(gameState.elapsedSeconds / 60);
     const secs = gameState.elapsedSeconds % 60;
