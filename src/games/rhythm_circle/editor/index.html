@@ -5,7 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rhythm Circle - Map Editor</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;500;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;500;700&display=swap"
+        rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -215,9 +217,17 @@
             position: relative;
         }
 
-        .track.red { background: rgba(255, 51, 102, 0.1); }
-        .track.blue { background: rgba(51, 204, 255, 0.1); }
-        .track.special { background: rgba(255, 204, 0, 0.1); }
+        .track.red {
+            background: rgba(255, 51, 102, 0.1);
+        }
+
+        .track.blue {
+            background: rgba(51, 204, 255, 0.1);
+        }
+
+        .track.special {
+            background: rgba(255, 204, 0, 0.1);
+        }
 
         .track-label {
             position: absolute;
@@ -239,10 +249,37 @@
             border: 2px solid #fff;
         }
 
-        .note-marker.red { background: #ff3366; top: 50%; }
-        .note-marker.blue { background: #33ccff; top: 50%; }
-        .note-marker.hold { background: #ff3366; }
-        .note-marker.spam { background: #ffcc00; }
+        .note-marker.red {
+            background: #33ccff;
+            top: 50%;
+        }
+
+        /* Default to Blue visual in editor timeline for simplicity or keep distinct? User said blue one is blue regular note. Red is confusing. Let's make 'Red' tool actually place Blue notes or just Rename UI? The game code supports 'red' and 'blue' types but draws them differently. 
+        Actually, the new game design makes 'red' and 'blue' both Blue Regular Notes. 
+        But let's keep timeline distinct colors so user knows which is which if they matter for mechanics (e.g. left/right click or keys). 
+        Wait, user said "blue one is a blue regular note". 
+        Let's update the timeline markers to be consistent with the requested scheme. */
+
+        .note-marker.red {
+            background: #33ccff;
+            top: 50%;
+            box-shadow: 0 0 5px #33ccff;
+        }
+
+        .note-marker.blue {
+            background: #33ccff;
+            top: 50%;
+            box-shadow: 0 0 5px #33ccff;
+        }
+
+        .note-marker.hold {
+            background: #ffcc00;
+        }
+
+        .note-marker.spam {
+            background: #ffcc00;
+            border-style: dashed;
+        }
 
         .note-marker:hover {
             transform: translate(-50%, -50%) scale(1.2);
@@ -255,7 +292,7 @@
         .hold-trail {
             position: absolute;
             height: 10px;
-            background: rgba(255, 51, 102, 0.5);
+            background: rgba(255, 204, 0, 0.5);
             top: 50%;
             transform: translateY(-50%);
             border-radius: 5px;
@@ -315,10 +352,23 @@
             text-transform: uppercase;
         }
 
-        .note-item .type.red { background: #ff3366; }
-        .note-item .type.blue { background: #33ccff; color: #000; }
-        .note-item .type.hold { background: #ff9933; }
-        .note-item .type.spam { background: #ffcc00; color: #000; }
+        .note-item .type.red {
+            background: #ff3366;
+        }
+
+        .note-item .type.blue {
+            background: #33ccff;
+            color: #000;
+        }
+
+        .note-item .type.hold {
+            background: #ff9933;
+        }
+
+        .note-item .type.spam {
+            background: #ffcc00;
+            color: #000;
+        }
 
         .note-item .delete-btn {
             background: none;
@@ -362,10 +412,25 @@
             color: #fff;
         }
 
-        .tool-btn.red.active { border-color: #ff3366; background: rgba(255, 51, 102, 0.2); }
-        .tool-btn.blue.active { border-color: #33ccff; background: rgba(51, 204, 255, 0.2); }
-        .tool-btn.hold.active { border-color: #ff9933; background: rgba(255, 153, 51, 0.2); }
-        .tool-btn.spam.active { border-color: #ffcc00; background: rgba(255, 204, 0, 0.2); }
+        .tool-btn.red.active {
+            border-color: #ff3366;
+            background: rgba(255, 51, 102, 0.2);
+        }
+
+        .tool-btn.blue.active {
+            border-color: #33ccff;
+            background: rgba(51, 204, 255, 0.2);
+        }
+
+        .tool-btn.hold.active {
+            border-color: #ff9933;
+            background: rgba(255, 153, 51, 0.2);
+        }
+
+        .tool-btn.spam.active {
+            border-color: #ffcc00;
+            background: rgba(255, 204, 0, 0.2);
+        }
     </style>
 </head>
 
@@ -410,8 +475,10 @@
             </div>
             <div class="form-group">
                 <label>Background Image</label>
-                <button class="btn secondary" style="width: 100%; padding: 8px;" onclick="loadBackground()">Load Background</button>
-                <span id="bg-filename" style="font-size: 0.75rem; color: #666; margin-top: 5px; display: block;">No background</span>
+                <button class="btn secondary" style="width: 100%; padding: 8px;" onclick="loadBackground()">Load
+                    Background</button>
+                <span id="bg-filename" style="font-size: 0.75rem; color: #666; margin-top: 5px; display: block;">No
+                    background</span>
             </div>
 
             <h3>Note Tool</h3>
@@ -461,6 +528,16 @@
                 <div class="timeline-controls">
                     <button class="play-btn" id="play-btn" onclick="togglePlay()">▶</button>
                     <span class="time-display" id="time-display">0:00.000</span>
+                    <div style="width: 1px; height: 30px; background: #333; margin: 0 10px;"></div>
+                    <select id="snap-select"
+                        style="padding: 5px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px;">
+                        <option value="0">No Snap</option>
+                        <option value="1">1/1 Beat</option>
+                        <option value="2">1/2 Beat</option>
+                        <option value="4" selected>1/4 Beat</option>
+                        <option value="8">1/8 Beat</option>
+                        <option value="16">1/16 Beat</option>
+                    </select>
                     <input type="range" id="zoom-slider" min="1" max="10" value="5" style="width: 100px;">
                     <span style="color: #888; font-size: 0.85rem;">Zoom</span>
                 </div>
@@ -479,7 +556,9 @@
                                 <span class="track-label">Hold/Spam</span>
                             </div>
                         </div>
-                        <div class="playhead" id="playhead" style="left: 0;"><div class="playhead-handle"></div></div>
+                        <div class="playhead" id="playhead" style="left: 0;">
+                            <div class="playhead-handle"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -542,18 +621,18 @@
 
             document.addEventListener('mousemove', (e) => {
                 if (!isDraggingPlayhead) return;
-                
+
                 const timelineScroll = document.getElementById('timeline-scroll');
                 const timeline = document.getElementById('timeline');
                 const rect = timeline.getBoundingClientRect();
                 const x = e.clientX - rect.left + timelineScroll.scrollLeft;
                 const newTime = Math.max(0, x / pixelsPerMs);
-                
+
                 if (audio && audio.duration) {
                     const clampedTime = Math.min(newTime, audio.duration * 1000);
                     audio.currentTime = clampedTime / 1000;
                 }
-                
+
                 // Update playhead position manually while dragging
                 playhead.style.left = `${x}px`;
             });
@@ -658,7 +737,7 @@
             const mins = Math.floor(audio.currentTime / 60);
             const secs = Math.floor(audio.currentTime % 60);
             const ms = Math.floor((audio.currentTime % 1) * 1000);
-            document.getElementById('time-display').textContent = 
+            document.getElementById('time-display').textContent =
                 `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
 
             // Auto-scroll timeline
@@ -678,7 +757,7 @@
         function updateTimeline() {
             const timeline = document.getElementById('timeline');
             const ruler = document.getElementById('timeline-ruler');
-            
+
             // Calculate timeline width
             const duration = audio ? audio.duration * 1000 : 60000;
             const width = duration * pixelsPerMs;
@@ -687,7 +766,7 @@
             // Draw ruler
             ruler.innerHTML = '';
             const beatInterval = 60000 / (parseInt(document.getElementById('song-bpm').value) || 120);
-            
+
             for (let t = 0; t < duration; t += beatInterval) {
                 const marker = document.createElement('div');
                 marker.style.cssText = `
@@ -761,7 +840,19 @@
             const timeline = document.getElementById('timeline');
             const rect = timeline.getBoundingClientRect();
             const x = e.clientX - rect.left + document.getElementById('timeline-scroll').scrollLeft;
-            const time = Math.round(x / pixelsPerMs);
+            let time = x / pixelsPerMs;
+
+            // SNAP LOGIC
+            const snapDivisor = parseInt(document.getElementById('snap-select').value);
+            if (snapDivisor > 0) {
+                const bpm = parseInt(document.getElementById('song-bpm').value) || 120;
+                const msPerBeat = 60000 / bpm;
+                const msPerSnap = msPerBeat / (snapDivisor / 1); // e.g. 1/4 beat
+
+                time = Math.round(time / msPerSnap) * msPerSnap;
+            } else {
+                time = Math.round(time);
+            }
 
             addNote(time);
         }
@@ -769,7 +860,7 @@
         // ===== NOTE MANAGEMENT =====
         function addNote(time) {
             const angle = parseInt(document.getElementById('note-angle').value) || 0;
-            
+
             const note = {
                 time: time,
                 type: currentTool,
@@ -778,6 +869,7 @@
 
             if (currentTool === 'hold') {
                 const duration = parseInt(document.getElementById('hold-duration').value) || 1000;
+                // Snap duration too if snapping is enabled? Maybe just start time for now.
                 note.endTime = time + duration;
             }
 
@@ -787,9 +879,9 @@
 
             notes.push(note);
             notes.sort((a, b) => a.time - b.time);
-            
+
             updateTimeline();
-            drawPreview();
+            drawPreview(time); // Show preview at note time
         }
 
         function selectNote(index) {
@@ -832,7 +924,7 @@
                 const imgRatio = backgroundImage.width / backgroundImage.height;
                 const canvasRatio = w / h;
                 let drawW, drawH, drawX, drawY;
-                
+
                 if (imgRatio > canvasRatio) {
                     drawH = h;
                     drawW = h * imgRatio;
@@ -844,7 +936,7 @@
                     drawX = 0;
                     drawY = (h - drawH) / 2;
                 }
-                
+
                 ctx.drawImage(backgroundImage, drawX, drawY, drawW, drawH);
                 // Add dark overlay for visibility
                 ctx.fillStyle = 'rgba(10, 10, 26, 0.7)';
@@ -854,49 +946,53 @@
                 ctx.fillRect(0, 0, w, h);
             }
 
-            // Draw center ring
-            const ringRadius = 60;
-            const ringThickness = 8;
-
-            ctx.beginPath();
-            ctx.arc(cx, cy, ringRadius + ringThickness, 0, Math.PI * 2);
-            ctx.arc(cx, cy, ringRadius - ringThickness, 0, Math.PI * 2, true);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.fill();
-
+            // Draw center ring (Hit Area)
+            const ringRadius = 60; // Editor scale
+            // Hit Area (Black Circle)
             ctx.beginPath();
             ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
-            ctx.strokeStyle = '#fff';
+            ctx.fillStyle = '#000000';
+            ctx.fill();
+
+            // Ring border
+            ctx.beginPath();
+            ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = '#444';
             ctx.lineWidth = 2;
             ctx.stroke();
 
             // Draw notes
             const approachTime = 1500;
             const spawnRadius = 150;
-            const noteSize = 15;
+            const NOTE_SPAWN_RADIUS = 150;
+            const RING_RADIUS = 60;
 
             notes.forEach(note => {
                 const timeUntil = note.time - currentTime;
                 if (timeUntil > approachTime || timeUntil < -100) return;
 
+                // Color Selection
+                let color = '#33ccff'; // Blue default
+                if (note.type === 'hold') color = '#ffcc00'; // Yellow
+                if (note.type === 'spam') color = '#ffcc00'; // Yellowish
+
+                // Shrinking Circle Logic (Editor Scale)
                 const progress = 1 - (timeUntil / approachTime);
-                const radius = spawnRadius - (spawnRadius - ringRadius) * progress;
+                const currentRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progress);
 
-                const angle = (note.angle || 0) * Math.PI / 180;
-                const x = cx + Math.cos(angle) * radius;
-                const y = cy + Math.sin(angle) * radius;
+                if (currentRadius < 0) return;
 
-                let color = '#ff3366';
-                if (note.type === 'blue') color = '#33ccff';
-                if (note.type === 'spam') color = '#ffcc00';
-
+                // Draw the shrinking ring
                 ctx.beginPath();
-                ctx.arc(x, y, noteSize, 0, Math.PI * 2);
-                ctx.fillStyle = color;
-                ctx.fill();
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 2;
+                ctx.arc(cx, cy, currentRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 4;
                 ctx.stroke();
+
+                // Hold note specific
+                if (note.type === 'hold' && note.endTime) {
+                    // Just basic indicator for editor
+                }
             });
         }
 
@@ -943,17 +1039,17 @@
             reader.onload = (event) => {
                 try {
                     const data = JSON.parse(event.target.result);
-                    
+
                     document.getElementById('song-title').value = data.title || '';
                     document.getElementById('song-artist').value = data.artist || '';
                     document.getElementById('song-difficulty').value = data.difficulty || 'Normal';
                     document.getElementById('difficulty-level').value = data.difficultyLevel || 3;
                     document.getElementById('song-bpm').value = data.bpm || 120;
-                    
+
                     notes = data.notes || [];
                     updateTimeline();
                     drawPreview();
-                    
+
                     alert('Map imported successfully!');
                 } catch (err) {
                     alert('Failed to parse map file');

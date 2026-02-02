@@ -57,10 +57,10 @@ let APPROACH_TIME = 1500; // ms for note to reach center (now configurable)
 
 // Timing windows (in ms)
 const TIMING = {
-    PERFECT: 30,
-    GREAT: 60,
-    GOOD: 100,
-    MISS: 150
+    PERFECT: 50, // Slightly more lenient for readability
+    GREAT: 100,
+    GOOD: 150,
+    MISS: 200
 };
 
 // ===== INITIALIZATION =====
@@ -688,6 +688,13 @@ function drawCenterRing() {
         ctx.lineWidth = 4;
         ctx.stroke();
     }
+
+    // Explicit Goal Line (Always visible white/grey thin line on top of black)
+    ctx.beginPath();
+    ctx.arc(cx, cy, RING_RADIUS, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
 }
 
 function drawNotes(currentTime) {
@@ -787,6 +794,8 @@ function updateNotes(currentTime) {
             // Hold completed successfully
             note.hit = true;
             processJudgment('perfect', note, true);
+            // Visual Flash for Hold End
+            createHitEffect(0, 0, 'perfect');
             return false;
         }
         return true;
