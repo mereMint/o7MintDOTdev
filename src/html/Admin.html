@@ -236,9 +236,9 @@
 
                 rows.forEach(row => {
                     html += '<tr>';
-                    // Delete Button - escape for HTML/JS safety
+                    // Delete Button - escape for JavaScript context (backslash-escape quotes)
                     const idVal = row[idCol];
-                    const escapedId = String(idVal).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const escapedId = String(idVal).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
                     html += `<td>
                         <button onclick="deleteRow('${tableName}', '${escapedId}')" style="background:#ff4444; color:white; border:none; padding:5px 10px; cursor:pointer;">Del</button>
                     </td>`;

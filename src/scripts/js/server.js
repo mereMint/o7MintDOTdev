@@ -311,11 +311,13 @@ app.post('/api/post', async (req, res) => {
         try {
             conn = await pool.getConnection();
             
-            // Ensure posts table has avatar columns
+            // Ensure posts table has avatar columns and status column
             try {
                 await conn.query("ALTER TABLE posts ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255)");
                 await conn.query("ALTER TABLE posts ADD COLUMN IF NOT EXISTS avatar VARCHAR(255)");
                 await conn.query("ALTER TABLE posts ADD COLUMN IF NOT EXISTS status ENUM('pending', 'approved', 'rejected') DEFAULT 'approved'");
+                // Migrate legacy posts with NULL status to 'approved'
+                await conn.query("UPDATE posts SET status = 'approved' WHERE status IS NULL");
             } catch (e) {}
             
             // Get user's discord info if not provided
