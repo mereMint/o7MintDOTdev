@@ -705,16 +705,22 @@ function drawNotes(currentTime) {
         if (note.hit || note.missed) return;
 
         const timeUntilHit = note.time - currentTime;
-        // Don't draw if too far away or already missed
-        if (timeUntilHit > APPROACH_TIME || timeUntilHit < -TIMING.MISS) return;
+        const isHoldActive = note.type === 'hold' && note.endTime && currentTime >= note.time && currentTime <= note.endTime;
+
+        // Don't draw if too far away, or already passed miss window (unless it's an active hold)
+        if (timeUntilHit > APPROACH_TIME) return;
+        if (timeUntilHit < -TIMING.MISS && !isHoldActive) return;
 
         // Note color based on type
         let color;
-        // The prompt says: "yellow is a hold note and the blue one is a blue regular note"
         if (note.type === 'hold') {
             color = '#ffcc00'; // Yellow
+        } else if (note.type === 'spam') {
+            color = '#33ff66'; // Green
+        } else if (note.type === 'red') {
+            color = '#ff3366'; // Red
         } else {
-            color = '#33ccff'; // Blue (for all regular notes)
+            color = '#33ccff'; // Blue
         }
 
         // Shrinking Circle Logic
@@ -728,11 +734,13 @@ function drawNotes(currentTime) {
         // 2. When it matches the Hit Area size, that's the hit time.
 
         // Calculate current radius based on time until hit
-        // At timeUntilHit = APPROACH_TIME, radius = NOTE_SPAWN_RADIUS
-        // At timeUntilHit = 0, radius = RING_RADIUS (The black hit area size)
-
-        const progress = 1 - (timeUntilHit / APPROACH_TIME);
-        const currentRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progress);
+        let currentRadius;
+        if (isHoldActive) {
+            currentRadius = RING_RADIUS;
+        } else {
+            const progress = 1 - (timeUntilHit / APPROACH_TIME);
+            currentRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progress);
+        }
 
         if (currentRadius < 0) return; // Should not happen with valid logic
 
@@ -740,7 +748,7 @@ function drawNotes(currentTime) {
         ctx.beginPath();
         ctx.arc(cx, cy, currentRadius, 0, Math.PI * 2);
         ctx.strokeStyle = color;
-        ctx.lineWidth = 8; // Thick visible ring
+        ctx.lineWidth = (note.type === 'hold') ? 16 : 8; // Double thickness for holds
         ctx.stroke();
 
         // Hold Note specifics

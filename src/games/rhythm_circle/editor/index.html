@@ -254,20 +254,9 @@
         }
 
         .note-marker.red {
-            background: #33ccff;
+            background: #ff3366;
             top: 50%;
-        }
-
-        /* Default to Blue visual in editor timeline for simplicity or keep distinct? User said blue one is blue regular note. Red is confusing. Let's make 'Red' tool actually place Blue notes or just Rename UI? The game code supports 'red' and 'blue' types but draws them differently. 
-        Actually, the new game design makes 'red' and 'blue' both Blue Regular Notes. 
-        But let's keep timeline distinct colors so user knows which is which if they matter for mechanics (e.g. left/right click or keys). 
-        Wait, user said "blue one is a blue regular note". 
-        Let's update the timeline markers to be consistent with the requested scheme. */
-
-        .note-marker.red {
-            background: #33ccff;
-            top: 50%;
-            box-shadow: 0 0 5px #33ccff;
+            box-shadow: 0 0 5px #ff3366;
         }
 
         .note-marker.blue {
@@ -281,7 +270,7 @@
         }
 
         .note-marker.spam {
-            background: #ffcc00;
+            background: #33ff66;
             border-style: dashed;
         }
 
@@ -296,7 +285,7 @@
         .hold-trail {
             position: absolute;
             height: 10px;
-            background: rgba(255, 204, 0, 0.5);
+            background: rgba(255, 204, 0, 0.4);
             top: 50%;
             transform: translateY(-50%);
             border-radius: 5px;
@@ -443,6 +432,8 @@
         <div class="logo">Map Editor</div>
         <div class="toolbar">
             <button class="btn secondary" onclick="loadAudio()">Load Audio</button>
+            <button class="btn secondary" onclick="saveDraft()">Save Draft</button>
+            <button class="btn secondary" onclick="loadDraft()">Load Draft</button>
             <button class="btn secondary" onclick="importMap()">Import Map</button>
             <button class="btn primary" onclick="exportMap()">Export Map</button>
             <button class="btn secondary" onclick="window.location.href='../index.html'">Back to Game</button>
@@ -1038,16 +1029,24 @@
 
             notes.forEach(note => {
                 const timeUntil = note.time - currentTime;
-                if (timeUntil > approachTime || timeUntil < -100) return;
+                const isHoldDuration = note.type === 'hold' && note.endTime && currentTime >= note.time && currentTime <= note.endTime;
+
+                if (timeUntil > approachTime || (timeUntil < -100 && !isHoldDuration)) return;
 
                 // Color Selection
                 let color = '#33ccff'; // Blue default
-                if (note.type === 'hold') color = '#ffcc00'; // Yellow
-                if (note.type === 'spam') color = '#ffcc00'; // Yellowish
+                if (note.type === 'red') color = '#ff3366';
+                if (note.type === 'hold') color = '#ffcc00';
+                if (note.type === 'spam') color = '#33ff66';
 
-                // Shrinking Circle Logic (Editor Scale)
-                const progress = 1 - (timeUntil / approachTime);
-                const currentRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progress);
+                // Radius logic
+                let currentRadius;
+                if (isHoldDuration) {
+                    currentRadius = RING_RADIUS;
+                } else {
+                    const progress = 1 - (timeUntil / approachTime);
+                    currentRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progress);
+                }
 
                 if (currentRadius < 0) return;
 
@@ -1055,13 +1054,8 @@
                 ctx.beginPath();
                 ctx.arc(cx, cy, currentRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = color;
-                ctx.lineWidth = 4;
+                ctx.lineWidth = (note.type === 'hold') ? 8 : 4; // Double thickness for holds (editor scale)
                 ctx.stroke();
-
-                // Hold note specific
-                if (note.type === 'hold' && note.endTime) {
-                    // Just basic indicator for editor
-                }
             });
         }
 
@@ -1150,6 +1144,45 @@
             a.click();
 
             URL.revokeObjectURL(url);
+        }
+
+        // ===== LOCAL DRAFTS =====
+        function saveDraft() {
+            const mapData = {
+                title: document.getElementById('song-title').value,
+                artist: document.getElementById('song-artist').value,
+                difficulty: document.getElementById('song-difficulty').value,
+                difficultyLevel: document.getElementById('difficulty-level').value,
+                bpm: document.getElementById('song-bpm').value,
+                notes: notes,
+                backgroundFilename: backgroundFilename
+            };
+            localStorage.setItem('rhythm_circle_draft', JSON.stringify(mapData));
+            alert('Draft saved to browser!');
+        }
+
+        function loadDraft() {
+            const draft = localStorage.getItem('rhythm_circle_draft');
+            if (!draft) {
+                alert('No draft found in this browser.');
+                return;
+            }
+            try {
+                const data = JSON.parse(draft);
+                document.getElementById('song-title').value = data.title || '';
+                document.getElementById('song-artist').value = data.artist || '';
+                document.getElementById('song-difficulty').value = data.difficulty || 'Normal';
+                document.getElementById('difficulty-level').value = data.difficultyLevel || 3;
+                document.getElementById('song-bpm').value = data.bpm || 120;
+                notes = data.notes || [];
+                backgroundFilename = data.backgroundFilename || '';
+                document.getElementById('bg-filename').textContent = backgroundFilename || 'No background';
+                updateTimeline();
+                drawPreview();
+                alert('Draft loaded successfully!');
+            } catch (e) {
+                alert('Failed to load draft.');
+            }
         }
     </script>
 </body>
