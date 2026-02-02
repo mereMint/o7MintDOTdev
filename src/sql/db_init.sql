@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- Table: Posts
 CREATE TABLE IF NOT EXISTS posts (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) DEFAULT 'Anonymous',
+    username VARCHAR(255) DEFAULT 'Anonymous',
     content VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS scores (
     id INT AUTO_INCREMENT PRIMARY KEY,
     game_id VARCHAR(50) NOT NULL,
     board_id VARCHAR(50) DEFAULT 'main',
-    username VARCHAR(50) DEFAULT 'Anonymous',
+    username VARCHAR(255) DEFAULT 'Anonymous',
     score INT NOT NULL,
     discord_id VARCHAR(255),
     avatar VARCHAR(255),
@@ -40,9 +40,9 @@ CREATE TABLE IF NOT EXISTS scores (
 -- Table: User Achievements
 CREATE TABLE IF NOT EXISTS user_achievements (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) NOT NULL,
-    game_id VARCHAR(50) NOT NULL,
-    achievement_id VARCHAR(50) NOT NULL,
+    username VARCHAR(255) NOT NULL,
+    game_id VARCHAR(255) NOT NULL,
+    achievement_id VARCHAR(255) NOT NULL,
     unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY unique_unlock (username, game_id, achievement_id)
 );
