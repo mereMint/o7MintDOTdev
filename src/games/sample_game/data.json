@@ -20,8 +20,24 @@
             "title": "First Win",
             "description": "Win your first game.",
             "image": "logo.png",
-            "secret": true,
+            "secret": false,
             "points": 100
+        },
+        {
+            "id": "high_scorer",
+            "title": "High Scorer",
+            "description": "Score over 1000 points in a single game.",
+            "image": "logo.png",
+            "secret": false,
+            "points": 250
+        },
+        {
+            "id": "secret_master",
+            "title": "Secret Master",
+            "description": "Discover the hidden easter egg.",
+            "image": "logo.png",
+            "secret": true,
+            "points": 500
         }
     ]
 }

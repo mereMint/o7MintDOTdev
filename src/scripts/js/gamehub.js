@@ -152,43 +152,43 @@ async function loadProfileStats() {
     container.innerHTML = 'Loading stats...';
 
     try {
-        // Parallel Fetch: Stats and Achievements
-        const [statsRes, achRes] = await Promise.all([
+        // Parallel Fetch: Stats and Profile (with full achievement data including images)
+        const [statsRes, profileRes, decorationsRes] = await Promise.all([
             fetch(`/api/user/${user.username}/stats`),
-            fetch(`/api/user/${user.username}/achievements`)
+            fetch(`/api/user/${user.username}/profile`),
+            fetch(`/api/decorations`)
         ]);
 
         const stats = await statsRes.json();
-        const achievements = await achRes.json(); // Returns array of { achievement_id, unlocked_at, game_id } (implied from schema)
+        const profile = await profileRes.json();
+        const decorations = await decorationsRes.json();
+        const achievements = profile.achievements || [];
 
-        // For display, we might want Game Names.
-        // But the API for achievements might only give IDs.
-        // We can look up game names from `allGames` if available, or just list IDs.
-        // Update: /api/user/:user/achievements returns rows from user_achievements table.
-        // Assuming it has game_id.
+        // Build decoration overlay HTML
+        let decorationOverlay = '';
+        if (stats.decoration) {
+            const deco = decorations.find(d => d.id === stats.decoration);
+            if (deco && deco.image) {
+                decorationOverlay = `<img src="${deco.image}" class="profile-decoration" style="position: absolute; top: -10px; left: -10px; width: 100px; height: 100px; pointer-events: none;" onerror="this.style.display='none'">`;
+            }
+        }
 
+        // Build achievements HTML with images
         let achievementsHtml = '';
         if (achievements.length > 0) {
             achievementsHtml = `
                 <div style="width: 100%; margin-top: 20px;">
                     <h3 style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px; color: #1DCD9F;">Achievements (${achievements.length})</h3>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 10px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 10px;">
                         ${achievements.map(a => {
-                // Find game info if possible
-                const game = allGames.find(g => g.id === a.game_id);
-                // Find achievement detail if available (complex without extra API calls, simplified here)
-                // We'll rely on a tooltip or simple display.
-                // Since we don't have full achievement data (images/titles) here without fetching every game's data,
-                // we'll show a generic icon or the ID as title.
-                // IMPROVEMENT: Fetch full game data cache?
-                // For now, simple box.
-                return `
-                                <div style="background: #222; padding: 5px; border-radius: 5px; text-align: center; font-size: 0.7rem; color: #aaa;" title="${a.game_id}: ${a.achievement_id}">
-                                    <div style="font-size: 1.2rem;">🏆</div>
-                                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${a.achievement_id}</div>
+                            const imgSrc = a.image ? `/src/games/${a.game_id}/${a.image}` : '../assets/imgs/const.png';
+                            return `
+                                <div style="background: #222; padding: 8px; border-radius: 5px; text-align: center; font-size: 0.65rem; color: #aaa; border: 1px solid #1DCD9F;" title="${a.game_name}: ${a.title}\n${a.description}\n+${a.points} points">
+                                    <img src="${imgSrc}" style="width: 40px; height: 40px; border-radius: 5px; object-fit: cover;" onerror="this.src='../assets/imgs/const.png'">
+                                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px;">${escapeHtml(a.title)}</div>
                                 </div>
                             `;
-            }).join('')}
+                        }).join('')}
                     </div>
                 </div>
             `;
@@ -196,11 +196,47 @@ async function loadProfileStats() {
             achievementsHtml = '<div style="margin-top: 20px; color: #555;">No achievements yet.</div>';
         }
 
+        // Build decoration selector
+        const ownedDecos = profile.inventory || [];
+        let decorationSelectorHtml = `
+            <div style="width: 100%; margin-top: 20px;">
+                <h3 style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px; color: #1DCD9F;">Profile Decoration</h3>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    ${decorations.map(d => {
+                        const isOwned = d.id === 'none' || ownedDecos.includes(d.id);
+                        const isEquipped = stats.decoration === d.id || (d.id === 'none' && !stats.decoration);
+                        const borderColor = isEquipped ? '#1DCD9F' : (isOwned ? '#444' : '#333');
+                        return `
+                            <button onclick="selectDecoration('${d.id}')" style="background: #222; border: 2px solid ${borderColor}; padding: 5px 10px; border-radius: 5px; cursor: pointer; color: #ccc; font-size: 0.75rem; opacity: ${isOwned ? '1' : '0.6'};">
+                                ${d.name}
+                                ${!isOwned ? `<span style="color: #FFD700;">(${d.cost}pts)</span>` : ''}
+                                ${isEquipped ? ' ✓' : ''}
+                            </button>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+
+        // Bio section
+        const bioHtml = `
+            <div style="width: 100%; margin-top: 15px;">
+                <div style="color: #888; font-size: 0.8rem; margin-bottom: 5px;">Bio</div>
+                <div style="background: #111; padding: 10px; border-radius: 5px; color: #ccc; font-size: 0.9rem; min-height: 40px;">
+                    ${profile.bio ? escapeHtml(profile.bio) : '<span style="color: #555;">No bio set</span>'}
+                    <button onclick="editBio()" style="float: right; background: #333; border: none; color: #888; padding: 2px 8px; cursor: pointer; border-radius: 3px;">Edit</button>
+                </div>
+            </div>
+        `;
+
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 20px;">
-                <img src="https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png" 
-                     style="width: 80px; height: 80px; border-radius: 50%; border: 2px solid #1DCD9F;"
-                     onerror="this.src='../assets/imgs/const.png'">
+                <div style="position: relative; display: inline-block;">
+                    ${decorationOverlay}
+                    <img src="https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png" 
+                         style="width: 80px; height: 80px; border-radius: 50%; border: 2px solid #1DCD9F;"
+                         onerror="this.src='../assets/imgs/const.png'">
+                </div>
                 <h2 style="margin: 0;">${escapeHtml(user.username)}</h2>
             </div>
             
@@ -221,13 +257,76 @@ async function loadProfileStats() {
                     <div style="color: #888; font-size: 0.8rem;">Best Score</div>
                     <div style="font-size: 1.2rem; color: #1DCD9F;">${stats.best_score}</div>
                 </div>
+                <div style="background: #111; padding: 10px; border-radius: 5px;">
+                    <div style="color: #888; font-size: 0.8rem;">Avg Score</div>
+                    <div style="font-size: 1.2rem; color: #1DCD9F;">${stats.average_score}</div>
+                </div>
+                <div style="background: #111; padding: 10px; border-radius: 5px;">
+                    <div style="color: #888; font-size: 0.8rem;">Achievements</div>
+                    <div style="font-size: 1.2rem; color: #1DCD9F;">${stats.total_achievements || 0}</div>
+                </div>
             </div>
 
+            ${bioHtml}
+            ${decorationSelectorHtml}
             ${achievementsHtml}
         `;
     } catch (err) {
         console.error("Stats Error", err);
         container.innerHTML = '<p style="color: red;">Failed to load stats.</p>';
+    }
+}
+
+// Select and purchase decoration
+async function selectDecoration(decoId) {
+    const storedUser = localStorage.getItem('discord_user');
+    if (!storedUser) return;
+    
+    const user = JSON.parse(storedUser);
+    
+    try {
+        const res = await fetch(`/api/user/${user.username}/decoration`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ decoration_id: decoId })
+        });
+        
+        const data = await res.json();
+        if (data.success) {
+            loadProfileStats(); // Refresh
+        } else {
+            alert(data.error || 'Failed to set decoration');
+        }
+    } catch (err) {
+        console.error("Decoration Error:", err);
+    }
+}
+
+// Edit bio
+async function editBio() {
+    const storedUser = localStorage.getItem('discord_user');
+    if (!storedUser) return;
+    
+    const user = JSON.parse(storedUser);
+    const newBio = prompt("Enter your bio (max 500 chars):", "");
+    
+    if (newBio === null) return; // Cancelled
+    
+    try {
+        const res = await fetch(`/api/user/${user.username}/profile`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bio: newBio })
+        });
+        
+        const data = await res.json();
+        if (data.success) {
+            loadProfileStats(); // Refresh
+        } else {
+            alert(data.error || 'Failed to update bio');
+        }
+    } catch (err) {
+        console.error("Bio Error:", err);
     }
 }
 
