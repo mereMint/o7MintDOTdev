@@ -79,7 +79,7 @@ async function loadGameDetails() {
             if (isDev && lbContainer && !document.getElementById('reset-progress-btn')) {
                 const btn = document.createElement('button');
                 btn.id = 'reset-progress-btn';
-                btn.innerText = "⚠️ Reset Progress";
+                btn.innerText = "[!] Reset Progress";
                 btn.style.marginTop = "20px";
                 btn.style.width = "100%";
                 btn.style.background = "#444";
@@ -259,7 +259,7 @@ async function loadGameDetails() {
                     div.innerHTML = `
                         <img src="${iconPath}" class="achievement-icon" alt="Icon" onerror="this.style.display='none'">
                         <div class="achievement-info">
-                            <h4>${escapeHtml(displayTitle)} ${isUnlocked ? '✅' : ''}</h4>
+                            <h4>${escapeHtml(displayTitle)} ${isUnlocked ? '<img src="../assets/imgs/icons/check.svg" alt="Unlocked" style="width:14px;height:14px;vertical-align:middle;">' : ''}</h4>
                             <p>${escapeHtml(displayDesc)}</p>
                         </div>
                     `;

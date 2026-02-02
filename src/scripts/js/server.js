@@ -18,7 +18,7 @@ const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI;
 let authEnabled = true;
 
 if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI || CLIENT_ID === "your_client_id_here") {
-    console.warn("⚠️  Discord Auth credentials missing or default in .env");
+    console.warn("[WARN]  Discord Auth credentials missing or default in .env");
     console.warn("   Discord Login will be disabled. Using Dev Mode is recommended.");
     authEnabled = false;
 }
@@ -46,7 +46,7 @@ let memoryPosts = [];
 // Initialize Connection
 pool.getConnection()
     .then(async conn => {
-        console.log("✅ Database connected successfully.");
+        console.log("[OK] Database connected successfully.");
 
         // Ensure Tables Exist
         try {
@@ -79,6 +79,7 @@ pool.getConnection()
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     username VARCHAR(255) DEFAULT 'Anonymous',
                     content VARCHAR(255) NOT NULL,
+                    status ENUM('pending', 'approved', 'rejected') DEFAULT 'approved',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             `);
@@ -109,7 +110,7 @@ pool.getConnection()
                     INDEX idx_user_game (username, game_id)
                 )
             `);
-            console.log("✅ Tables verified/created.");
+            console.log("[OK] Tables verified/created.");
 
             // Migrations: Ensure columns exist (for existing tables)
             try {
@@ -142,13 +143,13 @@ pool.getConnection()
                         } catch (ukErr) {
                             // Unique key may already exist
                         }
-                        console.log("✅ user_achievements table migrated to include id column.");
+                        console.log("[OK] user_achievements table migrated to include id column.");
                     }
                 } catch (achMigErr) {
                     console.warn("user_achievements migration skipped:", achMigErr.message);
                 }
                 
-                console.log("✅ Schema Migrations applied.");
+                console.log("[OK] Schema Migrations applied.");
             } catch (migErr) {
                 // Fallback for older versions or if syntax fails: verify manually
                 console.warn("Migration warning (safe to ignore if columns exist):", migErr.message);
@@ -161,7 +162,7 @@ pool.getConnection()
         conn.release();
     })
     .catch(err => {
-        console.warn("⚠️  Database Connection Failed. Switching to IN-MEMORY mode.");
+        console.warn("[WARN]  Database Connection Failed. Switching to IN-MEMORY mode.");
         console.warn("   Posts will be saved to RAM and lost on restart.");
         useInMemory = true;
         // Add some dummy data for testing
@@ -255,6 +256,7 @@ app.get('/api/posts', async (req, res) => {
                     COALESCE(p.avatar, u.avatar) as avatar
                 FROM posts p
                 LEFT JOIN users u ON p.username = u.username
+                WHERE p.status = 'approved' OR p.status IS NULL
                 ORDER BY p.created_at DESC LIMIT ? OFFSET ?
             `, [limit, offset]);
             res.json(rows);
@@ -313,6 +315,7 @@ app.post('/api/post', async (req, res) => {
             try {
                 await conn.query("ALTER TABLE posts ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255)");
                 await conn.query("ALTER TABLE posts ADD COLUMN IF NOT EXISTS avatar VARCHAR(255)");
+                await conn.query("ALTER TABLE posts ADD COLUMN IF NOT EXISTS status ENUM('pending', 'approved', 'rejected') DEFAULT 'approved'");
             } catch (e) {}
             
             // Get user's discord info if not provided
@@ -641,9 +644,18 @@ app.post('/api/score', async (req, res) => {
             res.json({ success: true });
         } catch (err) {
             if (err.code === 'ER_BAD_FIELD_ERROR') {
-                // Fallback for older schema without discord_id/avatar columns
-                await conn.query("INSERT INTO scores (game_id, username, score, board_id) VALUES (?, ?, ?, ?)", [game_id, user, score, board]);
-                return res.json({ success: true, warning: "avatar columns not available" });
+                // Fallback for older schema - try without board_id first, then without avatar columns
+                try {
+                    await conn.query("INSERT INTO scores (game_id, username, score, board_id) VALUES (?, ?, ?, ?)", [game_id, user, score, board]);
+                    return res.json({ success: true, warning: "avatar columns not available" });
+                } catch (fallbackErr) {
+                    if (fallbackErr.code === 'ER_BAD_FIELD_ERROR') {
+                        // Even older schema without board_id column
+                        await conn.query("INSERT INTO scores (game_id, username, score) VALUES (?, ?, ?)", [game_id, user, score]);
+                        return res.json({ success: true, warning: "using legacy schema without board_id" });
+                    }
+                    throw fallbackErr;
+                }
             }
             throw err;
         } finally {
@@ -1280,6 +1292,43 @@ app.delete('/api/admin/data/:table/:id', adminMiddleware, async (req, res) => {
     }
 });
 
+// POST /api/admin/user/role - Update user role (admin only)
+app.post('/api/admin/user/role', adminMiddleware, async (req, res) => {
+    if (useInMemory) return res.status(400).json({ error: "Memory mode - role updates not available" });
+
+    const { username, role } = req.body;
+    
+    if (!username || !role) {
+        return res.status(400).json({ error: "Username and role are required" });
+    }
+
+    const validRoles = ['user', 'moderator', 'admin'];
+    if (!validRoles.includes(role)) {
+        return res.status(400).json({ error: "Invalid role. Must be: user, moderator, or admin" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        
+        // Check if user exists
+        const userCheck = await conn.query("SELECT username FROM users WHERE username = ?", [username]);
+        if (userCheck.length === 0) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        // Update user role
+        await conn.query("UPDATE users SET role = ? WHERE username = ?", [role, username]);
+        
+        res.json({ success: true, message: `Updated ${username} to ${role}` });
+    } catch (err) {
+        console.error("Admin Role Update Error:", err);
+        res.status(500).json({ error: "Failed to update role: " + err.message });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
 // =============================================
 // Explain-TM Wiki API Routes
 // =============================================
@@ -1880,7 +1929,7 @@ async function ensureUserExtendedColumns(conn) {
         await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_online TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
         await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_settings JSON DEFAULT NULL");
         extendedColumnsInitialized = true;
-        console.log("✅ Extended user columns initialized.");
+        console.log("[OK] Extended user columns initialized.");
     } catch (err) {
         console.warn("Extended user columns migration warning:", err.message);
         extendedColumnsInitialized = true; // Don't retry on error
@@ -1903,7 +1952,7 @@ async function ensureFriendsTable(conn) {
         )
     `);
     friendsTableInitialized = true;
-    console.log("✅ Friends table initialized.");
+    console.log("[OK] Friends table initialized.");
 }
 
 // GET /api/user/:username/full-profile - Get complete user profile with all stats
@@ -2338,7 +2387,7 @@ async function ensureMultiplayerTables(conn) {
         )
     `);
     multiplayerTablesInitialized = true;
-    console.log("✅ Multiplayer tables initialized.");
+    console.log("[OK] Multiplayer tables initialized.");
 }
 
 // POST /api/multiplayer/session - Create a new game session
@@ -2747,6 +2796,132 @@ app.get('/api/moderator/pending', moderatorMiddleware, async (req, res) => {
         res.json({ articles, revisions });
     } catch (err) {
         console.error('Moderator pending error:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// =============================================
+// Post Moderation Routes
+// =============================================
+
+// GET /api/moderator/posts/pending - Get pending posts for moderators
+app.get('/api/moderator/posts/pending', moderatorMiddleware, async (req, res) => {
+    if (useInMemory) {
+        return res.json([]);
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        
+        const posts = await conn.query(`
+            SELECT p.*, u.discord_id, u.avatar
+            FROM posts p
+            LEFT JOIN users u ON p.username = u.username
+            WHERE p.status = 'pending'
+            ORDER BY p.created_at ASC
+        `);
+        
+        res.json(posts);
+    } catch (err) {
+        console.error('Get pending posts error:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/moderator/post/:id/approve - Approve a post
+app.post('/api/moderator/post/:id/approve', moderatorMiddleware, async (req, res) => {
+    const { id } = req.params;
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query(`UPDATE posts SET status = 'approved' WHERE id = ?`, [id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Approve post error:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/moderator/post/:id/reject - Reject a post
+app.post('/api/moderator/post/:id/reject', moderatorMiddleware, async (req, res) => {
+    const { id } = req.params;
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query(`UPDATE posts SET status = 'rejected' WHERE id = ?`, [id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Reject post error:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// DELETE /api/moderator/post/:id - Delete a post (moderator)
+app.delete('/api/moderator/post/:id', moderatorMiddleware, async (req, res) => {
+    const { id } = req.params;
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const result = await conn.query(`DELETE FROM posts WHERE id = ?`, [id]);
+        
+        if (result.affectedRows > 0) {
+            res.json({ success: true });
+        } else {
+            res.status(404).json({ error: 'Post not found' });
+        }
+    } catch (err) {
+        console.error('Delete post error:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/moderator/posts/all - Get all posts for moderation (with status filter)
+app.get('/api/moderator/posts/all', moderatorMiddleware, async (req, res) => {
+    const { status } = req.query;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
+    
+    if (useInMemory) {
+        return res.json([]);
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        
+        let query = `
+            SELECT p.*, u.discord_id, u.avatar
+            FROM posts p
+            LEFT JOIN users u ON p.username = u.username
+        `;
+        const params = [];
+        
+        if (status && ['pending', 'approved', 'rejected'].includes(status)) {
+            query += ` WHERE p.status = ?`;
+            params.push(status);
+        }
+        
+        query += ` ORDER BY p.created_at DESC LIMIT ? OFFSET ?`;
+        params.push(limit, offset);
+        
+        const posts = await conn.query(query, params);
+        res.json(posts);
+    } catch (err) {
+        console.error('Get all posts error:', err);
         res.status(500).json({ error: 'Database error' });
     } finally {
         if (conn) conn.release();

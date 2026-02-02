@@ -125,13 +125,18 @@
 
 <body>
 
-    <h2 style="color: #1DCD9F;">🔒 Local DB Admin</h2>
+    <h2 style="color: #1DCD9F;"><img src="../assets/imgs/icons/shield.svg" alt="" style="width: 24px; height: 24px; vertical-align: middle;"> Local DB Admin</h2>
     <div id="status-bar">Checking connection...</div>
 
     <div id="admin-container">
         <div id="sidebar">
             <h3>Tables</h3>
             <div id="table-list">Loading...</div>
+            
+            <h3 style="margin-top: 20px;">User Management</h3>
+            <button class="table-btn" onclick="showRoleManager()">
+                <img src="../assets/imgs/icons/shield.svg" alt="" style="width: 16px; height: 16px; vertical-align: middle;"> Manage Roles
+            </button>
         </div>
         <div id="content-area">
             <h3 id="current-table-name">Select a table</h3>
@@ -139,10 +144,38 @@
         </div>
     </div>
 
+    <!-- Role Manager Modal -->
+    <div id="role-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
+        <div style="background: #1a1a1a; margin: 10% auto; padding: 20px; max-width: 500px; border-radius: 8px; border: 1px solid #333;">
+            <h3 style="color: #1DCD9F; margin-bottom: 15px;"><img src="../assets/imgs/icons/shield.svg" alt="" style="width: 20px; height: 20px; vertical-align: middle;"> Manage User Roles</h3>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px;">Username:</label>
+                <input type="text" id="role-username" placeholder="Enter username" style="width: 100%; padding: 10px; background: #222; border: 1px solid #333; color: #fff; border-radius: 4px;">
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px;">New Role:</label>
+                <select id="role-select" style="width: 100%; padding: 10px; background: #222; border: 1px solid #333; color: #fff; border-radius: 4px;">
+                    <option value="user">User</option>
+                    <option value="moderator">Moderator</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            
+            <div style="display: flex; gap: 10px;">
+                <button onclick="updateUserRole()" style="flex: 1; padding: 10px; background: #1DCD9F; color: #000; border: none; cursor: pointer; border-radius: 4px;">Update Role</button>
+                <button onclick="hideRoleManager()" style="flex: 1; padding: 10px; background: #333; color: #fff; border: none; cursor: pointer; border-radius: 4px;">Cancel</button>
+            </div>
+            
+            <div id="role-result" style="margin-top: 15px; padding: 10px; display: none;"></div>
+        </div>
+    </div>
+
     <script>
         // Security Warning
         if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-            document.body.innerHTML = '<h1 style="color:red; text-align:center;">⛔ FORBIDDEN<br>Admin is Localhost Only</h1>';
+            document.body.innerHTML = '<h1 style="color:red; text-align:center;"><img src="../assets/imgs/icons/forbidden.svg" style="width:48px;height:48px;vertical-align:middle;"> FORBIDDEN<br>Admin is Localhost Only</h1>';
             throw new Error("Forbidden");
         }
 
@@ -150,7 +183,7 @@
             try {
                 const res = await fetch('/api/admin/tables');
                 if (res.status === 403) {
-                    document.getElementById('status-bar').innerText = "⛔ Access Denied (Not Localhost)";
+                    document.getElementById('status-bar').innerHTML = '<img src="../assets/imgs/icons/forbidden.svg" style="width:16px;height:16px;vertical-align:middle;"> Access Denied (Not Localhost)';
                     return;
                 }
                 const tables = await res.json();
@@ -166,11 +199,11 @@
                     list.appendChild(btn);
                 });
 
-                document.getElementById('status-bar').innerText = "✅ Connected to Local DB";
+                document.getElementById('status-bar').innerHTML = '<img src="../assets/imgs/icons/check.svg" style="width:16px;height:16px;vertical-align:middle;"> Connected to Local DB';
 
             } catch (err) {
                 console.error(err);
-                document.getElementById('status-bar').innerText = "❌ Connection Failed";
+                document.getElementById('status-bar').innerHTML = '<img src="../assets/imgs/icons/error.svg" style="width:16px;height:16px;vertical-align:middle;"> Connection Failed';
             }
         }
 
@@ -203,10 +236,11 @@
 
                 rows.forEach(row => {
                     html += '<tr>';
-                    // Delete Button
+                    // Delete Button - escape for HTML/JS safety
                     const idVal = row[idCol];
+                    const escapedId = String(idVal).replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     html += `<td>
-                        <button onclick="deleteRow('${tableName}', '${idVal}')" style="background:#ff4444; color:white; border:none; padding:5px 10px; cursor:pointer;">Del</button>
+                        <button onclick="deleteRow('${tableName}', '${escapedId}')" style="background:#ff4444; color:white; border:none; padding:5px 10px; cursor:pointer;">Del</button>
                     </td>`;
 
                     headers.forEach(h => {
@@ -235,7 +269,9 @@
             if (!confirm(`Are you sure you want to delete ID ${id} from ${table}?`)) return;
 
             try {
-                const res = await fetch(`/api/admin/data/${table}/${id}`, { method: "DELETE" });
+                // URL encode the id to handle special characters in usernames
+                const encodedId = encodeURIComponent(id);
+                const res = await fetch(`/api/admin/data/${table}/${encodedId}`, { method: "DELETE" });
                 if (res.ok) {
                     // Reload table
                     const currentBtn = document.querySelector('.table-btn.active');
@@ -246,6 +282,53 @@
                 }
             } catch (e) {
                 alert("Delete failed");
+            }
+        }
+
+        // Role Management Functions
+        function showRoleManager() {
+            document.getElementById('role-modal').style.display = 'block';
+            document.getElementById('role-username').value = '';
+            document.getElementById('role-result').style.display = 'none';
+        }
+
+        function hideRoleManager() {
+            document.getElementById('role-modal').style.display = 'none';
+        }
+
+        async function updateUserRole() {
+            const username = document.getElementById('role-username').value.trim();
+            const role = document.getElementById('role-select').value;
+            const resultDiv = document.getElementById('role-result');
+
+            if (!username) {
+                resultDiv.style.display = 'block';
+                resultDiv.style.background = '#442222';
+                resultDiv.innerHTML = 'Please enter a username';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/user/role', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, role })
+                });
+
+                const data = await res.json();
+                resultDiv.style.display = 'block';
+
+                if (res.ok) {
+                    resultDiv.style.background = '#224422';
+                    resultDiv.innerHTML = `Updated ${username} to ${role}`;
+                } else {
+                    resultDiv.style.background = '#442222';
+                    resultDiv.innerHTML = data.error || 'Failed to update role';
+                }
+            } catch (err) {
+                resultDiv.style.display = 'block';
+                resultDiv.style.background = '#442222';
+                resultDiv.innerHTML = 'Error updating role';
             }
         }
 

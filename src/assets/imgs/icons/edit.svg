@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- Pixel art pencil/edit icon -->
+  <style>
+    .pencil { fill: #1DCD9F; }
+    .eraser { fill: #ff6b6b; }
+    .tip { fill: #FFD700; }
+  </style>
+  <!-- Pencil body -->
+  <rect class="pencil" x="10" y="0" width="2" height="2"/>
+  <rect class="pencil" x="8" y="2" width="4" height="2"/>
+  <rect class="pencil" x="6" y="4" width="4" height="2"/>
+  <rect class="pencil" x="4" y="6" width="4" height="2"/>
+  <rect class="pencil" x="2" y="8" width="4" height="2"/>
+  <!-- Tip -->
+  <rect class="tip" x="0" y="10" width="4" height="2"/>
+  <rect class="tip" x="0" y="12" width="2" height="2"/>
+  <!-- Eraser -->
+  <rect class="eraser" x="12" y="0" width="4" height="4"/>
+</svg>

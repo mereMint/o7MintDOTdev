@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- Pixel art forbidden/stop icon -->
+  <style>
+    .circle { fill: #ff4444; }
+    .slash { fill: #ff4444; }
+    .bg { fill: #1a1a1a; }
+  </style>
+  <!-- Circle outline -->
+  <rect class="circle" x="4" y="0" width="8" height="2"/>
+  <rect class="circle" x="2" y="2" width="2" height="2"/>
+  <rect class="circle" x="12" y="2" width="2" height="2"/>
+  <rect class="circle" x="0" y="4" width="2" height="8"/>
+  <rect class="circle" x="14" y="4" width="2" height="8"/>
+  <rect class="circle" x="2" y="12" width="2" height="2"/>
+  <rect class="circle" x="12" y="12" width="2" height="2"/>
+  <rect class="circle" x="4" y="14" width="8" height="2"/>
+  <!-- Diagonal slash -->
+  <rect class="slash" x="11" y="3" width="2" height="2"/>
+  <rect class="slash" x="9" y="5" width="2" height="2"/>
+  <rect class="slash" x="7" y="7" width="2" height="2"/>
+  <rect class="slash" x="5" y="9" width="2" height="2"/>
+  <rect class="slash" x="3" y="11" width="2" height="2"/>
+</svg>
