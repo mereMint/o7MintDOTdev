@@ -12,8 +12,69 @@ CREATE TABLE IF NOT EXISTS users (
     inventory JSON,
     decoration VARCHAR(50) DEFAULT NULL,
     bio VARCHAR(500) DEFAULT NULL,
+    role ENUM('user', 'moderator', 'admin', 'owner') DEFAULT 'user',
+    favorite_game VARCHAR(50) DEFAULT NULL,
+    last_online TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    privacy_settings JSON DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Friends Table
+CREATE TABLE IF NOT EXISTS friends (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user1 VARCHAR(255) NOT NULL,
+    user2 VARCHAR(255) NOT NULL,
+    status ENUM('pending', 'accepted', 'blocked') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_friendship (user1, user2),
+    INDEX idx_user1 (user1),
+    INDEX idx_user2 (user2),
+    FOREIGN KEY (user1) REFERENCES users(username) ON DELETE CASCADE,
+    FOREIGN KEY (user2) REFERENCES users(username) ON DELETE CASCADE
+);
+
+-- Multiplayer Game Sessions Table
+CREATE TABLE IF NOT EXISTS game_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(100) NOT NULL UNIQUE,
+    game_id VARCHAR(50) NOT NULL,
+    host_username VARCHAR(255) NOT NULL,
+    mode ENUM('against', 'party', 'coop') DEFAULT 'against',
+    status ENUM('waiting', 'in_progress', 'finished') DEFAULT 'waiting',
+    max_players INT DEFAULT 2,
+    current_data JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_game (game_id),
+    INDEX idx_host (host_username),
+    INDEX idx_status (status)
+);
+
+-- Game Session Players Table
+CREATE TABLE IF NOT EXISTS game_session_players (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(100) NOT NULL,
+    username VARCHAR(255) NOT NULL,
+    status ENUM('invited', 'joined', 'left', 'declined') DEFAULT 'invited',
+    player_data JSON,
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_player (session_id, username),
+    INDEX idx_session (session_id),
+    INDEX idx_username (username)
+);
+
+-- Game Invites Table
+CREATE TABLE IF NOT EXISTS game_invites (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(100) NOT NULL,
+    from_username VARCHAR(255) NOT NULL,
+    to_username VARCHAR(255) NOT NULL,
+    status ENUM('pending', 'accepted', 'declined', 'expired') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL 5 MINUTE),
+    INDEX idx_to_user (to_username, status),
+    INDEX idx_session (session_id)
 );
 
 -- Posts Table

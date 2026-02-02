@@ -244,8 +244,23 @@ app.get('/api/posts', async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
-        const rows = await conn.query("SELECT * FROM posts ORDER BY created_at DESC LIMIT ? OFFSET ?", [limit, offset]);
-        res.json(rows);
+        
+        // Try to get with avatar columns, fallback if not available
+        try {
+            const rows = await conn.query(`
+                SELECT p.*, 
+                    COALESCE(p.discord_id, u.discord_id) as discord_id,
+                    COALESCE(p.avatar, u.avatar) as avatar
+                FROM posts p
+                LEFT JOIN users u ON p.username = u.username
+                ORDER BY p.created_at DESC LIMIT ? OFFSET ?
+            `, [limit, offset]);
+            res.json(rows);
+        } catch (e) {
+            // Fallback for older schema
+            const rows = await conn.query("SELECT * FROM posts ORDER BY created_at DESC LIMIT ? OFFSET ?", [limit, offset]);
+            res.json(rows);
+        }
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Database error" });
@@ -257,11 +272,16 @@ app.get('/api/posts', async (req, res) => {
 // POST /api/post
 app.post('/api/post', async (req, res) => {
     try {
-        const { username, content } = req.body;
+        const { username, content, discord_id, avatar } = req.body;
 
         // Basic Validation
         if (!content || content.length > 255) {
             return res.status(400).json({ error: "Invalid content" });
+        }
+
+        // Require login - username must be provided and not Anonymous
+        if (!username || username === 'Anonymous') {
+            return res.status(401).json({ error: "You must be logged in to post" });
         }
 
         // Profanity Check
@@ -269,14 +289,14 @@ app.post('/api/post', async (req, res) => {
             return res.status(400).json({ error: "Profanity detected" });
         }
 
-        const user = username || "Anonymous";
-
         if (useInMemory) {
             // Save to RAM
             const newPost = {
                 id: memoryPosts.length + 1,
-                username: user,
+                username: username,
                 content: content,
+                discord_id: discord_id || null,
+                avatar: avatar || null,
                 created_at: new Date()
             };
             memoryPosts.push(newPost);
@@ -286,7 +306,26 @@ app.post('/api/post', async (req, res) => {
         let conn;
         try {
             conn = await pool.getConnection();
-            await conn.query("INSERT INTO posts (username, content) VALUES (?, ?)", [user, content]);
+            
+            // Ensure posts table has avatar columns
+            try {
+                await conn.query("ALTER TABLE posts ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255)");
+                await conn.query("ALTER TABLE posts ADD COLUMN IF NOT EXISTS avatar VARCHAR(255)");
+            } catch (e) {}
+            
+            // Get user's discord info if not provided
+            let userDiscordId = discord_id;
+            let userAvatar = avatar;
+            if (!userDiscordId || !userAvatar) {
+                const userRes = await conn.query("SELECT discord_id, avatar FROM users WHERE username = ?", [username]);
+                if (userRes.length > 0) {
+                    userDiscordId = userDiscordId || userRes[0].discord_id;
+                    userAvatar = userAvatar || userRes[0].avatar;
+                }
+            }
+            
+            await conn.query("INSERT INTO posts (username, content, discord_id, avatar) VALUES (?, ?, ?, ?)", 
+                [username, content, userDiscordId, userAvatar]);
             res.json({ success: true });
         } finally {
             if (conn) conn.release();
@@ -1759,6 +1798,897 @@ app.post('/api/admin/explain/revision/:id/reject', adminMiddleware, async (req, 
         res.json({ success: true });
     } catch (err) {
         console.error('Error rejecting revision:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// =============================================
+// Extended User Profile API
+// =============================================
+
+// Track initialization state
+let extendedColumnsInitialized = false;
+let friendsTableInitialized = false;
+let multiplayerTablesInitialized = false;
+
+// Ensure new columns exist (runs only once)
+async function ensureUserExtendedColumns(conn) {
+    if (extendedColumnsInitialized) return;
+    try {
+        await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role ENUM('user', 'moderator', 'admin', 'owner') DEFAULT 'user'");
+        await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS favorite_game VARCHAR(50) DEFAULT NULL");
+        await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_online TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+        await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_settings JSON DEFAULT NULL");
+        extendedColumnsInitialized = true;
+        console.log("✅ Extended user columns initialized.");
+    } catch (err) {
+        console.warn("Extended user columns migration warning:", err.message);
+        extendedColumnsInitialized = true; // Don't retry on error
+    }
+}
+
+// Ensure friends table exists (runs only once)
+async function ensureFriendsTable(conn) {
+    if (friendsTableInitialized) return;
+    await conn.query(`
+        CREATE TABLE IF NOT EXISTS friends (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user1 VARCHAR(255) NOT NULL,
+            user2 VARCHAR(255) NOT NULL,
+            status ENUM('pending', 'accepted', 'blocked') DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_friendship (user1, user2),
+            INDEX idx_user1 (user1),
+            INDEX idx_user2 (user2)
+        )
+    `);
+    friendsTableInitialized = true;
+    console.log("✅ Friends table initialized.");
+}
+
+// GET /api/user/:username/full-profile - Get complete user profile with all stats
+app.get('/api/user/:username/full-profile', async (req, res) => {
+    const { username } = req.params;
+    const requestingUser = req.query.viewer || null;
+
+    if (useInMemory) {
+        return res.json({
+            username,
+            discord_id: null,
+            avatar: null,
+            bio: null,
+            role: 'user',
+            favorite_game: null,
+            last_online: new Date(),
+            games_played: 0,
+            total_score: 0,
+            total_achievements: 0,
+            posts_count: 0,
+            articles_count: 0,
+            points: 0,
+            achievements: [],
+            privacy: { show_stats: true, show_achievements: true, show_activity: true }
+        });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureUserExtendedColumns(conn);
+
+        // Get user data
+        const userRes = await conn.query(`
+            SELECT username, discord_id, avatar, bio, points, decoration, 
+                   role, favorite_game, last_online, privacy_settings
+            FROM users WHERE username = ?
+        `, [username]);
+
+        if (userRes.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const userData = userRes[0];
+        let privacy = { show_stats: true, show_achievements: true, show_activity: true };
+        try {
+            if (userData.privacy_settings) {
+                privacy = JSON.parse(userData.privacy_settings);
+            }
+        } catch (e) {}
+
+        // Check if viewer is the profile owner
+        const isOwner = requestingUser === username;
+
+        // Get stats
+        const statsRes = await conn.query(`
+            SELECT 
+                COUNT(DISTINCT game_id) as games_played,
+                SUM(score) as total_score,
+                MAX(score) as best_score
+            FROM scores WHERE username = ?
+        `, [username]);
+        const stats = statsRes[0] || {};
+
+        // Get achievements count
+        const achRes = await conn.query("SELECT COUNT(*) as count FROM user_achievements WHERE username = ?", [username]);
+
+        // Get posts count
+        const postsRes = await conn.query("SELECT COUNT(*) as count FROM posts WHERE username = ?", [username]);
+
+        // Get articles count
+        let articlesCount = 0;
+        try {
+            const articlesRes = await conn.query("SELECT COUNT(*) as count FROM explain_articles WHERE author = ? AND status = 'approved'", [username]);
+            articlesCount = Number(articlesRes[0]?.count) || 0;
+        } catch (e) {}
+
+        // Get achievements with images if allowed
+        let achievements = [];
+        if (isOwner || privacy.show_achievements) {
+            const achListRes = await conn.query("SELECT achievement_id, game_id, unlocked_at FROM user_achievements WHERE username = ?", [username]);
+            achievements = achListRes.map(a => {
+                const gameData = getGameData(a.game_id);
+                const achData = gameData?.achievements?.find(x => x.id === a.achievement_id || x.title === a.achievement_id);
+                return {
+                    ...a,
+                    title: achData?.title || a.achievement_id,
+                    description: achData?.description || '',
+                    image: achData?.image || null,
+                    game_name: gameData?.name || a.game_id,
+                    points: achData?.points || 10
+                };
+            });
+        }
+
+        // Get favorite game details
+        let favoriteGameDetails = null;
+        if (userData.favorite_game) {
+            const gameData = getGameData(userData.favorite_game);
+            if (gameData) {
+                favoriteGameDetails = {
+                    id: userData.favorite_game,
+                    name: gameData.name,
+                    image: `/src/games/${userData.favorite_game}/logo.png`
+                };
+            }
+        }
+
+        // Build response based on privacy
+        const response = {
+            username: userData.username,
+            discord_id: userData.discord_id,
+            avatar: userData.avatar,
+            bio: userData.bio,
+            role: userData.role || 'user',
+            decoration: userData.decoration,
+            points: Number(userData.points) || 0,
+            favorite_game: favoriteGameDetails,
+            last_online: (isOwner || privacy.show_activity) ? userData.last_online : null,
+            games_played: (isOwner || privacy.show_stats) ? (Number(stats.games_played) || 0) : null,
+            total_score: (isOwner || privacy.show_stats) ? (Number(stats.total_score) || 0) : null,
+            best_score: (isOwner || privacy.show_stats) ? (Number(stats.best_score) || 0) : null,
+            total_achievements: (isOwner || privacy.show_achievements) ? (Number(achRes[0]?.count) || 0) : null,
+            posts_count: (isOwner || privacy.show_activity) ? (Number(postsRes[0]?.count) || 0) : null,
+            articles_count: (isOwner || privacy.show_activity) ? articlesCount : null,
+            achievements: achievements,
+            privacy: isOwner ? privacy : null,
+            is_owner: isOwner
+        };
+
+        res.json(response);
+    } catch (err) {
+        console.error("Full Profile Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// PUT /api/user/:username/settings - Update user settings (privacy, favorite game, etc.)
+app.put('/api/user/:username/settings', async (req, res) => {
+    const { username } = req.params;
+    const { favorite_game, privacy_settings, bio } = req.body;
+
+    if (useInMemory) {
+        return res.json({ success: true, mode: "memory" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureUserExtendedColumns(conn);
+
+        const updates = [];
+        const values = [];
+
+        if (favorite_game !== undefined) {
+            updates.push("favorite_game = ?");
+            values.push(favorite_game || null);
+        }
+        if (privacy_settings !== undefined) {
+            updates.push("privacy_settings = ?");
+            values.push(JSON.stringify(privacy_settings));
+        }
+        if (bio !== undefined) {
+            updates.push("bio = ?");
+            values.push(bio ? bio.substring(0, 500) : null);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: "No updates provided" });
+        }
+
+        values.push(username);
+        await conn.query(`UPDATE users SET ${updates.join(', ')} WHERE username = ?`, values);
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Settings Update Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// =============================================
+// Friends System API
+// =============================================
+
+// GET /api/user/:username/friends - Get user's friends list
+app.get('/api/user/:username/friends', async (req, res) => {
+    const { username } = req.params;
+
+    if (useInMemory) {
+        return res.json([]);
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureFriendsTable(conn);
+
+        const friends = await conn.query(`
+            SELECT 
+                CASE WHEN f.user1 = ? THEN f.user2 ELSE f.user1 END as friend_username,
+                f.status,
+                f.created_at,
+                u.discord_id,
+                u.avatar,
+                u.role,
+                u.last_online
+            FROM friends f
+            JOIN users u ON (CASE WHEN f.user1 = ? THEN f.user2 ELSE f.user1 END) = u.username
+            WHERE (f.user1 = ? OR f.user2 = ?) AND f.status = 'accepted'
+        `, [username, username, username, username]);
+
+        res.json(friends);
+    } catch (err) {
+        console.error("Friends List Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/user/:username/friend-requests - Get pending friend requests
+app.get('/api/user/:username/friend-requests', async (req, res) => {
+    const { username } = req.params;
+
+    if (useInMemory) {
+        return res.json({ incoming: [], outgoing: [] });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureFriendsTable(conn);
+
+        const incoming = await conn.query(`
+            SELECT f.user1 as from_user, f.created_at, u.discord_id, u.avatar
+            FROM friends f
+            JOIN users u ON f.user1 = u.username
+            WHERE f.user2 = ? AND f.status = 'pending'
+        `, [username]);
+
+        const outgoing = await conn.query(`
+            SELECT f.user2 as to_user, f.created_at, u.discord_id, u.avatar
+            FROM friends f
+            JOIN users u ON f.user2 = u.username
+            WHERE f.user1 = ? AND f.status = 'pending'
+        `, [username]);
+
+        res.json({ incoming, outgoing });
+    } catch (err) {
+        console.error("Friend Requests Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/friends/request - Send friend request
+app.post('/api/friends/request', async (req, res) => {
+    const { from_user, to_user } = req.body;
+
+    if (!from_user || !to_user || from_user === to_user) {
+        return res.status(400).json({ error: "Invalid users" });
+    }
+
+    if (useInMemory) {
+        return res.json({ success: true, mode: "memory" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureFriendsTable(conn);
+
+        // Check if friendship already exists
+        const existing = await conn.query(`
+            SELECT * FROM friends 
+            WHERE (user1 = ? AND user2 = ?) OR (user1 = ? AND user2 = ?)
+        `, [from_user, to_user, to_user, from_user]);
+
+        if (existing.length > 0) {
+            return res.status(400).json({ error: "Friend request already exists or you are already friends" });
+        }
+
+        await conn.query(`
+            INSERT INTO friends (user1, user2, status) VALUES (?, ?, 'pending')
+        `, [from_user, to_user]);
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Friend Request Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/friends/accept - Accept friend request
+app.post('/api/friends/accept', async (req, res) => {
+    const { from_user, to_user } = req.body;
+
+    if (useInMemory) {
+        return res.json({ success: true, mode: "memory" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query(`
+            UPDATE friends SET status = 'accepted' 
+            WHERE user1 = ? AND user2 = ? AND status = 'pending'
+        `, [from_user, to_user]);
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Accept Friend Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/friends/decline - Decline/remove friend
+app.post('/api/friends/decline', async (req, res) => {
+    const { user1, user2 } = req.body;
+
+    if (useInMemory) {
+        return res.json({ success: true, mode: "memory" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query(`
+            DELETE FROM friends 
+            WHERE (user1 = ? AND user2 = ?) OR (user1 = ? AND user2 = ?)
+        `, [user1, user2, user2, user1]);
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Decline Friend Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/users/search - Search for users
+app.get('/api/users/search', async (req, res) => {
+    const { q } = req.query;
+    
+    if (!q || q.length < 2) {
+        return res.status(400).json({ error: "Search query too short" });
+    }
+
+    if (useInMemory) {
+        return res.json([]);
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const users = await conn.query(`
+            SELECT username, discord_id, avatar, role
+            FROM users
+            WHERE username LIKE ?
+            LIMIT 20
+        `, [`%${q}%`]);
+
+        res.json(users);
+    } catch (err) {
+        console.error("User Search Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// =============================================
+// Multiplayer API
+// =============================================
+
+// Ensure multiplayer tables exist (runs only once)
+async function ensureMultiplayerTables(conn) {
+    if (multiplayerTablesInitialized) return;
+    await conn.query(`
+        CREATE TABLE IF NOT EXISTS game_sessions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            session_id VARCHAR(100) NOT NULL UNIQUE,
+            game_id VARCHAR(50) NOT NULL,
+            host_username VARCHAR(255) NOT NULL,
+            mode ENUM('against', 'party', 'coop') DEFAULT 'against',
+            status ENUM('waiting', 'in_progress', 'finished') DEFAULT 'waiting',
+            max_players INT DEFAULT 2,
+            current_data JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_game (game_id),
+            INDEX idx_host (host_username),
+            INDEX idx_status (status)
+        )
+    `);
+
+    await conn.query(`
+        CREATE TABLE IF NOT EXISTS game_session_players (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            session_id VARCHAR(100) NOT NULL,
+            username VARCHAR(255) NOT NULL,
+            status ENUM('invited', 'joined', 'left', 'declined') DEFAULT 'invited',
+            player_data JSON,
+            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_player (session_id, username),
+            INDEX idx_session (session_id),
+            INDEX idx_username (username)
+        )
+    `);
+
+    await conn.query(`
+        CREATE TABLE IF NOT EXISTS game_invites (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            session_id VARCHAR(100) NOT NULL,
+            from_username VARCHAR(255) NOT NULL,
+            to_username VARCHAR(255) NOT NULL,
+            status ENUM('pending', 'accepted', 'declined', 'expired') DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_to_user (to_username, status),
+            INDEX idx_session (session_id)
+        )
+    `);
+    multiplayerTablesInitialized = true;
+    console.log("✅ Multiplayer tables initialized.");
+}
+
+// POST /api/multiplayer/session - Create a new game session
+app.post('/api/multiplayer/session', async (req, res) => {
+    const { game_id, host_username, mode, max_players } = req.body;
+
+    if (!game_id || !host_username) {
+        return res.status(400).json({ error: "game_id and host_username required" });
+    }
+
+    const sessionId = `${game_id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const gameMode = ['against', 'party', 'coop'].includes(mode) ? mode : 'against';
+    const maxP = Math.min(Math.max(parseInt(max_players) || 2, 2), 10);
+
+    if (useInMemory) {
+        return res.json({ success: true, session_id: sessionId, mode: "memory" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureMultiplayerTables(conn);
+
+        await conn.query(`
+            INSERT INTO game_sessions (session_id, game_id, host_username, mode, max_players)
+            VALUES (?, ?, ?, ?, ?)
+        `, [sessionId, game_id, host_username, gameMode, maxP]);
+
+        // Add host as first player
+        await conn.query(`
+            INSERT INTO game_session_players (session_id, username, status)
+            VALUES (?, ?, 'joined')
+        `, [sessionId, host_username]);
+
+        res.json({ success: true, session_id: sessionId });
+    } catch (err) {
+        console.error("Create Session Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/multiplayer/session/:sessionId - Get session details
+app.get('/api/multiplayer/session/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+
+    if (useInMemory) {
+        return res.status(404).json({ error: "Session not found" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+
+        const sessions = await conn.query(`
+            SELECT * FROM game_sessions WHERE session_id = ?
+        `, [sessionId]);
+
+        if (sessions.length === 0) {
+            return res.status(404).json({ error: "Session not found" });
+        }
+
+        const players = await conn.query(`
+            SELECT sp.*, u.discord_id, u.avatar
+            FROM game_session_players sp
+            LEFT JOIN users u ON sp.username = u.username
+            WHERE sp.session_id = ?
+        `, [sessionId]);
+
+        res.json({
+            ...sessions[0],
+            players
+        });
+    } catch (err) {
+        console.error("Get Session Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/multiplayer/invite - Send game invite
+app.post('/api/multiplayer/invite', async (req, res) => {
+    const { session_id, from_username, to_username } = req.body;
+
+    if (!session_id || !from_username || !to_username) {
+        return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    if (useInMemory) {
+        return res.json({ success: true, mode: "memory" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await ensureMultiplayerTables(conn);
+
+        // Verify session exists
+        const sessions = await conn.query(`SELECT * FROM game_sessions WHERE session_id = ? AND status = 'waiting'`, [session_id]);
+        if (sessions.length === 0) {
+            return res.status(404).json({ error: "Session not found or not accepting players" });
+        }
+
+        // Create invite
+        await conn.query(`
+            INSERT INTO game_invites (session_id, from_username, to_username)
+            VALUES (?, ?, ?)
+        `, [session_id, from_username, to_username]);
+
+        // Add player as invited
+        await conn.query(`
+            INSERT IGNORE INTO game_session_players (session_id, username, status)
+            VALUES (?, ?, 'invited')
+        `, [session_id, to_username]);
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Send Invite Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/multiplayer/invites/:username - Get pending invites for user
+app.get('/api/multiplayer/invites/:username', async (req, res) => {
+    const { username } = req.params;
+
+    if (useInMemory) {
+        return res.json([]);
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+
+        const invites = await conn.query(`
+            SELECT gi.*, gs.game_id, gs.mode, gs.host_username,
+                   u.discord_id as from_avatar_discord_id, u.avatar as from_avatar
+            FROM game_invites gi
+            JOIN game_sessions gs ON gi.session_id = gs.session_id
+            JOIN users u ON gi.from_username = u.username
+            WHERE gi.to_username = ? AND gi.status = 'pending' AND gs.status = 'waiting'
+            ORDER BY gi.created_at DESC
+        `, [username]);
+
+        res.json(invites);
+    } catch (err) {
+        console.error("Get Invites Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/multiplayer/invite/respond - Accept or decline invite
+app.post('/api/multiplayer/invite/respond', async (req, res) => {
+    const { invite_id, session_id, username, accept } = req.body;
+
+    if (useInMemory) {
+        return res.json({ success: true, mode: "memory" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+
+        if (accept) {
+            // Update invite
+            await conn.query(`UPDATE game_invites SET status = 'accepted' WHERE id = ?`, [invite_id]);
+            // Update player status
+            await conn.query(`
+                UPDATE game_session_players SET status = 'joined' 
+                WHERE session_id = ? AND username = ?
+            `, [session_id, username]);
+        } else {
+            await conn.query(`UPDATE game_invites SET status = 'declined' WHERE id = ?`, [invite_id]);
+            await conn.query(`
+                UPDATE game_session_players SET status = 'declined' 
+                WHERE session_id = ? AND username = ?
+            `, [session_id, username]);
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Respond Invite Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/multiplayer/session/:sessionId/action - Send game action (for turn-based games)
+app.post('/api/multiplayer/session/:sessionId/action', async (req, res) => {
+    const { sessionId } = req.params;
+    const { username, action_type, action_data } = req.body;
+
+    if (useInMemory) {
+        return res.json({ success: true, mode: "memory" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+
+        // Get current session data
+        const sessions = await conn.query(`SELECT * FROM game_sessions WHERE session_id = ?`, [sessionId]);
+        if (sessions.length === 0) {
+            return res.status(404).json({ error: "Session not found" });
+        }
+
+        let currentData = {};
+        try {
+            currentData = sessions[0].current_data ? JSON.parse(sessions[0].current_data) : {};
+        } catch (e) {}
+
+        // Add action to history
+        if (!currentData.actions) currentData.actions = [];
+        currentData.actions.push({
+            username,
+            action_type,
+            action_data,
+            timestamp: new Date().toISOString()
+        });
+        currentData.last_action = { username, action_type, action_data };
+
+        await conn.query(`
+            UPDATE game_sessions SET current_data = ?, updated_at = NOW()
+            WHERE session_id = ?
+        `, [JSON.stringify(currentData), sessionId]);
+
+        res.json({ success: true, current_data: currentData });
+    } catch (err) {
+        console.error("Session Action Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/multiplayer/session/:sessionId/start - Start the game session
+app.post('/api/multiplayer/session/:sessionId/start', async (req, res) => {
+    const { sessionId } = req.params;
+
+    if (useInMemory) {
+        return res.json({ success: true, mode: "memory" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query(`
+            UPDATE game_sessions SET status = 'in_progress', updated_at = NOW()
+            WHERE session_id = ? AND status = 'waiting'
+        `, [sessionId]);
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Start Session Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/multiplayer/session/:sessionId/end - End the game session
+app.post('/api/multiplayer/session/:sessionId/end', async (req, res) => {
+    const { sessionId } = req.params;
+    const { winner, final_data } = req.body;
+
+    if (useInMemory) {
+        return res.json({ success: true, mode: "memory" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+
+        let currentData = {};
+        const sessions = await conn.query(`SELECT current_data FROM game_sessions WHERE session_id = ?`, [sessionId]);
+        if (sessions.length > 0 && sessions[0].current_data) {
+            try {
+                currentData = JSON.parse(sessions[0].current_data);
+            } catch (e) {}
+        }
+        
+        currentData.winner = winner;
+        currentData.final_data = final_data;
+        currentData.ended_at = new Date().toISOString();
+
+        await conn.query(`
+            UPDATE game_sessions SET status = 'finished', current_data = ?, updated_at = NOW()
+            WHERE session_id = ?
+        `, [JSON.stringify(currentData), sessionId]);
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error("End Session Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// =============================================
+// Moderator Routes (Role-based access)
+// =============================================
+
+// Middleware to check moderator role
+const moderatorMiddleware = async (req, res, next) => {
+    const username = req.body.moderator_username || req.query.moderator_username;
+    
+    if (!username) {
+        return res.status(401).json({ error: "Moderator username required" });
+    }
+
+    if (useInMemory) {
+        return next(); // Allow in dev mode
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const userRes = await conn.query("SELECT role FROM users WHERE username = ?", [username]);
+        
+        if (userRes.length === 0) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const role = userRes[0].role;
+        if (!['moderator', 'admin', 'owner'].includes(role)) {
+            return res.status(403).json({ error: "Insufficient permissions" });
+        }
+
+        next();
+    } catch (err) {
+        console.error("Moderator check error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+};
+
+// POST /api/moderator/article/:id/approve - Moderator approve article
+app.post('/api/moderator/article/:id/approve', moderatorMiddleware, async (req, res) => {
+    const { id } = req.params;
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query(`UPDATE explain_articles SET status = 'approved' WHERE id = ?`, [id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Moderator approve article error:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// POST /api/moderator/article/:id/reject - Moderator reject article
+app.post('/api/moderator/article/:id/reject', moderatorMiddleware, async (req, res) => {
+    const { id } = req.params;
+    
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query(`UPDATE explain_articles SET status = 'rejected' WHERE id = ?`, [id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Moderator reject article error:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/moderator/pending - Get pending items for moderators
+app.get('/api/moderator/pending', moderatorMiddleware, async (req, res) => {
+    if (useInMemory) {
+        return res.json({ articles: [], revisions: [] });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+
+        const articles = await conn.query(`
+            SELECT a.*, c.name as category_name
+            FROM explain_articles a
+            LEFT JOIN explain_categories c ON a.category_id = c.id
+            WHERE a.status = 'pending'
+            ORDER BY a.created_at ASC
+        `);
+
+        const revisions = await conn.query(`
+            SELECT r.*, a.title, a.slug
+            FROM explain_revisions r
+            JOIN explain_articles a ON r.article_id = a.id
+            WHERE r.status = 'pending'
+            ORDER BY r.created_at ASC
+        `);
+
+        res.json({ articles, revisions });
+    } catch (err) {
+        console.error('Moderator pending error:', err);
         res.status(500).json({ error: 'Database error' });
     } finally {
         if (conn) conn.release();
