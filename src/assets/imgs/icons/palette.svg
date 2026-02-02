@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- Pixel art palette icon -->
+  <style>
+    .base { fill: #1DCD9F; }
+    .red { fill: #FF6B6B; }
+    .yellow { fill: #FFEAA7; }
+    .blue { fill: #4ECDC4; }
+    .purple { fill: #A29BFE; }
+  </style>
+  <!-- Palette shape -->
+  <rect class="base" x="2" y="2" width="12" height="12" rx="2"/>
+  <!-- Thumb hole -->
+  <rect fill="#000" x="3" y="9" width="3" height="4"/>
+  <!-- Paint blobs -->
+  <rect class="red" x="5" y="3" width="3" height="3"/>
+  <rect class="yellow" x="9" y="3" width="3" height="3"/>
+  <rect class="blue" x="10" y="7" width="3" height="3"/>
+  <rect class="purple" x="7" y="9" width="3" height="3"/>
+</svg>

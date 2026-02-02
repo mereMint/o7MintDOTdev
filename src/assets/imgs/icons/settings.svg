@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- Pixel art gear icon -->
+  <style>
+    .pixel { fill: #1DCD9F; }
+  </style>
+  <!-- Top notch -->
+  <rect class="pixel" x="6" y="0" width="4" height="2"/>
+  <!-- Top-right notch -->
+  <rect class="pixel" x="11" y="2" width="3" height="2"/>
+  <rect class="pixel" x="12" y="3" width="2" height="2"/>
+  <!-- Right notch -->
+  <rect class="pixel" x="14" y="6" width="2" height="4"/>
+  <!-- Bottom-right notch -->
+  <rect class="pixel" x="12" y="11" width="2" height="2"/>
+  <rect class="pixel" x="11" y="12" width="3" height="2"/>
+  <!-- Bottom notch -->
+  <rect class="pixel" x="6" y="14" width="4" height="2"/>
+  <!-- Bottom-left notch -->
+  <rect class="pixel" x="2" y="12" width="3" height="2"/>
+  <rect class="pixel" x="2" y="11" width="2" height="2"/>
+  <!-- Left notch -->
+  <rect class="pixel" x="0" y="6" width="2" height="4"/>
+  <!-- Top-left notch -->
+  <rect class="pixel" x="2" y="2" width="3" height="2"/>
+  <rect class="pixel" x="2" y="3" width="2" height="2"/>
+  <!-- Center body -->
+  <rect class="pixel" x="4" y="4" width="8" height="8"/>
+  <!-- Center hole -->
+  <rect fill="#000" x="6" y="6" width="4" height="4"/>
+</svg>

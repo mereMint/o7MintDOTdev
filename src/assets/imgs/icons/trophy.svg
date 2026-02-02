@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- Pixel art trophy icon -->
+  <style>
+    .gold { fill: #FFD700; }
+    .dark { fill: #B8860B; }
+  </style>
+  <!-- Trophy cup top -->
+  <rect class="gold" x="2" y="0" width="12" height="2"/>
+  <rect class="gold" x="2" y="2" width="12" height="4"/>
+  <!-- Handles -->
+  <rect class="gold" x="0" y="2" width="2" height="4"/>
+  <rect class="gold" x="14" y="2" width="2" height="4"/>
+  <!-- Cup body -->
+  <rect class="gold" x="3" y="6" width="10" height="2"/>
+  <rect class="gold" x="4" y="8" width="8" height="2"/>
+  <!-- Stem -->
+  <rect class="dark" x="6" y="10" width="4" height="2"/>
+  <!-- Base -->
+  <rect class="dark" x="4" y="12" width="8" height="2"/>
+  <rect class="dark" x="3" y="14" width="10" height="2"/>
+</svg>

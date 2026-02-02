@@ -67,8 +67,14 @@
                     </div>
                 </div>
                 <div class="profile-actions">
-                    <button onclick="showSettings()" class="btn-secondary">⚙️ Settings</button>
-                    <button onclick="showFriends()" class="btn-secondary">👥 Friends</button>
+                    <button onclick="showSettings()" class="btn-secondary btn-icon">
+                        <img src="../assets/imgs/icons/settings.svg" alt="Settings" class="icon">
+                        Settings
+                    </button>
+                    <button onclick="showFriends()" class="btn-secondary btn-icon">
+                        <img src="../assets/imgs/icons/friends.svg" alt="Friends" class="icon">
+                        Friends
+                    </button>
                 </div>
             </div>
 
@@ -102,7 +108,7 @@
 
             <!-- Favorite Game -->
             <div class="section-card" id="favorite-game-section">
-                <h2>⭐ Favorite Game</h2>
+                <h2><img src="../assets/imgs/icons/star.svg" alt="" class="icon section-icon"> Favorite Game</h2>
                 <div id="favorite-game-content">
                     <p class="muted">No favorite game set</p>
                 </div>
@@ -110,7 +116,7 @@
 
             <!-- Achievements -->
             <div class="section-card">
-                <h2>🏆 Achievements</h2>
+                <h2><img src="../assets/imgs/icons/trophy.svg" alt="" class="icon section-icon"> Achievements</h2>
                 <div id="achievements-list" class="achievements-grid">
                     <p class="muted">No achievements yet</p>
                 </div>
@@ -118,7 +124,7 @@
 
             <!-- Decorations -->
             <div class="section-card">
-                <h2>🎨 Profile Decorations</h2>
+                <h2><img src="../assets/imgs/icons/palette.svg" alt="" class="icon section-icon"> Profile Decorations</h2>
                 <div id="decorations-list" class="decorations-grid">
                     <!-- Decorations will be loaded here -->
                 </div>
@@ -129,7 +135,7 @@
         <div id="settings-modal" class="modal" style="display: none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>⚙️ Settings</h2>
+                    <h2><img src="../assets/imgs/icons/settings.svg" alt="" class="icon section-icon"> Settings</h2>
                     <button onclick="hideSettings()" class="close-btn">✕</button>
                 </div>
                 <div class="modal-body">
@@ -193,7 +199,7 @@
         <div id="friends-modal" class="modal" style="display: none;">
             <div class="modal-content modal-large">
                 <div class="modal-header">
-                    <h2>👥 Friends</h2>
+                    <h2><img src="../assets/imgs/icons/friends.svg" alt="" class="icon section-icon"> Friends</h2>
                     <button onclick="hideFriends()" class="close-btn">✕</button>
                 </div>
                 <div class="modal-body">
@@ -226,7 +232,7 @@
         <!-- Moderator Panel (for mods/admins) -->
         <div id="moderator-panel" style="display: none;">
             <div class="section-card">
-                <h2>🛡️ Moderator Panel</h2>
+                <h2><img src="../assets/imgs/icons/shield.svg" alt="" class="icon section-icon"> Moderator Panel</h2>
                 <div id="pending-items">
                     <p class="muted">Loading pending items...</p>
                 </div>

@@ -35,8 +35,8 @@ function showDevLogin() {
     if (isDev) {
         const container = document.getElementById('dev-login-container');
         container.innerHTML = `
-            <button onclick="devLogin()" class="btn-secondary" style="margin-top: 15px;">
-                🔧 Dev Login
+            <button onclick="devLogin()" class="btn-secondary btn-icon" style="margin-top: 15px;">
+                <img src="../assets/imgs/icons/wrench.svg" alt="" class="icon"> Dev Login
             </button>
         `;
     }

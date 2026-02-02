@@ -12,6 +12,31 @@ body {
     padding-bottom: 50px;
 }
 
+/* Icon styling */
+.icon {
+    width: 20px;
+    height: 20px;
+    vertical-align: middle;
+    image-rendering: pixelated;
+}
+
+.section-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+}
+
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-icon .icon {
+    width: 18px;
+    height: 18px;
+}
+
 /* Login Prompt */
 .login-box {
     text-align: center;
