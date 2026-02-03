@@ -3,3 +3,5 @@ node_modules/
 tmp/
 .env
 .DS_Store
+# Anime cache file (generated at runtime)
+src/config/anime_cache.json

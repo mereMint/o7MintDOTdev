@@ -15,6 +15,8 @@ let gameState = {
 const ANICOM_STORAGE_KEY = 'anicom_game_state';
 // Expiry time for saved game state (2 hours in milliseconds)
 const ANICOM_SAVE_EXPIRY_MS = 2 * 60 * 60 * 1000;
+// Minimum episode count required to create a "fewer episodes" challenge
+const MIN_EPISODES_FOR_FEWER_CHALLENGE = 2;
 
 // Save game state to localStorage
 function saveGameState() {
@@ -465,8 +467,8 @@ function generateChallenge() {
             }
         });
 
-        // Only add FEWER_EPISODES challenge if episodes > 1 (otherwise impossible)
-        if (anime.episodes > 1) {
+        // Only add FEWER_EPISODES challenge if episodes >= MIN_EPISODES_FOR_FEWER_CHALLENGE (otherwise impossible)
+        if (anime.episodes >= MIN_EPISODES_FOR_FEWER_CHALLENGE) {
             possibleChallenges.push({
                 type: CHALLENGE_TYPES.FEWER_EPISODES,
                 text: `Choose an anime with FEWER episodes than ${anime.episodes}`,

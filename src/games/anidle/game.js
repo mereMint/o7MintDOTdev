@@ -20,6 +20,8 @@ const ANIDLE_DAILY_STORAGE_KEY = 'anidle_daily_game_state';
 const ANIDLE_UNLIMITED_STORAGE_KEY = 'anidle_unlimited_game_state';
 // Expiry time for saved game state (2 hours in milliseconds) - only applies to unlimited mode
 const ANIDLE_SAVE_EXPIRY_MS = 2 * 60 * 60 * 1000;
+// Score comparison tolerance for floating point precision
+const SCORE_MATCH_TOLERANCE = 0.01;
 
 // Get storage key based on mode
 function getStorageKey(mode) {
@@ -605,7 +607,7 @@ function compareAnime(target, guess) {
     if (target.score && guess.score) {
         const diff = target.score - guess.score;
         // Score matches only if exactly equal (accounting for floating point precision)
-        if (Math.abs(diff) < 0.01) comparison.score_match = true;
+        if (Math.abs(diff) < SCORE_MATCH_TOLERANCE) comparison.score_match = true;
         else comparison.score_direction = diff > 0 ? '↑' : '↓';
     }
 
