@@ -236,6 +236,20 @@ pool.getConnection()
                 await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255)");
                 await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS avatar VARCHAR(255)");
 
+                // Migration: Make discord_id unique to prevent duplicate accounts
+                try {
+                    // Check if index exists
+                    const indexes = await conn.query("SHOW INDEX FROM users WHERE Key_name = 'unique_discord_id'");
+                    if (indexes.length === 0) {
+                        // Add unique constraint on discord_id
+                        await conn.query("ALTER TABLE users ADD UNIQUE KEY unique_discord_id (discord_id)");
+                        console.log("[OK] Added unique constraint on users.discord_id");
+                    }
+                } catch (idxErr) {
+                    // May fail if duplicate discord_ids exist - handle gracefully
+                    console.warn("Could not add unique constraint on discord_id:", idxErr.message);
+                }
+
                 // Migration for user_achievements: ensure id column exists
                 // Check if id column already exists before attempting migration
                 try {
@@ -1156,14 +1170,27 @@ app.get('/api/auth/discord/callback', async (req, res) => {
             let conn;
             try {
                 conn = await pool.getConnection();
-                await conn.query(
-                    "INSERT INTO users (username, discord_id, avatar) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE discord_id = ?, avatar = ?",
-                    [username, id, avatar, id, avatar]
+                
+                // Check if user exists by discord_id first
+                const existingUser = await conn.query(
+                    "SELECT username, role FROM users WHERE discord_id = ?",
+                    [id]
                 );
-                // Fetch user role
-                const roleRes = await conn.query("SELECT role FROM users WHERE username = ?", [username]);
-                if (roleRes.length > 0 && roleRes[0].role) {
-                    userRole = roleRes[0].role;
+                
+                if (existingUser.length > 0) {
+                    // User exists, update their info (in case username or avatar changed)
+                    await conn.query(
+                        "UPDATE users SET username = ?, avatar = ? WHERE discord_id = ?",
+                        [username, avatar, id]
+                    );
+                    userRole = existingUser[0].role || 'user';
+                } else {
+                    // New user, insert
+                    await conn.query(
+                        "INSERT INTO users (username, discord_id, avatar) VALUES (?, ?, ?)",
+                        [username, id, avatar]
+                    );
+                    // userRole defaults to 'user'
                 }
             } catch (err) {
                 console.error("Failed to sync user to DB:", err);
@@ -1599,6 +1626,43 @@ app.delete('/api/admin/data/:table/:id', adminMiddleware, async (req, res) => {
         }
     } catch (err) {
         console.error(`Admin Delete Error (${tableName}/${id}):`, err);
+        res.status(500).json({ error: "Delete Error: " + err.message });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// DELETE /api/admin/daily-challenge/:date_id/:game_id - Delete a daily challenge
+app.delete('/api/admin/daily-challenge/:date_id/:game_id', adminMiddleware, async (req, res) => {
+    if (useInMemory) return res.status(400).json({ error: "Memory mode - no deletion" });
+
+    const { date_id, game_id } = req.params;
+
+    if (!date_id || !game_id) {
+        return res.status(400).json({ error: "Both date_id and game_id are required" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+
+        // Delete the daily challenge
+        const result = await conn.query(
+            "DELETE FROM daily_challenges WHERE date_id = ? AND game_id = ?",
+            [date_id, game_id]
+        );
+
+        if (result.affectedRows > 0) {
+            // Clear memory cache for this challenge
+            const cacheKey = `${date_id}_${game_id}`;
+            delete memoryDailyCache[cacheKey];
+            
+            res.json({ success: true, deleted: result.affectedRows });
+        } else {
+            res.status(404).json({ error: "Daily challenge not found" });
+        }
+    } catch (err) {
+        console.error(`Admin Delete Daily Challenge Error (${date_id}/${game_id}):`, err);
         res.status(500).json({ error: "Delete Error: " + err.message });
     } finally {
         if (conn) conn.release();
