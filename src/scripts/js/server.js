@@ -771,20 +771,37 @@ app.post('/api/score', async (req, res) => {
                 const today = new Date().toISOString().split('T')[0];
                 
                 // Check if user already has a score for today
-                const existingScores = await conn.query(
-                    "SELECT id, score FROM scores WHERE game_id = ? AND username = ? AND board_id = 'daily' AND DATE(created_at) = ?",
-                    [game_id, user, today]
-                );
+                // Use discord_id if available to properly identify the user
+                let existingScores;
+                if (userDiscordId) {
+                    existingScores = await conn.query(
+                        "SELECT id, score FROM scores WHERE game_id = ? AND discord_id = ? AND board_id = 'daily' AND DATE(created_at) = ?",
+                        [game_id, userDiscordId, today]
+                    );
+                } else {
+                    // Fallback to username for users without discord_id (Anonymous users)
+                    existingScores = await conn.query(
+                        "SELECT id, score FROM scores WHERE game_id = ? AND username = ? AND discord_id IS NULL AND board_id = 'daily' AND DATE(created_at) = ?",
+                        [game_id, user, today]
+                    );
+                }
                 
                 if (existingScores.length > 0) {
                     const bestExisting = Math.max(...existingScores.map(s => s.score));
                     
                     if (score > bestExisting) {
                         // New score is better, delete old scores and insert new one
-                        await conn.query(
-                            "DELETE FROM scores WHERE game_id = ? AND username = ? AND board_id = 'daily' AND DATE(created_at) = ?",
-                            [game_id, user, today]
-                        );
+                        if (userDiscordId) {
+                            await conn.query(
+                                "DELETE FROM scores WHERE game_id = ? AND discord_id = ? AND board_id = 'daily' AND DATE(created_at) = ?",
+                                [game_id, userDiscordId, today]
+                            );
+                        } else {
+                            await conn.query(
+                                "DELETE FROM scores WHERE game_id = ? AND username = ? AND discord_id IS NULL AND board_id = 'daily' AND DATE(created_at) = ?",
+                                [game_id, user, today]
+                            );
+                        }
                         await conn.query(
                             "INSERT INTO scores (game_id, username, score, board_id, discord_id, avatar) VALUES (?, ?, ?, ?, ?, ?)",
                             [game_id, user, score, board, userDiscordId || null, userAvatar || null]
