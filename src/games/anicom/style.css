@@ -194,6 +194,21 @@ body {
     background-color: #1a1a1a;
     border-bottom: 1px solid #2a2a2a;
     color: #e0e0e0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.autocomplete-item-img {
+    width: 40px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.autocomplete-item-text {
+    flex: 1;
 }
 
 .autocomplete-items div:hover,
@@ -349,6 +364,21 @@ button {
     transition: all 0.3s;
 }
 
+.leaderboard-item-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.leaderboard-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
 .leaderboard-item:hover {
     background-color: #222;
     border-left-color: #1DCD9F;
@@ -373,7 +403,6 @@ button {
 .leaderboard-username {
     flex: 1;
     text-align: left;
-    margin-left: 15px;
     color: #e0e0e0;
     font-size: 1rem;
 }
