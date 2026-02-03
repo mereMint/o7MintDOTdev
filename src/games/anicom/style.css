@@ -1,0 +1,410 @@
+/* AniCom Styling */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #0a0a0a;
+    color: #e0e0e0;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+#user-display {
+    position: fixed;
+    top: 10px;
+    right: 20px;
+    background-color: rgba(29, 205, 159, 0.2);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #1DCD9F;
+    z-index: 100;
+}
+
+#game-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+#header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+#header h1 {
+    font-size: 3rem;
+    color: #1DCD9F;
+    margin-bottom: 10px;
+}
+
+#header p {
+    font-size: 1.2rem;
+    color: #888;
+}
+
+/* Stats Container */
+#stats-container {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+.stat-box {
+    background-color: #1a1a1a;
+    padding: 15px 30px;
+    border-radius: 10px;
+    border: 2px solid #2a2a2a;
+    text-align: center;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.9rem;
+    color: #888;
+    margin-bottom: 5px;
+}
+
+.stat-value {
+    display: block;
+    font-size: 2rem;
+    font-weight: bold;
+    color: #1DCD9F;
+}
+
+/* Challenge Container */
+#challenge-container {
+    background-color: #1a1a1a;
+    border: 2px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 30px;
+}
+
+#current-anime-display {
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+#current-anime-display h3,
+#challenge-prompt h3 {
+    color: #1DCD9F;
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+}
+
+.anime-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #e0e0e0;
+    margin-bottom: 10px;
+}
+
+.anime-details {
+    font-size: 1rem;
+    color: #aaa;
+    line-height: 1.6;
+}
+
+.anime-details .detail-item {
+    display: inline-block;
+    margin-right: 20px;
+    margin-bottom: 5px;
+}
+
+.detail-label {
+    color: #888;
+    font-weight: 500;
+}
+
+.detail-value {
+    color: #1DCD9F;
+    font-weight: bold;
+}
+
+.challenge-text {
+    font-size: 1.3rem;
+    color: #fff;
+    padding: 15px;
+    background-color: rgba(29, 205, 159, 0.1);
+    border-radius: 8px;
+    border-left: 4px solid #1DCD9F;
+}
+
+/* Guess Section */
+#guess-section {
+    margin-bottom: 30px;
+}
+
+#input-container {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+#guess-input {
+    width: 100%;
+    padding: 15px;
+    font-size: 1.1rem;
+    background-color: #1a1a1a;
+    border: 2px solid #2a2a2a;
+    border-radius: 8px;
+    color: #e0e0e0;
+    transition: border-color 0.3s;
+}
+
+#guess-input:focus {
+    outline: none;
+    border-color: #1DCD9F;
+}
+
+/* Autocomplete */
+.autocomplete-items {
+    position: absolute;
+    border: 2px solid #2a2a2a;
+    border-top: none;
+    z-index: 99;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 300px;
+    overflow-y: auto;
+    background-color: #1a1a1a;
+    border-radius: 0 0 8px 8px;
+}
+
+.autocomplete-items div {
+    padding: 12px;
+    cursor: pointer;
+    background-color: #1a1a1a;
+    border-bottom: 1px solid #2a2a2a;
+    color: #e0e0e0;
+}
+
+.autocomplete-items div:hover,
+.autocomplete-active {
+    background-color: #2a2a2a !important;
+}
+
+/* Buttons */
+button {
+    padding: 12px 30px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+#submit-btn {
+    width: 100%;
+    background-color: #1DCD9F;
+    color: #0a0a0a;
+}
+
+#submit-btn:hover {
+    background-color: #17b58a;
+    transform: translateY(-2px);
+}
+
+#submit-btn:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* History Container */
+#history-container {
+    background-color: #1a1a1a;
+    border: 2px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+#history-container h3 {
+    color: #1DCD9F;
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+}
+
+#used-anime-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.used-anime-item {
+    background-color: #2a2a2a;
+    padding: 8px 15px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #aaa;
+    border: 1px solid #3a3a3a;
+}
+
+/* Result Screen */
+#result-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.95);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 200;
+}
+
+#result-content {
+    background-color: #1a1a1a;
+    border: 3px solid #1DCD9F;
+    border-radius: 16px;
+    padding: 40px;
+    max-width: 500px;
+    text-align: center;
+}
+
+#result-title {
+    font-size: 2.5rem;
+    color: #1DCD9F;
+    margin-bottom: 20px;
+}
+
+#result-stats {
+    background-color: rgba(29, 205, 159, 0.1);
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+#result-stats p {
+    font-size: 1.3rem;
+    margin-bottom: 10px;
+}
+
+#result-stats span {
+    color: #1DCD9F;
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+#result-reason {
+    color: #aaa;
+    font-size: 1.1rem;
+    margin-bottom: 30px;
+    padding: 15px;
+    background-color: #2a2a2a;
+    border-radius: 8px;
+}
+
+#result-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+#play-again-btn {
+    background-color: #1DCD9F;
+    color: #0a0a0a;
+}
+
+#play-again-btn:hover {
+    background-color: #17b58a;
+}
+
+.back-btn {
+    background-color: #555;
+    color: #e0e0e0;
+}
+
+.back-btn:hover {
+    background-color: #666;
+}
+
+/* Floating Back Button */
+.floating-back-btn {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    background-color: rgba(29, 205, 159, 0.2);
+    color: #1DCD9F;
+    border: 2px solid #1DCD9F;
+    padding: 10px 20px;
+    font-size: 1rem;
+    z-index: 100;
+}
+
+.floating-back-btn:hover {
+    background-color: rgba(29, 205, 159, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
+    #header h1 {
+        font-size: 2rem;
+    }
+
+    #header p {
+        font-size: 1rem;
+    }
+
+    #stats-container {
+        gap: 15px;
+    }
+
+    .stat-box {
+        padding: 10px 20px;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+    }
+
+    .anime-title {
+        font-size: 1.2rem;
+    }
+
+    .challenge-text {
+        font-size: 1.1rem;
+    }
+
+    #result-content {
+        padding: 30px 20px;
+        margin: 20px;
+    }
+
+    #result-title {
+        font-size: 2rem;
+    }
+
+    #result-buttons {
+        flex-direction: column;
+    }
+}
+
+/* Loading Animation */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AniCom - Anime Comparison Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="user-display">Player: Loading...</div>
+
+    <div id="game-container">
+        <div id="header">
+            <h1>🎌 AniCom</h1>
+            <p>Keep the comparison chain going!</p>
+        </div>
+
+        <!-- Game Stats -->
+        <div id="stats-container">
+            <div class="stat-box">
+                <span class="stat-label">Round:</span>
+                <span id="round-count" class="stat-value">0</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-label">Score:</span>
+                <span id="score-count" class="stat-value">0</span>
+            </div>
+        </div>
+
+        <!-- Current Challenge Display -->
+        <div id="challenge-container">
+            <div id="current-anime-display">
+                <h3>Current Anime:</h3>
+                <div id="anime-info">
+                    <div id="anime-name" class="anime-title">Loading...</div>
+                    <div id="anime-details" class="anime-details"></div>
+                </div>
+            </div>
+
+            <div id="challenge-prompt">
+                <h3>Challenge:</h3>
+                <div id="challenge-text" class="challenge-text">Loading challenge...</div>
+            </div>
+        </div>
+
+        <!-- Guess Input -->
+        <div id="guess-section">
+            <div id="input-container">
+                <input type="text" id="guess-input" placeholder="Type anime name..." autocomplete="off">
+                <div id="autocomplete-list" class="autocomplete-items"></div>
+            </div>
+            <button id="submit-btn" onclick="submitGuess()">Submit Answer</button>
+        </div>
+
+        <!-- Used Anime History -->
+        <div id="history-container">
+            <h3>Used Anime (<span id="used-count">0</span>)</h3>
+            <div id="used-anime-list"></div>
+        </div>
+
+        <!-- Result Screen -->
+        <div id="result-screen" style="display: none;">
+            <div id="result-content">
+                <h2 id="result-title">Game Over!</h2>
+                <div id="result-stats">
+                    <p>Rounds Completed: <span id="final-rounds">0</span></p>
+                    <p>Final Score: <span id="final-score">0</span></p>
+                </div>
+                <div id="result-reason"></div>
+                <div id="result-buttons">
+                    <button id="play-again-btn" onclick="playAgain()">Play Again</button>
+                    <button onclick="window.history.back()" class="back-btn">Back to Hub</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button onclick="window.history.back()" class="floating-back-btn">← Back</button>
+
+    <script src="game.js"></script>
+</body>
+
+</html>

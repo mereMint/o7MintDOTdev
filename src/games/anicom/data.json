@@ -1,0 +1,66 @@
+{
+    "name": "AniCom",
+    "description": "Compare anime and keep the chain going! Each round gives you a challenge like 'choose an anime with a higher score' or 'choose one from the same studio'. Your choice becomes the next comparison target. Each anime can only be used once - how many rounds can you survive?",
+    "genre": "Puzzle",
+    "settings": {
+        "achievements": true,
+        "leaderboard": {
+            "key": "high_score",
+            "title": "Top Scores"
+        },
+        "phone": true
+    },
+    "images": [
+        "logo.svg"
+    ],
+    "achievements": [
+        {
+            "id": "first_round",
+            "title": "First Comparison",
+            "description": "Complete your first round in AniCom.",
+            "image": "logo.svg",
+            "secret": false,
+            "points": 50
+        },
+        {
+            "id": "round_5",
+            "title": "Getting Warmed Up",
+            "description": "Reach 5 rounds in a single game.",
+            "image": "logo.svg",
+            "secret": false,
+            "points": 100
+        },
+        {
+            "id": "round_10",
+            "title": "Perfect Ten",
+            "description": "Reach 10 rounds in a single game.",
+            "image": "logo.svg",
+            "secret": false,
+            "points": 200
+        },
+        {
+            "id": "round_20",
+            "title": "Double Digits Master",
+            "description": "Reach 20 rounds in a single game.",
+            "image": "logo.svg",
+            "secret": false,
+            "points": 300
+        },
+        {
+            "id": "genre_expert",
+            "title": "Genre Expert",
+            "description": "Successfully match anime by genre 10 times.",
+            "image": "logo.svg",
+            "secret": false,
+            "points": 150
+        },
+        {
+            "id": "studio_guru",
+            "title": "Studio Guru",
+            "description": "Successfully match anime by studio 10 times.",
+            "image": "logo.svg",
+            "secret": true,
+            "points": 150
+        }
+    ]
+}
