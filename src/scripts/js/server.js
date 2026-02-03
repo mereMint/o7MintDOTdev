@@ -676,6 +676,9 @@ app.get('/api/scores', async (req, res) => {
             LIMIT ?`,
             [gameId, boardId, limitInt]
         );
+        // Note: OR-based JOIN prevents optimal index usage but is necessary to support
+        // both discord_id-based matching (preferred) and username-based fallback (legacy).
+        // Performance is acceptable for limited result sets (LIMIT applied).
         res.json(rows);
     } catch (err) {
         // Fallback for missing column if schema isn't updated
@@ -787,8 +790,10 @@ app.post('/api/score', async (req, res) => {
                 }
                 
                 if (existingScores.length > 0) {
-                    const bestExisting = Math.max(...existingScores.map(s => s.score));
+                    // Find best existing score using reduce to avoid stack overflow with large arrays
+                    const bestExisting = existingScores.reduce((max, s) => Math.max(max, s.score), -Infinity);
                     
+                    // Only update if new score is strictly better (equal scores are ignored)
                     if (score > bestExisting) {
                         // New score is better, delete old scores and insert new one
                         if (userDiscordId) {
