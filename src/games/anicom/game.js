@@ -29,7 +29,9 @@ const CHALLENGE_TYPES = {
     HAS_GENRE: 'has_genre',
     HAS_TAG: 'has_tag',
     SCORE_RANGE: 'score_range',
-    MULTIPLE_GENRES: 'multiple_genres'
+    MULTIPLE_GENRES: 'multiple_genres',
+    MORE_EPISODES: 'more_episodes',
+    FEWER_EPISODES: 'fewer_episodes'
 };
 
 // User info
@@ -325,6 +327,25 @@ function generateChallenge() {
         }
     }
 
+    // Episode challenges (if anime has episode count)
+    if (anime.episodes && anime.episodes > 0) {
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.MORE_EPISODES,
+            text: `Choose an anime with MORE episodes than ${anime.episodes}`,
+            validator: (selectedAnime) => {
+                return selectedAnime.episodes && selectedAnime.episodes > anime.episodes;
+            }
+        });
+
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.FEWER_EPISODES,
+            text: `Choose an anime with FEWER episodes than ${anime.episodes}`,
+            validator: (selectedAnime) => {
+                return selectedAnime.episodes && selectedAnime.episodes < anime.episodes;
+            }
+        });
+    }
+
     // Select a random challenge from possible ones
     if (possibleChallenges.length === 0) {
         // Fallback: just pick any anime
@@ -493,37 +514,100 @@ function getFailureReason(selectedAnime) {
 
     switch (challenge.type) {
         case CHALLENGE_TYPES.HIGHER_SCORE:
-            return `${selectedAnime.title} has a score of ${selectedAnime.score?.toFixed(2) || 'N/A'}, which is not higher than ${current.score.toFixed(2)}.`;
+            if (!selectedAnime.score) {
+                return `${selectedAnime.title} has an unknown score, required: higher than ${current.score.toFixed(2)}.`;
+            }
+            return `${selectedAnime.title} has a score of ${selectedAnime.score.toFixed(2)}, not higher than ${current.score.toFixed(2)}.`;
         case CHALLENGE_TYPES.LOWER_SCORE:
-            return `${selectedAnime.title} has a score of ${selectedAnime.score?.toFixed(2) || 'N/A'}, which is not lower than ${current.score.toFixed(2)}.`;
+            if (!selectedAnime.score) {
+                return `${selectedAnime.title} has an unknown score, required: lower than ${current.score.toFixed(2)}.`;
+            }
+            return `${selectedAnime.title} has a score of ${selectedAnime.score.toFixed(2)}, not lower than ${current.score.toFixed(2)}.`;
         case CHALLENGE_TYPES.SCORE_RANGE:
-            return `${selectedAnime.title} has a score of ${selectedAnime.score?.toFixed(2) || 'N/A'}, which is not in the required range.`;
+            if (!selectedAnime.score) {
+                return `${selectedAnime.title} has an unknown score.`;
+            }
+            // Score range is ±0.5 from current anime's score, bounded by MAL's 1-10 scale
+            const lowerBound = Math.max(1, current.score - 0.5);
+            const upperBound = Math.min(10, current.score + 0.5);
+            return `${selectedAnime.title} has a score of ${selectedAnime.score.toFixed(2)}, not between ${lowerBound.toFixed(2)} and ${upperBound.toFixed(2)}.`;
         case CHALLENGE_TYPES.SAME_GENRE:
         case CHALLENGE_TYPES.HAS_GENRE:
-            return `${selectedAnime.title} does not have the required genre.`;
+            const requiredGenre = challenge.genre || 'the required genre';
+            const selectedGenres = selectedAnime.genres && selectedAnime.genres.length > 0 
+                ? selectedAnime.genres.join(', ') 
+                : 'no genres';
+            return `${selectedAnime.title} has genres: ${selectedGenres}, not ${requiredGenre}.`;
         case CHALLENGE_TYPES.DIFFERENT_GENRE:
-            return `${selectedAnime.title} shares at least one genre with ${current.title}.`;
+            const currentGenresStr = current.genres && current.genres.length > 0 
+                ? current.genres.join(', ') 
+                : 'unknown';
+            const sharedGenres = selectedAnime.genres && current.genres
+                ? selectedAnime.genres.filter(g => current.genres.includes(g))
+                : [];
+            // Validator should ensure sharedGenres.length > 0 when this is called
+            const sharedGenresList = sharedGenres.length > 0 ? sharedGenres.join(', ') : 'unknown genres';
+            return `${selectedAnime.title} shares genre(s): ${sharedGenresList} with ${current.title}.`;
         case CHALLENGE_TYPES.MULTIPLE_GENRES:
-            return `${selectedAnime.title} does not share at least two genres with ${current.title}.`;
+            const animeGenresList = selectedAnime.genres && selectedAnime.genres.length > 0 
+                ? selectedAnime.genres.join(', ') 
+                : 'no genres';
+            const matchingGenres = selectedAnime.genres && current.genres
+                ? selectedAnime.genres.filter(g => current.genres.includes(g))
+                : [];
+            if (matchingGenres.length === 0) {
+                return `${selectedAnime.title} has genres: ${animeGenresList}, but shares no genres with ${current.title} (required: at least 2).`;
+            }
+            return `${selectedAnime.title} has genres: ${animeGenresList}, only ${matchingGenres.length} genre(s) match with ${current.title} (required: at least 2).`;
         case CHALLENGE_TYPES.SAME_STUDIO:
-            return `${selectedAnime.title} is not made by the required studio.`;
+            const requiredStudio = challenge.studio || current.studio;
+            const selectedStudio = selectedAnime.studio || 'unknown studio';
+            return `${selectedAnime.title} is made by ${selectedStudio}, not ${requiredStudio}.`;
         case CHALLENGE_TYPES.DIFFERENT_STUDIO:
-            return `${selectedAnime.title} is made by the same studio (${current.studio}).`;
+            return `${selectedAnime.title} is made by ${selectedAnime.studio || 'unknown'}, same as ${current.title} (${current.studio}).`;
         case CHALLENGE_TYPES.SAME_TAG:
         case CHALLENGE_TYPES.HAS_TAG:
-            return `${selectedAnime.title} does not have the required tag.`;
+            const requiredTag = challenge.tag ? challenge.tag.name : 'the required tag';
+            const selectedTags = selectedAnime.tags && selectedAnime.tags.length > 0 
+                ? selectedAnime.tags.map(t => t.name).join(', ') 
+                : 'no tags';
+            return `${selectedAnime.title} has tags: ${selectedTags}, not ${requiredTag}.`;
         case CHALLENGE_TYPES.SAME_SOURCE:
-            return `${selectedAnime.title} does not have the same source material (${selectedAnime.source || 'N/A'} vs ${current.source}).`;
+            const selectedSource = selectedAnime.source || 'Unknown';
+            const requiredSource = current.source || 'Unknown';
+            return `${selectedAnime.title} has source: ${selectedSource}, not ${requiredSource}.`;
         case CHALLENGE_TYPES.DIFFERENT_SOURCE:
-            return `${selectedAnime.title} has the same source material (${current.source}).`;
+            return `${selectedAnime.title} has source: ${selectedAnime.source || 'Unknown'}, same as ${current.title} (${current.source}).`;
         case CHALLENGE_TYPES.SAME_YEAR:
-            return `${selectedAnime.title} was not released in ${current.release_date}.`;
+            if (!selectedAnime.release_date) {
+                return `${selectedAnime.title} has an unknown release date, required year: ${current.release_date}.`;
+            }
+            return `${selectedAnime.title} was released in ${selectedAnime.release_date}, not ${current.release_date}.`;
         case CHALLENGE_TYPES.EARLIER_YEAR:
-            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'N/A'}, which is not before ${current.release_date}.`;
+            if (!selectedAnime.release_date) {
+                return `${selectedAnime.title} has an unknown release date, required: before ${current.release_date}.`;
+            }
+            return `${selectedAnime.title} was released in ${selectedAnime.release_date}, not before ${current.release_date}.`;
         case CHALLENGE_TYPES.LATER_YEAR:
-            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'N/A'}, which is not after ${current.release_date}.`;
+            if (!selectedAnime.release_date) {
+                return `${selectedAnime.title} has an unknown release date, required: after ${current.release_date}.`;
+            }
+            return `${selectedAnime.title} was released in ${selectedAnime.release_date}, not after ${current.release_date}.`;
         case CHALLENGE_TYPES.WITHIN_YEAR_RANGE:
-            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'N/A'}, which is not in the required year range.`;
+            if (!selectedAnime.release_date) {
+                return `${selectedAnime.title} has an unknown release date.`;
+            }
+            return `${selectedAnime.title} was released in ${selectedAnime.release_date}, not in the required year range.`;
+        case CHALLENGE_TYPES.MORE_EPISODES:
+            if (!selectedAnime.episodes) {
+                return `${selectedAnime.title} has an unknown episode count, required: more than ${current.episodes}.`;
+            }
+            return `${selectedAnime.title} has ${selectedAnime.episodes} episodes, not more than ${current.episodes}.`;
+        case CHALLENGE_TYPES.FEWER_EPISODES:
+            if (!selectedAnime.episodes) {
+                return `${selectedAnime.title} has an unknown episode count, required: fewer than ${current.episodes}.`;
+            }
+            return `${selectedAnime.title} has ${selectedAnime.episodes} episodes, not fewer than ${current.episodes}.`;
         default:
             return 'The selected anime does not meet the challenge requirements.';
     }
@@ -587,7 +671,7 @@ async function checkAchievements() {
 
     for (const achievementId of achievementsToAward) {
         try {
-            await fetch('/api/achievements', {
+            await fetch('/api/achievements/unlock', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -609,43 +693,78 @@ function playAgain() {
     startGame();
 }
 
+// Search anime using API (similar to Anidle)
+async function searchAnime(query) {
+    try {
+        // Use Jikan API for anime search
+        const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=15&sfw`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        const results = data.data || [];
+
+        // Filter to only TV and Movie types
+        return results.filter(a => {
+            if (a.type !== 'TV' && a.type !== 'Movie') return false;
+            // Filter out already used anime
+            if (gameState.usedAnimeIds.has(a.mal_id)) return false;
+            return true;
+        });
+    } catch (err) {
+        console.error('Jikan API Error:', err);
+        // Fallback to cache search
+        return gameState.animeCache
+            .filter(anime => {
+                if (gameState.usedAnimeIds.has(anime.mal_id)) return false;
+                const title = (anime.title || '').toLowerCase();
+                const titleEng = (anime.title_english || '').toLowerCase();
+                return title.includes(query.toLowerCase()) || titleEng.includes(query.toLowerCase());
+            })
+            .slice(0, 10);
+    }
+}
+
 // Setup autocomplete
 function setupAutocomplete() {
     const input = document.getElementById('guess-input');
     const autocompleteList = document.getElementById('autocomplete-list');
+    let debounceTimer;
 
     input.addEventListener('input', function() {
-        const value = this.value.toLowerCase().trim();
+        const value = this.value.trim();
         
         // Close any already open lists
         autocompleteList.innerHTML = '';
         selectedAutocompleteIndex = -1;
 
+        clearTimeout(debounceTimer);
+
         if (!value || value.length < 2) {
             return;
         }
 
-        // Filter anime that match the input and haven't been used
-        const matches = gameState.animeCache
-            .filter(anime => {
-                if (gameState.usedAnimeIds.has(anime.mal_id)) return false;
-                
-                const title = (anime.title || '').toLowerCase();
-                const titleEng = (anime.title_english || '').toLowerCase();
-                return title.includes(value) || titleEng.includes(value);
-            })
-            .slice(0, 10); // Limit to 10 results
+        // Debounce search to avoid too many API calls
+        debounceTimer = setTimeout(async () => {
+            const matches = await searchAnime(value);
 
-        matches.forEach(anime => {
-            const div = document.createElement('div');
-            const displayTitle = anime.title_english || anime.title;
-            div.innerHTML = displayTitle;
-            div.addEventListener('click', function() {
-                input.value = displayTitle;
-                autocompleteList.innerHTML = '';
+            if (matches.length === 0) {
+                return;
+            }
+
+            matches.forEach(anime => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                
+                // Use title from API response or cache
+                const displayTitle = anime.title_english || anime.title;
+                div.textContent = displayTitle;
+                
+                div.addEventListener('click', function() {
+                    input.value = displayTitle;
+                    autocompleteList.innerHTML = '';
+                });
+                autocompleteList.appendChild(div);
             });
-            autocompleteList.appendChild(div);
-        });
+        }, 300); // 300ms debounce delay
     });
 
     // Handle keyboard navigation
