@@ -20,6 +20,7 @@ let availableMaps = []; // Maps available for download
 // Game settings (loaded from localStorage)
 let settings = {
     audioOffset: 0,
+    startDelay: 0,
     keyRed: 'KeyD',
     keyBlue: 'KeyK',
     keyPause: 'Escape',
@@ -35,6 +36,7 @@ let audio = null;
 let gameStartTime = 0;
 let isPaused = false;
 let animationFrameId = null;
+let backgroundImage = null; // Background image for gameplay
 
 // Input state tracking for visual feedback
 let keysPressed = {
@@ -55,7 +57,7 @@ let judgmentCounts = { perfect: 0, great: 0, good: 0, miss: 0 };
 // Visual settings
 const CENTER_X = () => canvas.width / 2;
 const CENTER_Y = () => canvas.height / 2;
-const RING_RADIUS = 60; // The target hit area radius
+const RING_RADIUS = 80; // The target hit area radius (increased for better visibility)
 // const RING_THICKNESS = 15; // Removed
 const NOTE_SPAWN_RADIUS = 400;
 const NOTE_SIZE = 20;
@@ -435,6 +437,7 @@ function loadSettings() {
 
 function saveSettings() {
     settings.audioOffset = parseInt(document.getElementById('audio-offset').value);
+    settings.startDelay = parseInt(document.getElementById('start-delay').value);
     settings.volume = parseInt(document.getElementById('volume').value) / 100;
     settings.mouseKey = document.getElementById('mouse-key').value;
     settings.approachRate = parseInt(document.getElementById('approach-rate').value);
@@ -450,6 +453,8 @@ function saveSettings() {
 function updateSettingsUI() {
     document.getElementById('audio-offset').value = settings.audioOffset;
     document.getElementById('offset-value').textContent = `${settings.audioOffset}ms`;
+    document.getElementById('start-delay').value = settings.startDelay;
+    document.getElementById('start-delay-value').textContent = `${settings.startDelay}ms`;
     document.getElementById('volume').value = settings.volume * 100;
     document.getElementById('volume-value').textContent = `${Math.round(settings.volume * 100)}%`;
     document.getElementById('key-red').textContent = getKeyName(settings.keyRed);
@@ -469,6 +474,9 @@ function updateSettingsUI() {
     // Slider listeners
     document.getElementById('audio-offset').oninput = (e) => {
         document.getElementById('offset-value').textContent = `${e.target.value}ms`;
+    };
+    document.getElementById('start-delay').oninput = (e) => {
+        document.getElementById('start-delay-value').textContent = `${e.target.value}ms`;
     };
     document.getElementById('volume').oninput = (e) => {
         document.getElementById('volume-value').textContent = `${e.target.value}%`;
@@ -546,6 +554,45 @@ async function startGame() {
         return;
     }
 
+    // Load background image if available
+    backgroundImage = null;
+    if (currentMap.backgroundFile) {
+        try {
+            let bgPath;
+            if (song.path) {
+                bgPath = `${song.path}/${currentMap.backgroundFile}`;
+            } else {
+                bgPath = `maps/${song.id}/${currentMap.backgroundFile}`;
+            }
+            
+            const img = new Image();
+            img.src = bgPath;
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+            });
+            backgroundImage = img;
+        } catch (e) {
+            console.log('Background image load failed, continuing without background');
+            backgroundImage = null;
+        }
+    }
+    // Also check for base64 background data (from drafts/localStorage)
+    if (!backgroundImage && currentMap.backgroundData) {
+        try {
+            const img = new Image();
+            img.src = currentMap.backgroundData;
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+            });
+            backgroundImage = img;
+        } catch (e) {
+            console.log('Background data load failed');
+            backgroundImage = null;
+        }
+    }
+
     // Load audio - for localStorage maps, we need to handle audio differently
     try {
         let audioPath;
@@ -583,13 +630,25 @@ async function startGame() {
     // Show game screen
     showScreen('game-screen');
 
-    // Start after short delay
+    // Start after short delay (use startDelay setting for music)
+    const baseDelay = 1000; // Base delay before game starts
+    const musicDelay = settings.startDelay || 0; // Additional delay before music starts
+    
     setTimeout(() => {
-        if (audio) audio.play();
         gameStartTime = performance.now();
         isPaused = false;
+        
+        // Start music after the configured delay
+        if (audio) {
+            setTimeout(() => {
+                if (!isPaused && currentState === GameState.PLAYING) {
+                    audio.play();
+                }
+            }, musicDelay);
+        }
+        
         gameLoop();
-    }, 1000);
+    }, baseDelay);
 }
 
 function updateAR(val) {
@@ -686,6 +745,44 @@ function getCurrentTime() {
 function drawBackground() {
     const cx = CENTER_X();
     const cy = CENTER_Y();
+
+    // Draw background image if available (stretched to fill, blurred)
+    if (backgroundImage) {
+        // Save context state
+        ctx.save();
+        
+        // Apply blur filter
+        ctx.filter = 'blur(8px)';
+        
+        // Calculate dimensions to cover the entire canvas (cover mode)
+        const imgRatio = backgroundImage.width / backgroundImage.height;
+        const canvasRatio = canvas.width / canvas.height;
+        let drawW, drawH, drawX, drawY;
+        
+        if (imgRatio > canvasRatio) {
+            // Image is wider - fit by height
+            drawH = canvas.height;
+            drawW = canvas.height * imgRatio;
+            drawX = (canvas.width - drawW) / 2;
+            drawY = 0;
+        } else {
+            // Image is taller - fit by width
+            drawW = canvas.width;
+            drawH = canvas.width / imgRatio;
+            drawX = 0;
+            drawY = (canvas.height - drawH) / 2;
+        }
+        
+        ctx.drawImage(backgroundImage, drawX, drawY, drawW, drawH);
+        
+        // Reset filter and add dark overlay for visibility
+        ctx.filter = 'none';
+        ctx.fillStyle = 'rgba(10, 10, 26, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Restore context state
+        ctx.restore();
+    }
 
     // Subtle pulsing background circles
     const pulse = Math.sin(performance.now() / 500) * 0.1 + 0.9;

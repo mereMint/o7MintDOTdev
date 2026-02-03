@@ -205,6 +205,8 @@
             width: 100%;
             background: #111;
             border-bottom: 1px solid #333;
+            cursor: pointer;
+            z-index: 5;
         }
 
         .timeline-tracks {
@@ -562,6 +564,7 @@
 
             <div class="timeline-container">
                 <div class="timeline-controls">
+                    <button class="play-btn" id="stop-btn" onclick="stopAndReset()" title="Stop and go to start">⏹</button>
                     <button class="play-btn" id="play-btn" onclick="togglePlay()">▶</button>
                     <button class="play-btn" id="timeline-record-btn" onclick="toggleRecordMode()" style="color: #ff5555;">●</button>
                     <span class="time-display" id="time-display">0:00.000</span>
@@ -620,11 +623,13 @@
         let copiedNotes = []; // Clipboard
         let currentTool = 'red';
         let audio = null;
+        let audioData = null; // Base64 audio data for drafts
         let isPlaying = false;
         let zoomLevel = 5;
         let pixelsPerMs = 0.1;
         let backgroundImage = null;
         let backgroundFilename = '';
+        let backgroundData = null; // Base64 background data for drafts
         let isDraggingPlayhead = false;
         let isDraggingNote = false;
         let isResizingHold = false;
@@ -717,8 +722,47 @@
                 updateTimeline();
             });
 
+            // Snap select change - update grid
+            document.getElementById('snap-select').addEventListener('change', () => {
+                updateTimeline();
+            });
+
+            // BPM change - update grid
+            document.getElementById('song-bpm').addEventListener('change', () => {
+                updateTimeline();
+            });
+
             // Timeline click to add notes
             document.getElementById('timeline').addEventListener('click', handleTimelineClick);
+
+            // Ruler click to seek
+            document.getElementById('timeline-ruler').addEventListener('click', (e) => {
+                if (!audio) return;
+                e.stopPropagation(); // Prevent adding notes
+                
+                const timeline = document.getElementById('timeline');
+                const scroll = document.getElementById('timeline-scroll');
+                const rect = timeline.getBoundingClientRect();
+                const x = e.clientX - rect.left + scroll.scrollLeft;
+                const time = Math.max(0, x / pixelsPerMs);
+                
+                // Clamp to audio duration
+                const clampedTime = Math.min(time, audio.duration * 1000);
+                audio.currentTime = clampedTime / 1000;
+                
+                // Update playhead
+                const playhead = document.getElementById('playhead');
+                playhead.style.left = `${clampedTime * pixelsPerMs}px`;
+                
+                // Update time display
+                const mins = Math.floor(audio.currentTime / 60);
+                const secs = Math.floor(audio.currentTime % 60);
+                const ms = Math.floor((audio.currentTime % 1) * 1000);
+                document.getElementById('time-display').textContent =
+                    `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+                
+                drawPreview(clampedTime);
+            });
 
             // Timeline Right-Click (Context Menu)
             document.getElementById('timeline').addEventListener('contextmenu', (e) => {
@@ -980,6 +1024,29 @@
             }
         }
 
+        function stopAndReset() {
+            if (!audio) return;
+            
+            // Stop playback and go to beginning
+            audio.pause();
+            audio.currentTime = 0;
+            isPlaying = false;
+            document.getElementById('play-btn').textContent = '▶';
+            
+            // Update playhead position
+            const playhead = document.getElementById('playhead');
+            playhead.style.left = '0px';
+            
+            // Update time display
+            document.getElementById('time-display').textContent = '0:00.000';
+            
+            // Scroll timeline to beginning
+            document.getElementById('timeline-scroll').scrollLeft = 0;
+            
+            // Update preview
+            drawPreview(0);
+        }
+
         // ===== BACKGROUND =====
         function loadBackground() {
             document.getElementById('bg-input').click();
@@ -994,6 +1061,7 @@
 
             const reader = new FileReader();
             reader.onload = (event) => {
+                backgroundData = event.target.result; // Store base64 data for drafts
                 const img = new Image();
                 img.onload = () => {
                     backgroundImage = img;
@@ -1036,40 +1104,91 @@
         function updateTimeline() {
             const timeline = document.getElementById('timeline');
             const ruler = document.getElementById('timeline-ruler');
+            const tracks = document.querySelector('.timeline-tracks');
 
             // Calculate timeline width
             const duration = audio ? audio.duration * 1000 : 60000;
             const width = duration * pixelsPerMs;
             timeline.style.width = `${Math.max(width, window.innerWidth)}px`;
 
-            // Draw ruler
-            ruler.innerHTML = '';
-            const beatInterval = 60000 / (parseInt(document.getElementById('song-bpm').value) || 120);
+            // Get snap settings
+            const snapDivisor = parseInt(document.getElementById('snap-select').value) || 0;
+            const bpm = parseInt(document.getElementById('song-bpm').value) || 120;
+            const beatInterval = 60000 / bpm;
 
+            // Draw ruler with beat markers
+            ruler.innerHTML = '';
+            
             for (let t = 0; t < duration; t += beatInterval) {
+                const isMeasureStart = t % (beatInterval * 4) === 0;
                 const marker = document.createElement('div');
                 marker.style.cssText = `
                     position: absolute;
                     left: ${t * pixelsPerMs}px;
                     top: 0;
                     height: 100%;
-                    width: 1px;
-                    background: ${t % (beatInterval * 4) === 0 ? '#555' : '#333'};
+                    width: ${isMeasureStart ? '2px' : '1px'};
+                    background: ${isMeasureStart ? '#666' : '#444'};
+                    pointer-events: none;
                 `;
                 ruler.appendChild(marker);
 
                 // Time labels every 4 beats
-                if (t % (beatInterval * 4) === 0) {
+                if (isMeasureStart) {
                     const label = document.createElement('span');
                     label.style.cssText = `
                         position: absolute;
                         left: ${t * pixelsPerMs + 5}px;
                         top: 5px;
                         font-size: 10px;
-                        color: #666;
+                        color: #888;
+                        pointer-events: none;
                     `;
                     label.textContent = `${Math.floor(t / 1000)}s`;
                     ruler.appendChild(label);
+                }
+            }
+
+            // Draw grid lines in tracks based on snap setting
+            // Remove old grid lines
+            document.querySelectorAll('.track-grid-line').forEach(el => el.remove());
+            
+            if (snapDivisor > 0) {
+                const msPerSnap = beatInterval / snapDivisor;
+                const trackElements = tracks.querySelectorAll('.track');
+                
+                for (let t = 0; t < duration; t += msPerSnap) {
+                    const isBeat = Math.abs(t % beatInterval) < 1;
+                    const isMeasureStart = Math.abs(t % (beatInterval * 4)) < 1;
+                    
+                    trackElements.forEach(track => {
+                        const gridLine = document.createElement('div');
+                        gridLine.className = 'track-grid-line';
+                        let lineColor, lineWidth;
+                        
+                        if (isMeasureStart) {
+                            lineColor = 'rgba(255, 255, 255, 0.3)';
+                            lineWidth = '2px';
+                        } else if (isBeat) {
+                            lineColor = 'rgba(255, 255, 255, 0.15)';
+                            lineWidth = '1px';
+                        } else {
+                            lineColor = 'rgba(255, 255, 255, 0.05)';
+                            lineWidth = '1px';
+                        }
+                        
+                        gridLine.style.cssText = `
+                            position: absolute;
+                            left: ${t * pixelsPerMs}px;
+                            top: 0;
+                            height: 100%;
+                            width: ${lineWidth};
+                            background: ${lineColor};
+                            pointer-events: none;
+                            z-index: 0;
+                        `;
+                        track.appendChild(gridLine);
+                    });
                 }
             }
 
@@ -1579,10 +1698,24 @@
                 difficultyLevel: document.getElementById('difficulty-level').value,
                 bpm: document.getElementById('song-bpm').value,
                 notes: notes,
-                backgroundFilename: backgroundFilename
+                backgroundFilename: backgroundFilename,
+                backgroundData: backgroundData // Save background image data
             };
-            localStorage.setItem('rhythm_circle_draft', JSON.stringify(mapData));
-            alert('Draft saved to browser!');
+            
+            try {
+                localStorage.setItem('rhythm_circle_draft', JSON.stringify(mapData));
+                alert('Draft saved to browser!');
+            } catch (e) {
+                // localStorage might be full due to background data size
+                if (e.name === 'QuotaExceededError') {
+                    // Try saving without background data
+                    delete mapData.backgroundData;
+                    localStorage.setItem('rhythm_circle_draft', JSON.stringify(mapData));
+                    alert('Draft saved (background image too large to save)');
+                } else {
+                    alert('Failed to save draft: ' + e.message);
+                }
+            }
         }
 
         function loadDraft() {
@@ -1600,10 +1733,24 @@
                 document.getElementById('song-bpm').value = data.bpm || 120;
                 notes = data.notes || [];
                 backgroundFilename = data.backgroundFilename || '';
+                backgroundData = data.backgroundData || null;
                 document.getElementById('bg-filename').textContent = backgroundFilename || 'No background';
+                
+                // Load background image from saved data
+                if (backgroundData) {
+                    const img = new Image();
+                    img.onload = () => {
+                        backgroundImage = img;
+                        drawPreview();
+                    };
+                    img.src = backgroundData;
+                } else {
+                    backgroundImage = null;
+                }
+                
                 updateTimeline();
                 drawPreview();
-                alert('Draft loaded successfully!');
+                alert('Draft loaded successfully!' + (data.backgroundData ? ' (with background)' : ''));
             } catch (e) {
                 alert('Failed to load draft.');
             }
