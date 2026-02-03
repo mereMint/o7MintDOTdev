@@ -527,7 +527,7 @@ function getFailureReason(selectedAnime) {
             if (!selectedAnime.score) {
                 return `${selectedAnime.title} has an unknown score.`;
             }
-            // Get the range from the challenge (it was stored during generation)
+            // Score range is ±0.5 from current anime's score, bounded by MAL's 1-10 scale
             const lowerBound = Math.max(1, current.score - 0.5);
             const upperBound = Math.min(10, current.score + 0.5);
             return `${selectedAnime.title} has a score of ${selectedAnime.score.toFixed(2)}, not between ${lowerBound.toFixed(2)} and ${upperBound.toFixed(2)}.`;
@@ -546,7 +546,8 @@ function getFailureReason(selectedAnime) {
                 ? selectedAnime.genres.filter(g => current.genres.includes(g))
                 : [];
             if (sharedGenres.length === 0) {
-                return `${selectedAnime.title} unexpectedly shares no genres with ${current.title}.`;
+                // This shouldn't happen if validator worked correctly, but handle gracefully
+                return `${selectedAnime.title} shares genres with ${current.title}.`;
             }
             return `${selectedAnime.title} shares genre(s): ${sharedGenres.join(', ')} with ${current.title}.`;
         case CHALLENGE_TYPES.MULTIPLE_GENRES:
