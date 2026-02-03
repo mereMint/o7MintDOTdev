@@ -526,11 +526,6 @@
                 <button class="tool-btn spam" data-type="spam" onclick="selectTool('spam')">Spam</button>
             </div>
 
-            <div class="form-group">
-                <label>Angle (0-360°)</label>
-                <input type="number" id="note-angle" value="0" min="0" max="360">
-            </div>
-
             <div class="form-group" id="hold-duration-group" style="display: none;">
                 <label>Hold Duration (ms)</label>
                 <input type="number" id="hold-duration" value="1000" min="100">
@@ -549,10 +544,14 @@
             <div class="help-text">
                 <strong>Shortcuts:</strong><br>
                 Space - Play/Pause<br>
-                1-4 - Select Tool<br>
+                1-4 - Select Tool / Add Note (recording)<br>
+                R - Toggle Record Mode<br>
                 Click Timeline - Add Note<br>
+                Shift+Click - Multi-select<br>
                 Drag Playhead - Seek<br>
                 Delete - Remove Selected<br>
+                Ctrl+Z/Y - Undo/Redo<br>
+                Ctrl+C/V - Copy/Paste<br>
             </div>
         </div>
 
@@ -564,7 +563,7 @@
             <div class="timeline-container">
                 <div class="timeline-controls">
                     <button class="play-btn" id="play-btn" onclick="togglePlay()">▶</button>
-                    <button class="play-btn" id="record-btn" onclick="toggleRecord()" style="color: #ff5555;">●</button>
+                    <button class="play-btn" id="timeline-record-btn" onclick="toggleRecordMode()" style="color: #ff5555;">●</button>
                     <span class="time-display" id="time-display">0:00.000</span>
                     <div style="width: 1px; height: 30px; background: #333; margin: 0 10px;"></div>
                     <select id="snap-select"
@@ -704,19 +703,6 @@
             // Fix sticking drag by ensuring mouseup on window clears everything
             window.addEventListener('mouseup', handleGlobalMouseUp);
         });
-
-        function toggleRecord() {
-            isRecording = !isRecording;
-            const btn = document.getElementById('record-btn');
-            if (isRecording) {
-                btn.style.background = '#aa0000';
-                btn.style.color = 'white';
-                if (!isPlaying) togglePlay(); // Auto-start play on record
-            } else {
-                btn.style.background = '#333';
-                btn.style.color = '#ff5555';
-            }
-        }
 
         function setupEventListeners() {
             // Audio file input
@@ -1164,6 +1150,11 @@
             if (isDraggingPlayhead || isDraggingNote || wasDragging) return;
             // Also prevent if clicking a note marker (handled by note click/drag)
             if (e.target.classList.contains('note-marker')) return;
+            // Prevent if clicking on hold trail or resize handle
+            if (e.target.classList.contains('hold-trail') || e.target.classList.contains('hold-resize-handle')) return;
+
+            // Clear selection when clicking on empty timeline space
+            selectedNotes.clear();
 
             const timeline = document.getElementById('timeline');
             const rect = timeline.getBoundingClientRect();
@@ -1211,12 +1202,10 @@
 
         function addNote(time) {
             saveState(); // Save before adding
-            const angle = parseInt(document.getElementById('note-angle').value) || 0;
 
             const note = {
                 time: time,
-                type: currentTool,
-                angle: angle
+                type: currentTool
             };
 
             if (currentTool === 'hold') {
@@ -1265,7 +1254,7 @@
             list.innerHTML = notes.map((note, i) => `
                 <div class="note-item" onclick="selectNote(${i})">
                     <span class="type ${note.type}">${note.type}</span>
-                    <span>${(note.time / 1000).toFixed(2)}s @ ${note.angle}°</span>
+                    <span>${(note.time / 1000).toFixed(2)}s${note.endTime ? ' (' + ((note.endTime - note.time) / 1000).toFixed(2) + 's)' : ''}</span>
                     <button class="delete-btn" onclick="event.stopPropagation(); deleteNote(${i})">×</button>
                 </div>
             `).join('');
@@ -1393,6 +1382,10 @@
                     e.preventDefault();
                     togglePlay();
                     break;
+                case 'KeyR':
+                    e.preventDefault();
+                    toggleRecordMode();
+                    break;
                 case 'Digit1':
                     if (isRecording && isPlaying) { addNoteAtCurrentTime('red'); }
                     else { selectTool('red'); }
@@ -1411,8 +1404,8 @@
                     break;
                 case 'Delete':
                 case 'Backspace':
-                    if (selectedNote !== null) {
-                        deleteNote(selectedNote);
+                    if (selectedNotes.size > 0) {
+                        deleteSelectedNotes();
                     }
                     break;
             }
@@ -1478,36 +1471,53 @@
         // ===== LIVE RECORDING =====
         function toggleRecordMode() {
             isRecording = !isRecording;
-            const btn = document.getElementById('record-btn');
-            if (isRecording) {
-                btn.style.background = '#ff3366';
-                btn.style.color = '#fff';
-                btn.textContent = '⏺ Recording...';
-            } else {
-                btn.style.background = '';
-                btn.style.color = '';
-                btn.textContent = '⏺ Record';
-            }
-        }
-
-        function handleKeyboard(e) {
-            if (e.code === 'Space') {
-                e.preventDefault();
-                togglePlay();
-                return;
-            }
-
-            // Live Recording Logic
-            if (isRecording && isPlaying && audio) {
-                // Ignore if key currently held
-                if (recordingKeys[e.code]) return;
-
-                const validKeys = ['KeyZ', 'KeyX', 'KeyC', 'KeyV']; // Example keys
-                if (validKeys.includes(e.code) || true) { // Allow any key for now? Or specific?
-                    recordingKeys[e.code] = audio.currentTime * 1000;
+            
+            // Update header record button
+            const headerBtn = document.getElementById('record-btn');
+            if (headerBtn) {
+                if (isRecording) {
+                    headerBtn.style.background = '#ff3366';
+                    headerBtn.style.color = '#fff';
+                    headerBtn.textContent = '⏺ Recording...';
+                } else {
+                    headerBtn.style.background = '';
+                    headerBtn.style.color = '';
+                    headerBtn.textContent = '⏺ Record';
                 }
             }
+            
+            // Update timeline record button
+            const timelineBtn = document.getElementById('timeline-record-btn');
+            if (timelineBtn) {
+                if (isRecording) {
+                    timelineBtn.style.background = '#aa0000';
+                    timelineBtn.style.color = 'white';
+                } else {
+                    timelineBtn.style.background = '';
+                    timelineBtn.style.color = '#ff5555';
+                }
+            }
+            
+            // Auto-start playback when recording starts
+            if (isRecording && !isPlaying && audio) {
+                togglePlay();
+            }
         }
+
+        // Live recording keydown handler - stores key press start times
+        function handleRecordingKeyDown(e) {
+            if (!isRecording || !isPlaying || !audio) return;
+            if (e.target.tagName === 'INPUT') return;
+            
+            // Ignore if key currently held
+            if (recordingKeys[e.code]) return;
+            
+            // Record the start time for this key
+            recordingKeys[e.code] = audio.currentTime * 1000;
+        }
+
+        // Add recording keydown listener
+        document.addEventListener('keydown', handleRecordingKeyDown);
 
         document.addEventListener('keyup', (e) => {
             if (isRecording && isPlaying && audio && recordingKeys[e.code]) {

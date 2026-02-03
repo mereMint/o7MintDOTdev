@@ -832,22 +832,30 @@ function drawNotes(currentTime) {
             const progressEnd = 1 - (timeUntilEnd / APPROACH_TIME);
             endRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progressEnd);
 
+            // Calculate ring thickness based on hold duration and AR
+            // Formula: thickness = base_thickness * (duration / 1000) * (AR / 5)
+            const holdDuration = note.endTime - note.time;
+            const baseThickness = 8; // Same as normal note lineWidth
+            const arFactor = Math.max(1, AR) / 5; // Normalize AR (AR 5 = factor 1)
+            const durationFactor = Math.min(holdDuration / 1000, 3); // Cap at 3 seconds worth
+            const ringThickness = Math.max(8, baseThickness * durationFactor * arFactor);
+
             // Clamp for drawing
-            let drawStart = Math.max(0, startRadius);
+            let drawStart = Math.max(RING_RADIUS, startRadius);
             let drawEnd = Math.min(NOTE_SPAWN_RADIUS, endRadius);
 
             if (drawStart < drawEnd) {
-                // Draw the duration band
+                // Draw the duration band with calculated thickness
                 ctx.beginPath();
                 ctx.arc(cx, cy, (drawStart + drawEnd) / 2, 0, Math.PI * 2);
                 ctx.strokeStyle = color;
-                ctx.lineWidth = Math.abs(drawEnd - drawStart);
+                ctx.lineWidth = Math.min(Math.abs(drawEnd - drawStart), ringThickness);
                 ctx.globalAlpha = 0.4;
                 ctx.stroke();
                 ctx.globalAlpha = 1.0;
 
-                // Draw edges
-                ctx.lineWidth = 4;
+                // Draw edges with thickness based on duration
+                ctx.lineWidth = Math.min(ringThickness, 12);
                 ctx.beginPath();
                 ctx.arc(cx, cy, drawStart, 0, Math.PI * 2);
                 ctx.stroke();
