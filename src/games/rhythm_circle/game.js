@@ -904,9 +904,13 @@ function drawNotes(currentTime) {
         const timeUntilHit = note.time - currentTime;
         const isHoldActive = note.type === 'hold' && note.endTime && currentTime >= note.time && currentTime <= note.endTime;
 
-        // Don't draw if too far away, or already passed miss window (unless it's an active hold)
+        // Don't draw if too far away
         if (timeUntilHit > APPROACH_TIME) return;
-        if (timeUntilHit < -TIMING.MISS && !isHoldActive) return;
+        
+        // Notes continue past the center (go through the circle)
+        // Allow notes to be visible until they're well past the miss window
+        const timePastHit = -timeUntilHit;
+        if (timePastHit > TIMING.MISS + 200 && !isHoldActive) return; // Give extra time for visual
 
         // Note color based on type
         let color;
@@ -920,29 +924,54 @@ function drawNotes(currentTime) {
             color = '#33ccff'; // Blue
         }
 
-        // Radius logic
-        let startRadius, endRadius;
+        // Radius logic - notes now continue through the center
+        let startRadius;
         const progressStart = 1 - (timeUntilHit / APPROACH_TIME);
-        startRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progressStart);
+        
+        // Calculate radius - notes shrink from spawn radius through the center and past
+        // At progress 0: radius = NOTE_SPAWN_RADIUS
+        // At progress 1 (hit time): radius = RING_RADIUS (at the target ring)
+        // Past progress 1: radius continues to shrink towards 0
+        if (progressStart <= 1) {
+            // Approaching - shrink from spawn radius to ring radius
+            startRadius = NOTE_SPAWN_RADIUS - (NOTE_SPAWN_RADIUS - RING_RADIUS) * progressStart;
+        } else {
+            // Past hit time - continue shrinking through the center
+            const overProgress = progressStart - 1;
+            startRadius = RING_RADIUS * (1 - overProgress);
+        }
 
         if (note.type === 'hold' && note.endTime) {
+            // Hold notes: the outer edge (end time) shrinks from outside
+            // The inner edge (start time) stays at RING_RADIUS when held
             const timeUntilEnd = note.endTime - currentTime;
             const progressEnd = 1 - (timeUntilEnd / APPROACH_TIME);
-            endRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progressEnd);
+            
+            let endRadius;
+            if (progressEnd <= 1) {
+                endRadius = NOTE_SPAWN_RADIUS - (NOTE_SPAWN_RADIUS - RING_RADIUS) * progressEnd;
+            } else {
+                const overProgress = progressEnd - 1;
+                endRadius = RING_RADIUS * (1 - overProgress);
+            }
 
             // Calculate ring thickness based on hold duration and AR
-            // Formula: thickness = base_thickness * min(duration/1000, 3) * (max(1, AR) / 5)
             const holdDuration = note.endTime - note.time;
-            const baseThickness = 8; // Same as normal note lineWidth
-            const arFactor = Math.max(1, AR) / 5; // Normalize AR (AR 5 = factor 1)
-            const durationFactor = Math.min(holdDuration / 1000, 3); // Cap at 3 seconds worth
+            const baseThickness = 8;
+            const arFactor = Math.max(1, AR) / 5;
+            const durationFactor = Math.min(holdDuration / 1000, 3);
             const ringThickness = Math.max(8, baseThickness * durationFactor * arFactor);
 
-            // Clamp for drawing
-            let drawStart = Math.max(RING_RADIUS, startRadius);
+            // Clamp for drawing - allow drawing even when past center
+            let drawStart = Math.max(0, startRadius);
             let drawEnd = Math.min(NOTE_SPAWN_RADIUS, endRadius);
 
-            if (drawStart < drawEnd) {
+            // Ensure start < end for proper rendering
+            if (drawStart > drawEnd) {
+                [drawStart, drawEnd] = [drawEnd, drawStart];
+            }
+
+            if (drawEnd > 0 && drawEnd > drawStart) {
                 // Draw the duration band with calculated thickness
                 ctx.beginPath();
                 ctx.arc(cx, cy, (drawStart + drawEnd) / 2, 0, Math.PI * 2);
@@ -954,15 +983,18 @@ function drawNotes(currentTime) {
 
                 // Draw edges with thickness based on duration
                 ctx.lineWidth = Math.min(ringThickness, 12);
-                ctx.beginPath();
-                ctx.arc(cx, cy, drawStart, 0, Math.PI * 2);
-                ctx.stroke();
+                if (drawStart > 0) {
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, drawStart, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
                 ctx.beginPath();
                 ctx.arc(cx, cy, drawEnd, 0, Math.PI * 2);
                 ctx.stroke();
             }
         } else {
-            if (startRadius < 0) return;
+            // Regular notes - continue through the center
+            if (startRadius <= 0) return;
 
             ctx.beginPath();
             ctx.arc(cx, cy, startRadius, 0, Math.PI * 2);
@@ -971,16 +1003,14 @@ function drawNotes(currentTime) {
             if (note.type === 'spam') ctx.setLineDash([10, 5]);
             ctx.stroke();
             ctx.setLineDash([]);
-        }
-
-        // Hold Note specifics
-        if (note.type === 'hold' && note.endTime) {
-            // For holds, we might want a visual indicator of the tail?
-            // Or just the main head shrinking is enough for now based on the image provided.
-            // The image shows a yellow ring (presumably the head approaching).
-
-            // Let's add a dashed inner ring for holds to distinguish further if needed, 
-            // but color difference is usually enough.
+            
+            // Add a visual indicator when note is in the hit zone
+            if (startRadius <= RING_RADIUS + 20 && startRadius >= RING_RADIUS - 20) {
+                ctx.globalAlpha = 0.5;
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            }
         }
     });
 }
