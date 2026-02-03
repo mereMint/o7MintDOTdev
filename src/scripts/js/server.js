@@ -669,7 +669,8 @@ app.get('/api/scores', async (req, res) => {
                 COALESCE(u.discord_id, s.discord_id) as discord_id,
                 COALESCE(u.avatar, s.avatar) as avatar
             FROM scores s 
-            LEFT JOIN users u ON s.username = u.username 
+            LEFT JOIN users u ON (u.discord_id = s.discord_id AND s.discord_id IS NOT NULL) 
+                OR (u.username = s.username AND s.discord_id IS NULL)
             WHERE s.game_id = ? AND s.board_id = ? 
             ORDER BY s.score DESC 
             LIMIT ?`,
@@ -4046,9 +4047,12 @@ app.get('/api/anidle/daily-leaderboard', async (req, res) => {
     try {
         conn = await pool.getConnection();
         const rows = await conn.query(`
-            SELECT s.username, s.score, s.created_at, u.discord_id, u.avatar
+            SELECT s.username, s.score, s.created_at, 
+                COALESCE(u.discord_id, s.discord_id) as discord_id,
+                COALESCE(u.avatar, s.avatar) as avatar
             FROM scores s
-            LEFT JOIN users u ON s.username = u.username
+            LEFT JOIN users u ON (u.discord_id = s.discord_id AND s.discord_id IS NOT NULL) 
+                OR (u.username = s.username AND s.discord_id IS NULL)
             WHERE s.game_id = 'anidle' 
             AND s.board_id = 'daily'
             AND DATE(s.created_at) = ?
