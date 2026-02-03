@@ -327,6 +327,27 @@ async function selectMode(mode) {
 
 // Start a new game
 async function startGame(mode) {
+    // For daily mode, check if user has already completed today's challenge
+    if (mode === 'daily' && user.username !== 'Anonymous') {
+        try {
+            const checkUrl = `/api/anidle/check-daily?username=${encodeURIComponent(user.username)}` +
+                (user.discord_id ? `&discord_id=${encodeURIComponent(user.discord_id)}` : '');
+            const response = await fetch(checkUrl);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.completed) {
+                    alert("You have already completed today's daily challenge! Come back tomorrow or try unlimited mode.");
+                    // Switch to unlimited mode
+                    await selectMode('unlimited');
+                    return;
+                }
+            }
+        } catch (err) {
+            console.error('Failed to check daily completion:', err);
+            // Continue anyway if check fails
+        }
+    }
+    
     // Clear any old saved state for this mode
     clearSavedAnidleState(mode);
     
