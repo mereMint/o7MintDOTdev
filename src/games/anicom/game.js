@@ -702,13 +702,33 @@ async function searchAnime(query) {
         const data = await res.json();
         const results = data.data || [];
 
-        // Filter to only TV and Movie types
-        return results.filter(a => {
+        // Filter to only TV and Movie types and add to cache if not present
+        const filtered = results.filter(a => {
             if (a.type !== 'TV' && a.type !== 'Movie') return false;
             // Filter out already used anime
             if (gameState.usedAnimeIds.has(a.mal_id)) return false;
+            
+            // Add to cache if not already present
+            if (!gameState.animeCache.find(cached => cached.mal_id === a.mal_id)) {
+                // Normalize the API result format to match cache format
+                gameState.animeCache.push({
+                    mal_id: a.mal_id,
+                    title: a.title,
+                    title_english: a.title_english,
+                    type: a.type,
+                    episodes: a.episodes,
+                    score: a.score,
+                    year: a.year || (a.aired && a.aired.from ? new Date(a.aired.from).getFullYear() : null),
+                    genres: a.genres || [],
+                    studios: a.studios || [],
+                    image_url: a.images?.jpg?.image_url || null
+                });
+            }
+            
             return true;
         });
+        
+        return filtered;
     } catch (err) {
         console.error('Jikan API Error:', err);
         // Fallback to cache search
@@ -756,7 +776,24 @@ function setupAutocomplete() {
                 
                 // Use title from API response or cache
                 const displayTitle = anime.title_english || anime.title;
-                div.textContent = displayTitle;
+                
+                // Get image URL (from API or cache)
+                const imageUrl = anime.images?.jpg?.image_url || anime.image_url || '';
+                
+                // Create HTML with image and text
+                if (imageUrl) {
+                    const img = document.createElement('img');
+                    img.src = imageUrl;
+                    img.className = 'autocomplete-item-img';
+                    img.alt = displayTitle;
+                    img.onerror = function() { this.style.display = 'none'; };
+                    div.appendChild(img);
+                }
+                
+                const span = document.createElement('span');
+                span.className = 'autocomplete-item-text';
+                span.textContent = displayTitle;
+                div.appendChild(span);
                 
                 div.addEventListener('click', function() {
                     input.value = displayTitle;
@@ -851,21 +888,42 @@ async function loadLeaderboard() {
             const rank = index + 1;
             const rankClass = `rank-${rank}`;
             
-            // Create elements safely to prevent XSS
+            // Create left side container with rank, avatar, and username
+            const leftDiv = document.createElement('div');
+            leftDiv.className = 'leaderboard-item-left';
+            
+            // Create rank element
             const rankSpan = document.createElement('span');
             rankSpan.className = `leaderboard-rank ${rankClass}`;
             rankSpan.textContent = `#${rank}`;
             
+            // Create avatar element
+            let avatarImg = '../assets/imgs/const.png';
+            if (score.discord_id && score.avatar) {
+                avatarImg = `https://cdn.discordapp.com/avatars/${score.discord_id}/${score.avatar}.png`;
+            }
+            const avatar = document.createElement('img');
+            avatar.className = 'leaderboard-avatar';
+            avatar.src = avatarImg;
+            avatar.alt = score.username;
+            avatar.onerror = function() { this.src = '../assets/imgs/const.png'; };
+            
+            // Create username element
             const usernameSpan = document.createElement('span');
             usernameSpan.className = 'leaderboard-username';
             usernameSpan.textContent = score.username;
             
+            // Create score element
             const scoreSpan = document.createElement('span');
             scoreSpan.className = 'leaderboard-score';
             scoreSpan.textContent = score.score;
             
-            item.appendChild(rankSpan);
-            item.appendChild(usernameSpan);
+            // Assemble the elements
+            leftDiv.appendChild(rankSpan);
+            leftDiv.appendChild(avatar);
+            leftDiv.appendChild(usernameSpan);
+            
+            item.appendChild(leftDiv);
             item.appendChild(scoreSpan);
             
             leaderboardList.appendChild(item);
