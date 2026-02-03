@@ -353,7 +353,13 @@ function updateUI() {
     const coverImg = document.getElementById('anime-cover');
     if (coverImg && anime.image) {
         coverImg.src = anime.image;
+        coverImg.alt = `${anime.title_english || anime.title} cover`;
         coverImg.style.display = 'block';
+        
+        // Handle image load errors
+        coverImg.onerror = function() {
+            coverImg.style.display = 'none';
+        };
     }
     
     // Build details string
