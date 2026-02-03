@@ -161,6 +161,10 @@ pool.getConnection()
                     inventory JSON,
                     decoration VARCHAR(50) DEFAULT NULL,
                     bio VARCHAR(500) DEFAULT NULL,
+                    role ENUM('user', 'moderator', 'admin', 'owner') DEFAULT 'user',
+                    favorite_game VARCHAR(50) DEFAULT NULL,
+                    last_online TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    privacy_settings JSON DEFAULT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
@@ -1223,6 +1227,9 @@ app.get('/api/auth/discord/callback', async (req, res) => {
             let conn;
             try {
                 conn = await pool.getConnection();
+                
+                // Ensure role column exists before querying
+                await ensureUserExtendedColumns(conn);
                 
                 // Check if user exists by discord_id first
                 const existingUser = await conn.query(
