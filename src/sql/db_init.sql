@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS users (
     inventory JSON,
     decoration VARCHAR(50) DEFAULT NULL,
     bio VARCHAR(500) DEFAULT NULL,
+    role ENUM('user', 'moderator', 'admin', 'owner') DEFAULT 'user',
+    favorite_game VARCHAR(50) DEFAULT NULL,
+    last_online TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    privacy_settings JSON DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
