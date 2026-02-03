@@ -833,7 +833,7 @@ function drawNotes(currentTime) {
             endRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progressEnd);
 
             // Calculate ring thickness based on hold duration and AR
-            // Formula: thickness = base_thickness * (duration / 1000) * (AR / 5)
+            // Formula: thickness = base_thickness * min(duration/1000, 3) * (max(1, AR) / 5)
             const holdDuration = note.endTime - note.time;
             const baseThickness = 8; // Same as normal note lineWidth
             const arFactor = Math.max(1, AR) / 5; // Normalize AR (AR 5 = factor 1)
