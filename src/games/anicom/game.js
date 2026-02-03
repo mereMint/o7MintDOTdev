@@ -710,18 +710,29 @@ async function loadLeaderboard() {
             item.className = 'leaderboard-item';
             
             // Highlight current user
-            if (score.username === user.username) {
+            if (user && score.username === user.username) {
                 item.classList.add('current-user');
             }
             
             const rank = index + 1;
             const rankClass = `rank-${rank}`;
             
-            item.innerHTML = `
-                <span class="leaderboard-rank ${rankClass}">#${rank}</span>
-                <span class="leaderboard-username">${score.username}</span>
-                <span class="leaderboard-score">${score.score}</span>
-            `;
+            // Create elements safely to prevent XSS
+            const rankSpan = document.createElement('span');
+            rankSpan.className = `leaderboard-rank ${rankClass}`;
+            rankSpan.textContent = `#${rank}`;
+            
+            const usernameSpan = document.createElement('span');
+            usernameSpan.className = 'leaderboard-username';
+            usernameSpan.textContent = score.username;
+            
+            const scoreSpan = document.createElement('span');
+            scoreSpan.className = 'leaderboard-score';
+            scoreSpan.textContent = score.score;
+            
+            item.appendChild(rankSpan);
+            item.appendChild(usernameSpan);
+            item.appendChild(scoreSpan);
             
             leaderboardList.appendChild(item);
         });
