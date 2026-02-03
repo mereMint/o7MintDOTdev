@@ -2437,9 +2437,16 @@ app.get('/api/user/:username/full-profile', async (req, res) => {
         let privacy = { show_stats: true, show_achievements: true, show_activity: true };
         try {
             if (userData.privacy_settings) {
-                privacy = JSON.parse(userData.privacy_settings);
+                // Handle both JSON string and already-parsed object
+                if (typeof userData.privacy_settings === 'string') {
+                    privacy = JSON.parse(userData.privacy_settings);
+                } else if (typeof userData.privacy_settings === 'object') {
+                    privacy = userData.privacy_settings;
+                }
             }
-        } catch (e) { }
+        } catch (e) {
+            console.warn("Failed to parse privacy_settings:", e);
+        }
 
         // Check if viewer is the profile owner
         const isOwner = requestingUser === username;
