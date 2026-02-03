@@ -1,0 +1,601 @@
+{
+  "anime": [
+    {
+      "mal_id": 5114,
+      "title": "Fullmetal Alchemist: Brotherhood",
+      "title_english": "Fullmetal Alchemist: Brotherhood",
+      "score": 9.1,
+      "studio": "Bones",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Drama",
+        "Fantasy"
+      ],
+      "release_date": "2009",
+      "source": "Manga",
+      "episodes": 64,
+      "tags": [
+        {
+          "name": "Military",
+          "primary": true
+        },
+        {
+          "name": "Shounen",
+          "primary": false
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/1223/96541.jpg",
+      "synopsis": "Two brothers search for the Philosopher's Stone to restore their bodies after a failed alchemy experiment.",
+      "main_character": {
+        "name": "Edward Elric",
+        "image": "https://cdn.myanimelist.net/images/characters/9/72533.jpg"
+      }
+    },
+    {
+      "mal_id": 1535,
+      "title": "Death Note",
+      "title_english": "Death Note",
+      "score": 8.62,
+      "studio": "Madhouse",
+      "genres": [
+        "Supernatural",
+        "Suspense"
+      ],
+      "release_date": "2006",
+      "source": "Manga",
+      "episodes": 37,
+      "tags": [
+        {
+          "name": "Psychological",
+          "primary": true
+        },
+        {
+          "name": "Shounen",
+          "primary": false
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/9/9453.jpg",
+      "synopsis": "Light Yagami finds a notebook that kills anyone whose name is written in it.",
+      "main_character": {
+        "name": "Light Yagami",
+        "image": "https://cdn.myanimelist.net/images/characters/2/84177.jpg"
+      }
+    },
+    {
+      "mal_id": 16498,
+      "title": "Shingeki no Kyojin",
+      "title_english": "Attack on Titan",
+      "score": 8.54,
+      "studio": "Wit Studio",
+      "genres": [
+        "Action",
+        "Drama",
+        "Fantasy",
+        "Mystery"
+      ],
+      "release_date": "2013",
+      "source": "Manga",
+      "episodes": 25,
+      "tags": [
+        {
+          "name": "Military",
+          "primary": true
+        },
+        {
+          "name": "Shounen",
+          "primary": false
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/10/47347.jpg",
+      "synopsis": "Humanity lives within enormous walled cities to protect themselves from Titans.",
+      "main_character": {
+        "name": "Eren Yeager",
+        "image": "https://cdn.myanimelist.net/images/characters/10/216895.jpg"
+      }
+    },
+    {
+      "mal_id": 11061,
+      "title": "Hunter x Hunter (2011)",
+      "title_english": "Hunter x Hunter",
+      "score": 9.04,
+      "studio": "Madhouse",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Fantasy"
+      ],
+      "release_date": "2011",
+      "source": "Manga",
+      "episodes": 148,
+      "tags": [
+        {
+          "name": "Shounen",
+          "primary": true
+        },
+        {
+          "name": "Adventure",
+          "primary": true
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/1337/99013.jpg",
+      "synopsis": "Gon Freecss discovers his father is a legendary Hunter and sets out to become one himself.",
+      "main_character": {
+        "name": "Gon Freecss",
+        "image": "https://cdn.myanimelist.net/images/characters/11/174517.jpg"
+      }
+    },
+    {
+      "mal_id": 9253,
+      "title": "Steins;Gate",
+      "title_english": "Steins;Gate",
+      "score": 9.08,
+      "studio": "White Fox",
+      "genres": [
+        "Drama",
+        "Sci-Fi",
+        "Suspense"
+      ],
+      "release_date": "2011",
+      "source": "Visual novel",
+      "tags": [
+        {
+          "name": "Time Travel",
+          "primary": true
+        },
+        {
+          "name": "Thriller",
+          "primary": true
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/5/73199.jpg",
+      "synopsis": "A self-proclaimed mad scientist discovers he can send messages to the past.",
+      "main_character": {
+        "name": "Rintarou Okabe",
+        "image": "https://cdn.myanimelist.net/images/characters/6/122643.jpg"
+      }
+    },
+    {
+      "mal_id": 38000,
+      "title": "Kimetsu no Yaiba",
+      "title_english": "Demon Slayer",
+      "score": 8.45,
+      "studio": "ufotable",
+      "genres": [
+        "Action",
+        "Fantasy"
+      ],
+      "release_date": "2019",
+      "source": "Manga",
+      "tags": [
+        {
+          "name": "Historical",
+          "primary": true
+        },
+        {
+          "name": "Shounen",
+          "primary": false
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/1286/99889.jpg",
+      "synopsis": "Tanjiro Kamado becomes a demon slayer to avenge his family and cure his sister.",
+      "main_character": {
+        "name": "Tanjiro Kamado",
+        "image": "https://cdn.myanimelist.net/images/characters/6/386735.jpg"
+      }
+    },
+    {
+      "mal_id": 40748,
+      "title": "Jujutsu Kaisen",
+      "title_english": "Jujutsu Kaisen",
+      "score": 8.6,
+      "studio": "MAPPA",
+      "genres": [
+        "Action",
+        "Fantasy"
+      ],
+      "release_date": "2020",
+      "source": "Manga",
+      "tags": [
+        {
+          "name": "School",
+          "primary": true
+        },
+        {
+          "name": "Supernatural",
+          "primary": true
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/1171/109222.jpg",
+      "synopsis": "Yuji Itadori swallows a cursed finger and becomes host to a powerful curse.",
+      "main_character": {
+        "name": "Yuji Itadori",
+        "image": "https://cdn.myanimelist.net/images/characters/6/467646.jpg"
+      }
+    },
+    {
+      "mal_id": 21,
+      "title": "One Piece",
+      "title_english": "One Piece",
+      "score": 8.71,
+      "studio": "Toei Animation",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Fantasy"
+      ],
+      "release_date": "1999",
+      "source": "Manga",
+      "tags": [
+        {
+          "name": "Pirates",
+          "primary": true
+        },
+        {
+          "name": "Shounen",
+          "primary": false
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/6/73245.jpg",
+      "synopsis": "Monkey D. Luffy sets out to become the King of Pirates.",
+      "main_character": {
+        "name": "Monkey D. Luffy",
+        "image": "https://cdn.myanimelist.net/images/characters/9/310307.jpg"
+      }
+    },
+    {
+      "mal_id": 1735,
+      "title": "Naruto",
+      "title_english": "Naruto",
+      "score": 8,
+      "studio": "Pierrot",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Fantasy"
+      ],
+      "release_date": "2002",
+      "source": "Manga",
+      "tags": [
+        {
+          "name": "Ninja",
+          "primary": true
+        },
+        {
+          "name": "Shounen",
+          "primary": false
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/13/17405.jpg",
+      "synopsis": "Naruto Uzumaki dreams of becoming the Hokage.",
+      "main_character": {
+        "name": "Naruto Uzumaki",
+        "image": "https://cdn.myanimelist.net/images/characters/2/284121.jpg"
+      }
+    },
+    {
+      "mal_id": 31964,
+      "title": "Boku no Hero Academia",
+      "title_english": "My Hero Academia",
+      "score": 7.95,
+      "studio": "Bones",
+      "genres": [
+        "Action",
+        "Comedy"
+      ],
+      "release_date": "2016",
+      "source": "Manga",
+      "tags": [
+        {
+          "name": "Superhero",
+          "primary": true
+        },
+        {
+          "name": "School",
+          "primary": true
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/10/78745.jpg",
+      "synopsis": "Izuku Midoriya dreams of becoming a hero in a world where superpowers are common.",
+      "main_character": {
+        "name": "Izuku Midoriya",
+        "image": "https://cdn.myanimelist.net/images/characters/7/299404.jpg"
+      }
+    },
+    {
+      "mal_id": 40456,
+      "title": "Spy x Family",
+      "title_english": "Spy x Family",
+      "score": 8.51,
+      "studio": "Wit Studio",
+      "genres": [
+        "Action",
+        "Comedy"
+      ],
+      "release_date": "2022",
+      "source": "Manga",
+      "tags": [
+        {
+          "name": "Family",
+          "primary": true
+        },
+        {
+          "name": "Espionage",
+          "primary": true
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/1441/122795.jpg",
+      "synopsis": "A spy must create a fake family to complete his mission.",
+      "main_character": {
+        "name": "Anya Forger",
+        "image": "https://cdn.myanimelist.net/images/characters/8/461346.jpg"
+      }
+    },
+    {
+      "mal_id": 48583,
+      "title": "Chainsaw Man",
+      "title_english": "Chainsaw Man",
+      "score": 8.54,
+      "studio": "MAPPA",
+      "genres": [
+        "Action",
+        "Fantasy"
+      ],
+      "release_date": "2022",
+      "source": "Manga",
+      "tags": [
+        {
+          "name": "Gore",
+          "primary": true
+        },
+        {
+          "name": "Supernatural",
+          "primary": true
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/1806/126216.jpg",
+      "synopsis": "Denji becomes a devil hunter after merging with his chainsaw devil pet.",
+      "main_character": {
+        "name": "Denji",
+        "image": "https://cdn.myanimelist.net/images/characters/3/489135.jpg"
+      }
+    },
+    {
+      "mal_id": 32281,
+      "title": "Kimi no Na wa.",
+      "title_english": "Your Name",
+      "score": 8.83,
+      "studio": "CoMix Wave Films",
+      "genres": [
+        "Drama",
+        "Romance",
+        "Supernatural"
+      ],
+      "release_date": "2016",
+      "source": "Original",
+      "tags": [
+        {
+          "name": "Time",
+          "primary": true
+        },
+        {
+          "name": "Romance",
+          "primary": false
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/5/87048.jpg",
+      "synopsis": "Two teenagers discover they are swapping bodies.",
+      "main_character": {
+        "name": "Mitsuha Miyamizu",
+        "image": "https://cdn.myanimelist.net/images/characters/14/316108.jpg"
+      }
+    },
+    {
+      "mal_id": 37521,
+      "title": "Vinland Saga",
+      "title_english": "Vinland Saga",
+      "score": 8.72,
+      "studio": "Wit Studio",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Drama"
+      ],
+      "release_date": "2019",
+      "source": "Manga",
+      "tags": [
+        {
+          "name": "Vikings",
+          "primary": true
+        },
+        {
+          "name": "Historical",
+          "primary": true
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/1500/103005.jpg",
+      "synopsis": "Thorfinn seeks revenge in the Viking era.",
+      "main_character": {
+        "name": "Thorfinn",
+        "image": "https://cdn.myanimelist.net/images/characters/9/379687.jpg"
+      }
+    },
+    {
+      "mal_id": 20583,
+      "title": "Haikyuu!!",
+      "title_english": "Haikyu!!",
+      "score": 8.44,
+      "studio": "Production I.G",
+      "genres": [
+        "Sports"
+      ],
+      "release_date": "2014",
+      "source": "Manga",
+      "tags": [
+        {
+          "name": "Volleyball",
+          "primary": true
+        },
+        {
+          "name": "Team",
+          "primary": true
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/7/76014.jpg",
+      "synopsis": "Shoyo Hinata joins a high school volleyball team.",
+      "main_character": {
+        "name": "Shouyou Hinata",
+        "image": "https://cdn.myanimelist.net/images/characters/11/280453.jpg"
+      }
+    },
+    {
+      "mal_id": 1,
+      "title": "Cowboy Bebop",
+      "title_english": "Cowboy Bebop",
+      "score": 8.75,
+      "studio": "Sunrise",
+      "genres": [
+        "Action",
+        "Adventure",
+        "Sci-Fi"
+      ],
+      "release_date": "1998",
+      "source": "Original",
+      "tags": [
+        {
+          "name": "Space",
+          "primary": true
+        },
+        {
+          "name": "Adult Cast",
+          "primary": false
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/4/19644.jpg",
+      "synopsis": "Bounty hunters travel through space catching criminals.",
+      "main_character": {
+        "name": "Spike Spiegel",
+        "image": "https://cdn.myanimelist.net/images/characters/4/50197.jpg"
+      }
+    },
+    {
+      "mal_id": 30831,
+      "title": "Kono Subarashii Sekai ni Shukufuku wo!",
+      "title_english": "KONOSUBA",
+      "score": 8.11,
+      "studio": "Studio Deen",
+      "genres": [
+        "Adventure",
+        "Comedy",
+        "Fantasy"
+      ],
+      "release_date": "2016",
+      "source": "Light novel",
+      "tags": [
+        {
+          "name": "Isekai",
+          "primary": true
+        },
+        {
+          "name": "Parody",
+          "primary": true
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/8/77831.jpg",
+      "synopsis": "A teenager is reincarnated in a fantasy world with a useless goddess.",
+      "main_character": {
+        "name": "Kazuma Satou",
+        "image": "https://cdn.myanimelist.net/images/characters/13/291295.jpg"
+      }
+    },
+    {
+      "mal_id": 22535,
+      "title": "Kiseijuu: Sei no Kakuritsu",
+      "title_english": "Parasyte -the maxim-",
+      "score": 8.35,
+      "studio": "Madhouse",
+      "genres": [
+        "Action",
+        "Horror",
+        "Sci-Fi"
+      ],
+      "release_date": "2014",
+      "source": "Manga",
+      "tags": [
+        {
+          "name": "Gore",
+          "primary": true
+        },
+        {
+          "name": "Psychological",
+          "primary": false
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/3/73178.jpg",
+      "synopsis": "Shinichi's hand is taken over by a parasitic alien.",
+      "main_character": {
+        "name": "Shinichi Izumi",
+        "image": "https://cdn.myanimelist.net/images/characters/2/264549.jpg"
+      }
+    },
+    {
+      "mal_id": 52299,
+      "title": "Oshi no Ko",
+      "title_english": "Oshi No Ko",
+      "score": 8.55,
+      "studio": "Doga Kobo",
+      "genres": [
+        "Drama",
+        "Supernatural"
+      ],
+      "release_date": "2023",
+      "source": "Manga",
+      "tags": [
+        {
+          "name": "Idol",
+          "primary": true
+        },
+        {
+          "name": "Reincarnation",
+          "primary": true
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/1812/134736.jpg",
+      "synopsis": "A doctor reincarnated as the child of his favorite idol.",
+      "main_character": {
+        "name": "Aqua Hoshino",
+        "image": "https://cdn.myanimelist.net/images/characters/6/506389.jpg"
+      }
+    },
+    {
+      "mal_id": 50265,
+      "title": "Bocchi the Rock!",
+      "title_english": "Bocchi the Rock!",
+      "score": 8.77,
+      "studio": "CloverWorks",
+      "genres": [
+        "Comedy"
+      ],
+      "release_date": "2022",
+      "source": "Manga",
+      "tags": [
+        {
+          "name": "Music",
+          "primary": true
+        },
+        {
+          "name": "CGDCT",
+          "primary": false
+        }
+      ],
+      "image": "https://cdn.myanimelist.net/images/anime/1448/127956.jpg",
+      "synopsis": "A socially anxious girl joins a rock band.",
+      "main_character": {
+        "name": "Hitori Gotou",
+        "image": "https://cdn.myanimelist.net/images/characters/16/497656.jpg"
+      }
+    }
+  ],
+  "lastUpdate": 1770139850717,
+  "savedAt": 1770139850717
+}

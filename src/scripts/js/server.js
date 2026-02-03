@@ -3653,8 +3653,8 @@ let anidleCacheLastUpdate = null;
 const ANIDLE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const JIKAN_API_BASE = 'https://api.jikan.moe/v4';
 
-// File path for persistent anime cache
-const ANIME_CACHE_FILE = path.join(__dirname, '../../config/anime_cache.json');
+// File path for persistent anime cache - stored in game directory
+const ANIME_CACHE_FILE = path.join(__dirname, '../../games/anidle/cache/anime_cache.json');
 
 // Save anime cache to file for persistence across server restarts
 function saveAnimeCacheToFile() {
