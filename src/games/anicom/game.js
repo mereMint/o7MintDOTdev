@@ -514,29 +514,65 @@ function getFailureReason(selectedAnime) {
 
     switch (challenge.type) {
         case CHALLENGE_TYPES.HIGHER_SCORE:
-            return `${selectedAnime.title} has a score of ${selectedAnime.score?.toFixed(2) || 'N/A'}, which is not higher than ${current.score.toFixed(2)}.`;
+            if (!selectedAnime.score) {
+                return `${selectedAnime.title} has an unknown score, required: higher than ${current.score.toFixed(2)}.`;
+            }
+            return `${selectedAnime.title} has a score of ${selectedAnime.score.toFixed(2)}, not higher than ${current.score.toFixed(2)}.`;
         case CHALLENGE_TYPES.LOWER_SCORE:
-            return `${selectedAnime.title} has a score of ${selectedAnime.score?.toFixed(2) || 'N/A'}, which is not lower than ${current.score.toFixed(2)}.`;
+            if (!selectedAnime.score) {
+                return `${selectedAnime.title} has an unknown score, required: lower than ${current.score.toFixed(2)}.`;
+            }
+            return `${selectedAnime.title} has a score of ${selectedAnime.score.toFixed(2)}, not lower than ${current.score.toFixed(2)}.`;
         case CHALLENGE_TYPES.SCORE_RANGE:
-            return `${selectedAnime.title} has a score of ${selectedAnime.score?.toFixed(2) || 'N/A'}, which is not in the required range.`;
+            if (!selectedAnime.score) {
+                return `${selectedAnime.title} has an unknown score.`;
+            }
+            // Get the range from the challenge (it was stored during generation)
+            const lowerBound = Math.max(1, current.score - 0.5);
+            const upperBound = Math.min(10, current.score + 0.5);
+            return `${selectedAnime.title} has a score of ${selectedAnime.score.toFixed(2)}, not between ${lowerBound.toFixed(2)} and ${upperBound.toFixed(2)}.`;
         case CHALLENGE_TYPES.SAME_GENRE:
         case CHALLENGE_TYPES.HAS_GENRE:
-            return `${selectedAnime.title} does not have the required genre.`;
+            const requiredGenre = challenge.genre || 'the required genre';
+            const selectedGenres = selectedAnime.genres && selectedAnime.genres.length > 0 
+                ? selectedAnime.genres.join(', ') 
+                : 'no genres';
+            return `${selectedAnime.title} has genres: ${selectedGenres}, not ${requiredGenre}.`;
         case CHALLENGE_TYPES.DIFFERENT_GENRE:
-            return `${selectedAnime.title} shares at least one genre with ${current.title}.`;
+            const currentGenres = current.genres && current.genres.length > 0 
+                ? current.genres.join(', ') 
+                : 'unknown';
+            const sharedGenres = selectedAnime.genres && current.genres
+                ? selectedAnime.genres.filter(g => current.genres.includes(g))
+                : [];
+            return `${selectedAnime.title} shares genre(s): ${sharedGenres.join(', ')} with ${current.title}.`;
         case CHALLENGE_TYPES.MULTIPLE_GENRES:
-            return `${selectedAnime.title} does not share at least two genres with ${current.title}.`;
+            const selectedGenresList = selectedAnime.genres && selectedAnime.genres.length > 0 
+                ? selectedAnime.genres.join(', ') 
+                : 'no genres';
+            const matchingGenres = selectedAnime.genres && current.genres
+                ? selectedAnime.genres.filter(g => current.genres.includes(g))
+                : [];
+            return `${selectedAnime.title} has genres: ${selectedGenresList}, only ${matchingGenres.length} genre(s) match with ${current.title}.`;
         case CHALLENGE_TYPES.SAME_STUDIO:
-            return `${selectedAnime.title} is not made by the required studio.`;
+            const requiredStudio = challenge.studio || current.studio;
+            const selectedStudio = selectedAnime.studio || 'unknown studio';
+            return `${selectedAnime.title} is made by ${selectedStudio}, not ${requiredStudio}.`;
         case CHALLENGE_TYPES.DIFFERENT_STUDIO:
-            return `${selectedAnime.title} is made by the same studio (${current.studio}).`;
+            return `${selectedAnime.title} is made by ${selectedAnime.studio || 'unknown'}, same as ${current.title} (${current.studio}).`;
         case CHALLENGE_TYPES.SAME_TAG:
         case CHALLENGE_TYPES.HAS_TAG:
-            return `${selectedAnime.title} does not have the required tag.`;
+            const requiredTag = challenge.tag ? challenge.tag.name : 'the required tag';
+            const selectedTags = selectedAnime.tags && selectedAnime.tags.length > 0 
+                ? selectedAnime.tags.map(t => t.name).join(', ') 
+                : 'no tags';
+            return `${selectedAnime.title} has tags: ${selectedTags}, not ${requiredTag}.`;
         case CHALLENGE_TYPES.SAME_SOURCE:
-            return `${selectedAnime.title} does not have the same source material (${selectedAnime.source || 'N/A'} vs ${current.source}).`;
+            const selectedSource = selectedAnime.source || 'Unknown';
+            const requiredSource = current.source || 'Unknown';
+            return `${selectedAnime.title} has source: ${selectedSource}, not ${requiredSource}.`;
         case CHALLENGE_TYPES.DIFFERENT_SOURCE:
-            return `${selectedAnime.title} has the same source material (${current.source}).`;
+            return `${selectedAnime.title} has source: ${selectedAnime.source || 'Unknown'}, same as ${current.title} (${current.source}).`;
         case CHALLENGE_TYPES.SAME_YEAR:
             if (!selectedAnime.release_date) {
                 return `${selectedAnime.title} has an unknown release date, required year: ${current.release_date}.`;
@@ -558,9 +594,15 @@ function getFailureReason(selectedAnime) {
             }
             return `${selectedAnime.title} was released in ${selectedAnime.release_date}, not in the required year range.`;
         case CHALLENGE_TYPES.MORE_EPISODES:
-            return `${selectedAnime.title} has ${selectedAnime.episodes || 'N/A'} episodes, which is not more than ${current.episodes}.`;
+            if (!selectedAnime.episodes) {
+                return `${selectedAnime.title} has an unknown episode count, required: more than ${current.episodes}.`;
+            }
+            return `${selectedAnime.title} has ${selectedAnime.episodes} episodes, not more than ${current.episodes}.`;
         case CHALLENGE_TYPES.FEWER_EPISODES:
-            return `${selectedAnime.title} has ${selectedAnime.episodes || 'N/A'} episodes, which is not fewer than ${current.episodes}.`;
+            if (!selectedAnime.episodes) {
+                return `${selectedAnime.title} has an unknown episode count, required: fewer than ${current.episodes}.`;
+            }
+            return `${selectedAnime.title} has ${selectedAnime.episodes} episodes, not fewer than ${current.episodes}.`;
         default:
             return 'The selected anime does not meet the challenge requirements.';
     }
