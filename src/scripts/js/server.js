@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 require('dotenv').config();
 const axios = require('axios');
 
@@ -42,6 +43,107 @@ const pool = mariadb.createPool({
 // State
 let useInMemory = false;
 let memoryPosts = [];
+
+// =============================================
+// Session Management - Secure Authentication
+// =============================================
+
+// In-memory session store (Map of sessionToken -> sessionData)
+// In production, use Redis or database-backed sessions
+const sessions = new Map();
+const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+// Generate cryptographically secure session token
+function generateSessionToken() {
+    return crypto.randomBytes(32).toString('hex');
+}
+
+// Create a new session
+function createSession(username, discordId, avatar, role = 'user') {
+    const token = generateSessionToken();
+    const session = {
+        token,
+        username,
+        discordId,
+        avatar,
+        role,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + SESSION_EXPIRY_MS
+    };
+    sessions.set(token, session);
+    return token;
+}
+
+// Validate and get session
+function getSession(token) {
+    if (!token) return null;
+    const session = sessions.get(token);
+    if (!session) return null;
+    if (Date.now() > session.expiresAt) {
+        sessions.delete(token);
+        return null;
+    }
+    return session;
+}
+
+// Destroy a session
+function destroySession(token) {
+    sessions.delete(token);
+}
+
+// Cleanup expired sessions periodically
+setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [token, session] of sessions.entries()) {
+        if (now > session.expiresAt) {
+            sessions.delete(token);
+            cleaned++;
+        }
+    }
+    if (cleaned > 0) {
+        console.log(`[Sessions] Cleaned up ${cleaned} expired sessions`);
+    }
+}, SESSION_CLEANUP_INTERVAL_MS);
+
+// Authentication Middleware - Validates session token
+const authMiddleware = (req, res, next) => {
+    // Get token from Authorization header or query param
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') 
+        ? authHeader.substring(7) 
+        : req.query.session_token;
+    
+    const session = getSession(token);
+    
+    if (!session) {
+        return res.status(401).json({ error: "Authentication required. Please log in." });
+    }
+    
+    // Attach session to request for use in handlers
+    req.session = session;
+    next();
+};
+
+// Owner verification middleware - Ensures user can only access their own data
+const ownerMiddleware = (usernameParam = 'username') => {
+    return (req, res, next) => {
+        const targetUsername = req.params[usernameParam] || req.body[usernameParam] || req.query[usernameParam];
+        
+        if (!req.session) {
+            return res.status(401).json({ error: "Authentication required" });
+        }
+        
+        // Allow if user is accessing their own data or is admin/owner
+        if (req.session.username === targetUsername || 
+            ['admin', 'owner'].includes(req.session.role)) {
+            next();
+        } else {
+            return res.status(403).json({ error: "You can only access your own data" });
+        }
+    };
+};
 
 // Initialize Connection
 pool.getConnection()
@@ -284,22 +386,19 @@ app.get('/api/posts', async (req, res) => {
 });
 
 // POST /api/post
-app.post('/api/post', async (req, res) => {
+app.post('/api/post', authMiddleware, async (req, res) => {
     try {
-        const { username, content, discord_id, avatar } = req.body;
+        const { content, discord_id, avatar } = req.body;
+        // Use username from authenticated session, not from request body
+        const username = req.session.username;
 
         // Basic Validation
         if (!content || content.length > 255) {
             return res.status(400).json({ error: "Invalid content" });
         }
 
-        // Require login - username must be provided and not Anonymous
-        if (!username || username === 'Anonymous') {
-            return res.status(401).json({ error: "You must be logged in to post" });
-        }
-
         // Profanity Check
-        if (containsBadWord(content) || (username && containsBadWord(username))) {
+        if (containsBadWord(content) || containsBadWord(username)) {
             return res.status(400).json({ error: "Profanity detected" });
         }
 
@@ -309,8 +408,8 @@ app.post('/api/post', async (req, res) => {
                 id: memoryPosts.length + 1,
                 username: username,
                 content: content,
-                discord_id: discord_id || null,
-                avatar: avatar || null,
+                discord_id: req.session.discordId || null,
+                avatar: req.session.avatar || null,
                 created_at: new Date()
             };
             memoryPosts.push(newPost);
@@ -330,9 +429,9 @@ app.post('/api/post', async (req, res) => {
                 await conn.query("UPDATE posts SET status = 'approved' WHERE status IS NULL");
             } catch (e) { }
 
-            // Get user's discord info if not provided
-            let userDiscordId = discord_id;
-            let userAvatar = avatar;
+            // Use session discord info, fallback to database
+            let userDiscordId = req.session.discordId || discord_id;
+            let userAvatar = req.session.avatar || avatar;
             if (!userDiscordId || !userAvatar) {
                 const userRes = await conn.query("SELECT discord_id, avatar FROM users WHERE username = ?", [username]);
                 if (userRes.length > 0) {
@@ -1049,6 +1148,9 @@ app.get('/api/auth/discord/callback', async (req, res) => {
 
         const { id, username, discriminator, avatar } = userRes.data;
 
+        // Get user role from DB or default to 'user'
+        let userRole = 'user';
+
         // Upsert User to DB
         if (!useInMemory) {
             let conn;
@@ -1058,6 +1160,11 @@ app.get('/api/auth/discord/callback', async (req, res) => {
                     "INSERT INTO users (username, discord_id, avatar) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE discord_id = ?, avatar = ?",
                     [username, id, avatar, id, avatar]
                 );
+                // Fetch user role
+                const roleRes = await conn.query("SELECT role FROM users WHERE username = ?", [username]);
+                if (roleRes.length > 0 && roleRes[0].role) {
+                    userRole = roleRes[0].role;
+                }
             } catch (err) {
                 console.error("Failed to sync user to DB:", err);
             } finally {
@@ -1065,10 +1172,12 @@ app.get('/api/auth/discord/callback', async (req, res) => {
             }
         }
 
-        // Simple "Session" via redirect params (for now)
-        // Redirect to GameHub with user info so frontend can save it
-        // Note: In production, use secure cookies/sessions!
-        res.redirect(`/src/html/GameHub.html?login=success&username=${username}&discord_id=${id}&avatar=${avatar}`);
+        // Create secure session
+        const sessionToken = createSession(username, id, avatar, userRole);
+
+        // Redirect with only the session token (not sensitive user data)
+        // The frontend will use the token to fetch user data via API
+        res.redirect(`/src/html/GameHub.html?session_token=${sessionToken}`);
 
     } catch (err) {
         console.error("Auth Error:", err.response ? err.response.data : err.message);
@@ -1076,6 +1185,63 @@ app.get('/api/auth/discord/callback', async (req, res) => {
     }
 });
 
+// GET /api/auth/me - Get current user from session token
+app.get('/api/auth/me', authMiddleware, (req, res) => {
+    res.json({
+        username: req.session.username,
+        discord_id: req.session.discordId,
+        avatar: req.session.avatar,
+        role: req.session.role
+    });
+});
+
+// POST /api/auth/logout - Destroy session
+app.post('/api/auth/logout', authMiddleware, (req, res) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') 
+        ? authHeader.substring(7) 
+        : req.body.session_token;
+    
+    if (token) {
+        destroySession(token);
+    }
+    res.json({ success: true, message: "Logged out successfully" });
+});
+
+// Constants for dev mode
+const DEV_DISCORD_ID = '000000000000000000';
+const DEV_AVATAR = '0';
+
+// POST /api/auth/dev-login - Dev mode login (localhost only)
+app.post('/api/auth/dev-login', (req, res) => {
+    // Localhost-only check (same as adminMiddleware but without auth requirement)
+    if (req.headers['cf-ray'] || req.headers['x-forwarded-for']) {
+        return res.status(403).json({ error: "Forbidden: Dev login only available on localhost" });
+    }
+    const ip = req.ip || req.connection.remoteAddress;
+    const isLocal = ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1';
+    if (!isLocal) {
+        return res.status(403).json({ error: "Forbidden: Dev login only available on localhost" });
+    }
+    
+    const { username } = req.body;
+    if (!username) {
+        return res.status(400).json({ error: "Username required" });
+    }
+    
+    // Create a dev session
+    const sessionToken = createSession(username, DEV_DISCORD_ID, DEV_AVATAR, 'user');
+    res.json({ 
+        success: true, 
+        session_token: sessionToken,
+        user: {
+            username,
+            discord_id: DEV_DISCORD_ID,
+            avatar: DEV_AVATAR,
+            role: 'user'
+        }
+    });
+});
 
 
 // GET /api/user/:username/stats
@@ -1222,7 +1388,7 @@ app.get('/api/user/:username/profile', async (req, res) => {
 });
 
 // PUT /api/user/:username/profile - Update user profile (decoration, bio)
-app.put('/api/user/:username/profile', async (req, res) => {
+app.put('/api/user/:username/profile', authMiddleware, ownerMiddleware('username'), async (req, res) => {
     const { username } = req.params;
     const { decoration, bio } = req.body;
 
@@ -1279,7 +1445,7 @@ app.get('/api/decorations', (req, res) => {
 });
 
 // POST /api/user/:username/decoration - Purchase and equip decoration
-app.post('/api/user/:username/decoration', async (req, res) => {
+app.post('/api/user/:username/decoration', authMiddleware, ownerMiddleware('username'), async (req, res) => {
     const { username } = req.params;
     const { decoration_id } = req.body;
 
@@ -2240,7 +2406,7 @@ app.get('/api/user/:username/full-profile', async (req, res) => {
 });
 
 // PUT /api/user/:username/settings - Update user settings (privacy, favorite game, etc.)
-app.put('/api/user/:username/settings', async (req, res) => {
+app.put('/api/user/:username/settings', authMiddleware, ownerMiddleware('username'), async (req, res) => {
     const { username } = req.params;
     const { favorite_game, privacy_settings, bio } = req.body;
 
@@ -2362,8 +2528,13 @@ app.get('/api/user/:username/friend-requests', async (req, res) => {
 });
 
 // POST /api/friends/request - Send friend request
-app.post('/api/friends/request', async (req, res) => {
+app.post('/api/friends/request', authMiddleware, async (req, res) => {
     const { from_user, to_user } = req.body;
+
+    // Verify the requester is the from_user
+    if (req.session.username !== from_user) {
+        return res.status(403).json({ error: "You can only send friend requests from your own account" });
+    }
 
     if (!from_user || !to_user || from_user === to_user) {
         return res.status(400).json({ error: "Invalid users" });
@@ -2402,8 +2573,13 @@ app.post('/api/friends/request', async (req, res) => {
 });
 
 // POST /api/friends/accept - Accept friend request
-app.post('/api/friends/accept', async (req, res) => {
+app.post('/api/friends/accept', authMiddleware, async (req, res) => {
     const { from_user, to_user } = req.body;
+
+    // Verify the acceptor is the to_user (the one receiving the request)
+    if (req.session.username !== to_user) {
+        return res.status(403).json({ error: "You can only accept friend requests sent to you" });
+    }
 
     if (useInMemory) {
         return res.json({ success: true, mode: "memory" });
@@ -2427,8 +2603,13 @@ app.post('/api/friends/accept', async (req, res) => {
 });
 
 // POST /api/friends/decline - Decline/remove friend
-app.post('/api/friends/decline', async (req, res) => {
+app.post('/api/friends/decline', authMiddleware, async (req, res) => {
     const { user1, user2 } = req.body;
+
+    // Verify the user is one of the parties in the friendship
+    if (req.session.username !== user1 && req.session.username !== user2) {
+        return res.status(403).json({ error: "You can only manage your own friendships" });
+    }
 
     if (useInMemory) {
         return res.json({ success: true, mode: "memory" });
@@ -2845,39 +3026,34 @@ app.post('/api/multiplayer/session/:sessionId/end', async (req, res) => {
 // Moderator Routes (Role-based access)
 // =============================================
 
-// Middleware to check moderator role
+// Middleware to check moderator role - uses session authentication
 const moderatorMiddleware = async (req, res, next) => {
-    const username = req.body.moderator_username || req.query.moderator_username;
-
-    if (!username) {
-        return res.status(401).json({ error: "Moderator username required" });
+    // First, verify the session token
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') 
+        ? authHeader.substring(7) 
+        : req.query.session_token;
+    
+    const session = getSession(token);
+    
+    if (!session) {
+        return res.status(401).json({ error: "Authentication required. Please log in." });
     }
+    
+    // Attach session to request
+    req.session = session;
 
+    // In dev mode with in-memory storage, allow access
     if (useInMemory) {
-        return next(); // Allow in dev mode
+        return next();
     }
 
-    let conn;
-    try {
-        conn = await pool.getConnection();
-        const userRes = await conn.query("SELECT role FROM users WHERE username = ?", [username]);
-
-        if (userRes.length === 0) {
-            return res.status(404).json({ error: "User not found" });
-        }
-
-        const role = userRes[0].role;
-        if (!['moderator', 'admin', 'owner'].includes(role)) {
-            return res.status(403).json({ error: "Insufficient permissions" });
-        }
-
-        next();
-    } catch (err) {
-        console.error("Moderator check error:", err);
-        res.status(500).json({ error: "Database error" });
-    } finally {
-        if (conn) conn.release();
+    // Check if user has moderator, admin, or owner role from session
+    if (!['moderator', 'admin', 'owner'].includes(session.role)) {
+        return res.status(403).json({ error: "Insufficient permissions. Moderator access required." });
     }
+
+    next();
 };
 
 // POST /api/moderator/article/:id/approve - Moderator approve article
