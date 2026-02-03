@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#1a1a1a" stroke="#1DCD9F" stroke-width="4"/>
+  
+  <!-- Two anime-style stars representing comparison -->
+  <g transform="translate(60, 80)">
+    <!-- Left star -->
+    <path d="M 0,-20 L 5,-5 L 20,0 L 5,5 L 0,20 L -5,5 L -20,0 L -5,-5 Z" fill="#1DCD9F" opacity="0.8"/>
+  </g>
+  
+  <g transform="translate(140, 80)">
+    <!-- Right star -->
+    <path d="M 0,-20 L 5,-5 L 20,0 L 5,5 L 0,20 L -5,5 L -20,0 L -5,-5 Z" fill="#1DCD9F" opacity="0.8"/>
+  </g>
+  
+  <!-- Comparison arrows -->
+  <path d="M 70 80 L 90 80" stroke="#1DCD9F" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M 110 80 L 130 80" stroke="#1DCD9F" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M 125 75 L 130 80 L 125 85" stroke="#1DCD9F" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Text "VS" in the middle -->
+  <text x="100" y="85" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#1DCD9F" text-anchor="middle" dominant-baseline="middle">VS</text>
+  
+  <!-- Bottom text -->
+  <text x="100" y="140" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1DCD9F" text-anchor="middle">AniCom</text>
+  <text x="100" y="160" font-family="Arial, sans-serif" font-size="12" fill="#888" text-anchor="middle">Compare &amp; Chain</text>
+</svg>
