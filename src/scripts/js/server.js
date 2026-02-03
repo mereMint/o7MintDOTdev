@@ -8,6 +8,17 @@ const crypto = require('crypto');
 require('dotenv').config();
 const axios = require('axios');
 
+// Global error handlers to prevent 502 errors from unhandled rejections
+process.on('uncaughtException', (error) => {
+    console.error('[CRITICAL] Uncaught Exception:', error);
+    // Log but don't exit - let the process continue
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[CRITICAL] Unhandled Rejection at:', promise, 'reason:', reason);
+    // Log but don't exit - let the process continue
+});
+
 const app = express();
 const PORT = 8000;
 
@@ -31,6 +42,28 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static('.')); // Serve static files from root (process.cwd)
 
+// Request timeout middleware to prevent hanging requests
+app.use((req, res, next) => {
+    // Set timeout to 30 seconds for all requests
+    const timeout = setTimeout(() => {
+        if (!res.headersSent) {
+            console.error(`[TIMEOUT] Request timeout: ${req.method} ${req.url}`);
+            res.status(504).json({ error: 'Request timeout' });
+        }
+    }, 30000);
+    
+    // Clear timeout when response finishes
+    res.on('finish', () => {
+        clearTimeout(timeout);
+    });
+    
+    next();
+});
+
+// State
+let useInMemory = false;
+let memoryPosts = [];
+
 // Database Connection Pool
 const pool = mariadb.createPool({
     host: '127.0.0.1',
@@ -43,9 +76,27 @@ const pool = mariadb.createPool({
     minimumIdle: 5
 });
 
-// State
-let useInMemory = false;
-let memoryPosts = [];
+// Database pool error handling
+pool.on('error', (err) => {
+    console.error('[DB POOL ERROR]', err);
+    // Switch to in-memory mode on pool errors
+    if (!useInMemory) {
+        console.warn('[DB] Switching to in-memory mode due to pool error');
+        useInMemory = true;
+    }
+});
+
+// Test database connection on startup and handle errors gracefully
+pool.getConnection()
+    .then(conn => {
+        console.log('[DB] Database connection pool initialized successfully');
+        conn.release();
+    })
+    .catch(err => {
+        console.error('[DB] Failed to connect to database:', err.message);
+        console.warn('[DB] Server will use in-memory mode');
+        useInMemory = true;
+    });
 
 // =============================================
 // Session Management - Secure Authentication
@@ -859,58 +910,73 @@ app.post('/api/score', async (req, res) => {
 
 // GET /api/saves?game=id&username=user
 app.get('/api/saves', async (req, res) => {
-    const { game, username } = req.query;
-    if (!game || !username) return res.status(400).json({ error: "Missing params" });
+    try {
+        const { game, username } = req.query;
+        if (!game || !username) return res.status(400).json({ error: "Missing params" });
 
-    if (useInMemory) {
-        const saves = memorySaves.filter(s => s.game_id === game && s.username === username);
-        return res.json(saves);
+        if (useInMemory) {
+            const saves = memorySaves.filter(s => s.game_id === game && s.username === username);
+            return res.json(saves);
+        }
+
+        // TODO: Implement DB logic
+        return res.json([]);
+    } catch (err) {
+        console.error('Error in GET /api/saves:', err);
+        res.status(500).json({ error: "Server error" });
     }
-
-    // TODO: Implement DB logic
-    return res.json([]);
 });
 
 // POST /api/save
 app.post('/api/save', async (req, res) => {
-    const { game_id, username, slot_id, label, data } = req.body;
-    if (!game_id || !username || !data) return res.status(400).json({ error: "Invalid data" });
+    try {
+        const { game_id, username, slot_id, label, data } = req.body;
+        if (!game_id || !username || !data) return res.status(400).json({ error: "Invalid data" });
 
-    const saveObj = {
-        save_id: `${game_id}_${username}_${slot_id || 'auto'}`,
-        game_id,
-        username,
-        slot_id: slot_id || 'auto',
-        label: label || 'Auto Save',
-        data,
-        updated_at: new Date()
-    };
+        const saveObj = {
+            save_id: `${game_id}_${username}_${slot_id || 'auto'}`,
+            game_id,
+            username,
+            slot_id: slot_id || 'auto',
+            label: label || 'Auto Save',
+            data,
+            updated_at: new Date()
+        };
 
-    if (useInMemory) {
-        // Upsert
-        const idx = memorySaves.findIndex(s => s.save_id === saveObj.save_id);
-        if (idx >= 0) {
-            memorySaves[idx] = saveObj;
-        } else {
-            memorySaves.push(saveObj);
+        if (useInMemory) {
+            // Upsert
+            const idx = memorySaves.findIndex(s => s.save_id === saveObj.save_id);
+            if (idx >= 0) {
+                memorySaves[idx] = saveObj;
+            } else {
+                memorySaves.push(saveObj);
+            }
+            return res.json({ success: true });
         }
-        return res.json({ success: true });
-    }
 
-    // DB Implementation omitted for brevity, responding success
-    res.json({ success: true, mode: "mock_db" });
+        // DB Implementation omitted for brevity, responding success
+        res.json({ success: true, mode: "mock_db" });
+    } catch (err) {
+        console.error('Error in POST /api/save:', err);
+        res.status(500).json({ error: "Server error" });
+    }
 });
 
 // DELETE /api/save
 app.delete('/api/save', async (req, res) => {
-    const { game_id, username, slot_id } = req.body;
+    try {
+        const { game_id, username, slot_id } = req.body;
 
-    if (useInMemory) {
-        const id = `${game_id}_${username}_${slot_id}`;
-        memorySaves = memorySaves.filter(s => s.save_id !== id);
-        return res.json({ success: true });
+        if (useInMemory) {
+            const id = `${game_id}_${username}_${slot_id}`;
+            memorySaves = memorySaves.filter(s => s.save_id !== id);
+            return res.json({ success: true });
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error in DELETE /api/save:', err);
+        res.status(500).json({ error: "Server error" });
     }
-    res.json({ success: true });
 });
 
 // --- Achievement Routes ---
@@ -1212,12 +1278,14 @@ app.get('/api/auth/discord/callback', async (req, res) => {
 
         const tokenRes = await axios.post('https://discord.com/api/oauth2/token', formData, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 10000 // 10 second timeout
         });
 
         const { access_token } = tokenRes.data;
 
         const userRes = await axios.get('https://discord.com/api/users/@me', {
             headers: { Authorization: `Bearer ${access_token}` },
+            timeout: 10000 // 10 second timeout
         });
 
         const { id, username, discriminator, avatar } = userRes.data;
@@ -4229,6 +4297,22 @@ app.get('/api/anidle/cache-status', (req, res) => {
         count: anidleAnimeCache.length,
         lastUpdate: anidleCacheLastUpdate ? new Date(anidleCacheLastUpdate).toISOString() : null,
         cacheAge: anidleCacheLastUpdate ? Math.floor((Date.now() - anidleCacheLastUpdate) / 1000 / 60) + ' minutes' : 'never'
+    });
+});
+
+// Global error handler middleware - must be defined after all routes
+app.use((err, req, res, next) => {
+    console.error('[EXPRESS ERROR HANDLER]', err);
+    
+    // If headers already sent, delegate to default Express error handler
+    if (res.headersSent) {
+        return next(err);
+    }
+    
+    // Send error response
+    res.status(err.status || 500).json({
+        error: err.message || 'Internal Server Error',
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
     });
 });
 
