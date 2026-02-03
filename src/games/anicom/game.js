@@ -526,6 +526,9 @@ function endGame(reason) {
 
     // Submit score to server
     submitScore();
+    
+    // Load leaderboard
+    loadLeaderboard();
 }
 
 // Submit score to server
@@ -672,5 +675,59 @@ function updateAutocompleteSelection(items) {
     if (selectedAutocompleteIndex >= 0 && items[selectedAutocompleteIndex]) {
         items[selectedAutocompleteIndex].classList.add('autocomplete-active');
         items[selectedAutocompleteIndex].scrollIntoView({ block: 'nearest' });
+    }
+}
+
+// Load and display leaderboard
+async function loadLeaderboard() {
+    const leaderboardList = document.getElementById('result-leaderboard-list');
+    
+    try {
+        leaderboardList.innerHTML = '<div class="leaderboard-loading">Loading top scores...</div>';
+        
+        // Fetch top scores from API
+        const response = await fetch('/api/scores?game=anicom&board=high_score&limit=10');
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                leaderboardList.innerHTML = '<div class="leaderboard-loading">No scores yet. Be the first!</div>';
+                return;
+            }
+            throw new Error('Failed to fetch leaderboard');
+        }
+        
+        const scores = await response.json();
+        
+        if (!scores || scores.length === 0) {
+            leaderboardList.innerHTML = '<div class="leaderboard-loading">No scores yet. Be the first!</div>';
+            return;
+        }
+        
+        // Build leaderboard HTML
+        leaderboardList.innerHTML = '';
+        scores.forEach((score, index) => {
+            const item = document.createElement('div');
+            item.className = 'leaderboard-item';
+            
+            // Highlight current user
+            if (score.username === user.username) {
+                item.classList.add('current-user');
+            }
+            
+            const rank = index + 1;
+            const rankClass = `rank-${rank}`;
+            
+            item.innerHTML = `
+                <span class="leaderboard-rank ${rankClass}">#${rank}</span>
+                <span class="leaderboard-username">${score.username}</span>
+                <span class="leaderboard-score">${score.score}</span>
+            `;
+            
+            leaderboardList.appendChild(item);
+        });
+        
+    } catch (error) {
+        console.error('Error loading leaderboard:', error);
+        leaderboardList.innerHTML = '<div class="leaderboard-loading">Failed to load leaderboard</div>';
     }
 }
