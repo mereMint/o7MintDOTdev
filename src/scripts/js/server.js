@@ -1205,22 +1205,36 @@ app.post('/api/auth/logout', authMiddleware, (req, res) => {
     res.json({ success: true, message: "Logged out successfully" });
 });
 
+// Constants for dev mode
+const DEV_DISCORD_ID = '000000000000000000';
+const DEV_AVATAR = '0';
+
 // POST /api/auth/dev-login - Dev mode login (localhost only)
-app.post('/api/auth/dev-login', adminMiddleware, (req, res) => {
+app.post('/api/auth/dev-login', (req, res) => {
+    // Localhost-only check (same as adminMiddleware but without auth requirement)
+    if (req.headers['cf-ray'] || req.headers['x-forwarded-for']) {
+        return res.status(403).json({ error: "Forbidden: Dev login only available on localhost" });
+    }
+    const ip = req.ip || req.connection.remoteAddress;
+    const isLocal = ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1';
+    if (!isLocal) {
+        return res.status(403).json({ error: "Forbidden: Dev login only available on localhost" });
+    }
+    
     const { username } = req.body;
     if (!username) {
         return res.status(400).json({ error: "Username required" });
     }
     
     // Create a dev session
-    const sessionToken = createSession(username, '000000000000000000', '0', 'user');
+    const sessionToken = createSession(username, DEV_DISCORD_ID, DEV_AVATAR, 'user');
     res.json({ 
         success: true, 
         session_token: sessionToken,
         user: {
             username,
-            discord_id: '000000000000000000',
-            avatar: '0',
+            discord_id: DEV_DISCORD_ID,
+            avatar: DEV_AVATAR,
             role: 'user'
         }
     });

@@ -722,8 +722,7 @@ async function approveRevision(id) {
     try {
         await fetch(`/api/admin/explain/revision/${id}/approve`, {
             method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ reviewer: currentUser.username })
+            headers: getAuthHeaders()
         });
         loadModeratorPanel();
     } catch (err) {
@@ -735,8 +734,7 @@ async function rejectRevision(id) {
     try {
         await fetch(`/api/admin/explain/revision/${id}/reject`, {
             method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ reviewer: currentUser.username })
+            headers: getAuthHeaders()
         });
         loadModeratorPanel();
     } catch (err) {
