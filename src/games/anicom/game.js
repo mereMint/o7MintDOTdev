@@ -545,6 +545,9 @@ function getFailureReason(selectedAnime) {
             const sharedGenres = selectedAnime.genres && current.genres
                 ? selectedAnime.genres.filter(g => current.genres.includes(g))
                 : [];
+            if (sharedGenres.length === 0) {
+                return `${selectedAnime.title} unexpectedly shares no genres with ${current.title}.`;
+            }
             return `${selectedAnime.title} shares genre(s): ${sharedGenres.join(', ')} with ${current.title}.`;
         case CHALLENGE_TYPES.MULTIPLE_GENRES:
             const selectedGenresList = selectedAnime.genres && selectedAnime.genres.length > 0 
@@ -553,7 +556,7 @@ function getFailureReason(selectedAnime) {
             const matchingGenres = selectedAnime.genres && current.genres
                 ? selectedAnime.genres.filter(g => current.genres.includes(g))
                 : [];
-            return `${selectedAnime.title} has genres: ${selectedGenresList}, only ${matchingGenres.length} genre(s) match with ${current.title}.`;
+            return `${selectedAnime.title} has genres: ${selectedGenresList}, only ${matchingGenres.length} genre(s) match with ${current.title} (required: at least 2).`;
         case CHALLENGE_TYPES.SAME_STUDIO:
             const requiredStudio = challenge.studio || current.studio;
             const selectedStudio = selectedAnime.studio || 'unknown studio';
