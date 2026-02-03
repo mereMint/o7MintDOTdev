@@ -539,7 +539,7 @@ function getFailureReason(selectedAnime) {
                 : 'no genres';
             return `${selectedAnime.title} has genres: ${selectedGenres}, not ${requiredGenre}.`;
         case CHALLENGE_TYPES.DIFFERENT_GENRE:
-            const currentGenres = current.genres && current.genres.length > 0 
+            const currentGenresStr = current.genres && current.genres.length > 0 
                 ? current.genres.join(', ') 
                 : 'unknown';
             const sharedGenres = selectedAnime.genres && current.genres
@@ -547,7 +547,7 @@ function getFailureReason(selectedAnime) {
                 : [];
             if (sharedGenres.length === 0) {
                 // This shouldn't happen if validator worked correctly, but handle gracefully
-                return `${selectedAnime.title} shares genres with ${current.title}.`;
+                return `${selectedAnime.title} was not supposed to share any genres with ${current.title}.`;
             }
             return `${selectedAnime.title} shares genre(s): ${sharedGenres.join(', ')} with ${current.title}.`;
         case CHALLENGE_TYPES.MULTIPLE_GENRES:
