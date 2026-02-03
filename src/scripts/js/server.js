@@ -37,7 +37,10 @@ const pool = mariadb.createPool({
     user: 'root',
     password: '',
     database: 'mintdev_db',
-    connectionLimit: 5
+    connectionLimit: 10,
+    acquireTimeout: 10000,
+    idleTimeout: 60000,
+    minimumIdle: 5
 });
 
 // State
