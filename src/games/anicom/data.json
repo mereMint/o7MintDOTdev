@@ -45,22 +45,6 @@
             "image": "logo.svg",
             "secret": false,
             "points": 300
-        },
-        {
-            "id": "genre_expert",
-            "title": "Genre Expert",
-            "description": "Successfully match anime by genre 10 times.",
-            "image": "logo.svg",
-            "secret": false,
-            "points": 150
-        },
-        {
-            "id": "studio_guru",
-            "title": "Studio Guru",
-            "description": "Successfully match anime by studio 10 times.",
-            "image": "logo.svg",
-            "secret": true,
-            "points": 150
         }
     ]
 }

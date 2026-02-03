@@ -39,6 +39,13 @@ const user = storedUser ? JSON.parse(storedUser) : { username: "Anonymous" };
 // Autocomplete state
 let selectedAutocompleteIndex = -1;
 
+// Helper function to extract year from release_date
+function getYear(release_date) {
+    if (!release_date) return null;
+    // Works for both "2020" and "2020-01-15" formats
+    return parseInt(release_date);
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('user-display').innerText = `Player: ${user.username}`;
@@ -270,44 +277,47 @@ function generateChallenge() {
 
     // Release year challenges (if anime has release_date)
     if (anime.release_date) {
-        const year = parseInt(anime.release_date);
+        const year = getYear(anime.release_date);
         
-        possibleChallenges.push({
-            type: CHALLENGE_TYPES.SAME_YEAR,
-            text: `Choose an anime released in the SAME YEAR: ${year}`,
-            validator: (selectedAnime) => {
-                return selectedAnime.release_date && parseInt(selectedAnime.release_date) === year;
-            }
-        });
+        if (year) {
+            possibleChallenges.push({
+                type: CHALLENGE_TYPES.SAME_YEAR,
+                text: `Choose an anime released in the SAME YEAR: ${year}`,
+                validator: (selectedAnime) => {
+                    return getYear(selectedAnime.release_date) === year;
+                }
+            });
 
-        possibleChallenges.push({
-            type: CHALLENGE_TYPES.EARLIER_YEAR,
-            text: `Choose an anime released BEFORE ${year}`,
-            validator: (selectedAnime) => {
-                return selectedAnime.release_date && parseInt(selectedAnime.release_date) < year;
-            }
-        });
+            possibleChallenges.push({
+                type: CHALLENGE_TYPES.EARLIER_YEAR,
+                text: `Choose an anime released BEFORE ${year}`,
+                validator: (selectedAnime) => {
+                    const selectedYear = getYear(selectedAnime.release_date);
+                    return selectedYear && selectedYear < year;
+                }
+            });
 
-        possibleChallenges.push({
-            type: CHALLENGE_TYPES.LATER_YEAR,
-            text: `Choose an anime released AFTER ${year}`,
-            validator: (selectedAnime) => {
-                return selectedAnime.release_date && parseInt(selectedAnime.release_date) > year;
-            }
-        });
+            possibleChallenges.push({
+                type: CHALLENGE_TYPES.LATER_YEAR,
+                text: `Choose an anime released AFTER ${year}`,
+                validator: (selectedAnime) => {
+                    const selectedYear = getYear(selectedAnime.release_date);
+                    return selectedYear && selectedYear > year;
+                }
+            });
 
-        // Within year range challenge
-        const rangeLower = year - 2;
-        const rangeUpper = year + 2;
-        possibleChallenges.push({
-            type: CHALLENGE_TYPES.WITHIN_YEAR_RANGE,
-            text: `Choose an anime released between ${rangeLower} and ${rangeUpper}`,
-            validator: (selectedAnime) => {
-                if (!selectedAnime.release_date) return false;
-                const selectedYear = parseInt(selectedAnime.release_date);
-                return selectedYear >= rangeLower && selectedYear <= rangeUpper;
-            }
-        });
+            // Within year range challenge
+            const rangeLower = year - 2;
+            const rangeUpper = year + 2;
+            possibleChallenges.push({
+                type: CHALLENGE_TYPES.WITHIN_YEAR_RANGE,
+                text: `Choose an anime released between ${rangeLower} and ${rangeUpper}`,
+                validator: (selectedAnime) => {
+                    const selectedYear = getYear(selectedAnime.release_date);
+                    return selectedYear && selectedYear >= rangeLower && selectedYear <= rangeUpper;
+                }
+            });
+        }
     }
 
     // Select a random challenge from possible ones
@@ -333,7 +343,7 @@ function updateUI() {
     document.getElementById('score-count').innerText = gameState.score;
 
     // Update current anime display
-    document.getElementById('anime-name').innerText = anime.title || anime.title_english || 'Unknown';
+    document.getElementById('anime-name').innerText = anime.title_english || anime.title || 'Unknown';
     
     // Build details string
     let details = [];
