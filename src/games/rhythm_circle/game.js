@@ -57,10 +57,11 @@ let judgmentCounts = { perfect: 0, great: 0, good: 0, miss: 0 };
 // Visual settings
 const CENTER_X = () => canvas.width / 2;
 const CENTER_Y = () => canvas.height / 2;
-const RING_RADIUS = 80; // The target hit area radius (increased for better visibility)
-// const RING_THICKNESS = 15; // Removed
+const RING_RADIUS = 80; // The target hit area radius
 const NOTE_SPAWN_RADIUS = 400;
 const NOTE_SIZE = 20;
+const VISUAL_FADE_TIME = 200; // Extra time to show notes after miss window
+const HIT_ZONE_THRESHOLD = 20; // Range for hit zone visual indicator
 let APPROACH_TIME = 1500; // MS to reach center (will be driven by AR)
 let AR = 5; // Approach Rate (0-10)
 
@@ -201,7 +202,7 @@ function activateMenuOption(action) {
             break;
         case 'quit':
             // Navigate to the game's hub page instead of browser history
-            window.location.href = '/src/html/Game.html?id=rhythm_circle';
+            window.location.href = '../../html/Game.html?id=rhythm_circle';
             break;
     }
 }
@@ -910,7 +911,7 @@ function drawNotes(currentTime) {
         // Notes continue past the center (go through the circle)
         // Allow notes to be visible until they're well past the miss window
         const timePastHit = -timeUntilHit;
-        if (timePastHit > TIMING.MISS + 200 && !isHoldActive) return; // Give extra time for visual
+        if (timePastHit > TIMING.MISS + VISUAL_FADE_TIME && !isHoldActive) return;
 
         // Note color based on type
         let color;
@@ -1005,7 +1006,7 @@ function drawNotes(currentTime) {
             ctx.setLineDash([]);
             
             // Add a visual indicator when note is in the hit zone
-            if (startRadius <= RING_RADIUS + 20 && startRadius >= RING_RADIUS - 20) {
+            if (startRadius <= RING_RADIUS + HIT_ZONE_THRESHOLD && startRadius >= RING_RADIUS - HIT_ZONE_THRESHOLD) {
                 ctx.globalAlpha = 0.5;
                 ctx.lineWidth = 4;
                 ctx.stroke();

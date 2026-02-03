@@ -1069,6 +1069,15 @@
             const file = e.target.files[0];
             if (!file) return;
 
+            // Warn about large files (> 2MB) as they may not save properly
+            const MAX_BG_SIZE = 2 * 1024 * 1024; // 2MB
+            if (file.size > MAX_BG_SIZE) {
+                const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                if (!confirm(`The background image is ${sizeMB}MB which may be too large to save in drafts. Continue anyway?`)) {
+                    return;
+                }
+            }
+
             backgroundFilename = file.name;
             document.getElementById('bg-filename').textContent = backgroundFilename;
 
@@ -1771,7 +1780,7 @@
                 
                 updateTimeline();
                 drawPreview();
-                alert('Draft loaded successfully!' + (data.backgroundData ? ' (with background)' : ''));
+                alert(`Draft loaded successfully!${data.backgroundData ? ' (with background)' : ''}`);
             } catch (e) {
                 alert('Failed to load draft.');
             }
