@@ -766,6 +766,36 @@ app.post('/api/score', async (req, res) => {
                 }
             }
 
+            // Special handling for daily boards - only keep best score per user per day
+            if (board === 'daily') {
+                const today = new Date().toISOString().split('T')[0];
+                
+                // Check if user already has a score for today
+                const existingScores = await conn.query(
+                    "SELECT id, score FROM scores WHERE game_id = ? AND username = ? AND board_id = 'daily' AND DATE(created_at) = ?",
+                    [game_id, user, today]
+                );
+                
+                if (existingScores.length > 0) {
+                    const bestExisting = Math.max(...existingScores.map(s => s.score));
+                    
+                    if (score > bestExisting) {
+                        // New score is better, delete old scores and insert new one
+                        await conn.query(
+                            "DELETE FROM scores WHERE game_id = ? AND username = ? AND board_id = 'daily' AND DATE(created_at) = ?",
+                            [game_id, user, today]
+                        );
+                        await conn.query(
+                            "INSERT INTO scores (game_id, username, score, board_id, discord_id, avatar) VALUES (?, ?, ?, ?, ?, ?)",
+                            [game_id, user, score, board, userDiscordId || null, userAvatar || null]
+                        );
+                    }
+                    // If score is not better, don't insert (silently ignore)
+                    res.json({ success: true, note: "Daily score updated" });
+                    return;
+                }
+            }
+
             await conn.query(
                 "INSERT INTO scores (game_id, username, score, board_id, discord_id, avatar) VALUES (?, ?, ?, ?, ?, ?)",
                 [game_id, user, score, board, userDiscordId || null, userAvatar || null]
