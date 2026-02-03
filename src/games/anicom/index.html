@@ -20,10 +20,6 @@
         <!-- Game Stats -->
         <div id="stats-container">
             <div class="stat-box">
-                <span class="stat-label">Round:</span>
-                <span id="round-count" class="stat-value">0</span>
-            </div>
-            <div class="stat-box">
                 <span class="stat-label">Score:</span>
                 <span id="score-count" class="stat-value">0</span>
             </div>
@@ -34,6 +30,7 @@
             <div id="current-anime-display">
                 <h3>Current Anime:</h3>
                 <div id="anime-info">
+                    <img id="anime-cover" class="anime-cover" src="" alt="Anime Cover" style="display: none;">
                     <div id="anime-name" class="anime-title">Loading...</div>
                     <div id="anime-details" class="anime-details"></div>
                 </div>
@@ -65,7 +62,6 @@
             <div id="result-content">
                 <h2 id="result-title">Game Over!</h2>
                 <div id="result-stats">
-                    <p>Rounds Completed: <span id="final-rounds">0</span></p>
                     <p>Final Score: <span id="final-score">0</span></p>
                 </div>
                 <div id="result-reason"></div>

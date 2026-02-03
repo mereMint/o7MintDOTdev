@@ -100,6 +100,15 @@ body {
     margin-bottom: 15px;
 }
 
+.anime-cover {
+    width: 150px;
+    height: auto;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 2px solid #2a2a2a;
+    display: block;
+}
+
 .anime-title {
     font-size: 1.5rem;
     font-weight: bold;

@@ -69,13 +69,18 @@ async function startGame() {
     };
 
     // Reset UI
-    document.getElementById('round-count').innerText = '0';
     document.getElementById('score-count').innerText = '0';
     document.getElementById('used-count').innerText = '0';
     document.getElementById('used-anime-list').innerHTML = '';
     document.getElementById('guess-input').value = '';
     document.getElementById('result-screen').style.display = 'none';
     document.getElementById('submit-btn').disabled = false;
+    
+    // Hide anime cover initially
+    const coverImg = document.getElementById('anime-cover');
+    if (coverImg) {
+        coverImg.style.display = 'none';
+    }
 
     // Load anime cache
     await loadAnimeCache();
@@ -338,12 +343,18 @@ function generateChallenge() {
 function updateUI() {
     const anime = gameState.currentAnime;
     
-    // Update stats
-    document.getElementById('round-count').innerText = gameState.roundsCompleted;
-    document.getElementById('score-count').innerText = gameState.score;
+    // Update score (same as rounds)
+    document.getElementById('score-count').innerText = gameState.roundsCompleted;
 
     // Update current anime display
     document.getElementById('anime-name').innerText = anime.title_english || anime.title || 'Unknown';
+    
+    // Display anime cover if available
+    const coverImg = document.getElementById('anime-cover');
+    if (coverImg && anime.image) {
+        coverImg.src = anime.image;
+        coverImg.style.display = 'block';
+    }
     
     // Build details string
     let details = [];
@@ -438,10 +449,9 @@ async function submitGuess() {
     if (isValid) {
         // Correct answer!
         gameState.roundsCompleted++;
-        gameState.score += 100; // Base score per round
+        gameState.score = gameState.roundsCompleted; // Score equals rounds
         
-        // Update stats immediately
-        document.getElementById('round-count').innerText = gameState.roundsCompleted;
+        // Update score display immediately
         document.getElementById('score-count').innerText = gameState.score;
 
         // Clear input
@@ -519,7 +529,6 @@ function endGame(reason) {
     
     // Show result screen
     document.getElementById('result-title').innerText = 'Game Over!';
-    document.getElementById('final-rounds').innerText = gameState.roundsCompleted;
     document.getElementById('final-score').innerText = gameState.score;
     document.getElementById('result-reason').innerText = reason;
     document.getElementById('result-screen').style.display = 'flex';
