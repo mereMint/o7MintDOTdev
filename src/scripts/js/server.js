@@ -551,7 +551,10 @@ app.get('/api/scores', async (req, res) => {
         // For robustness, if column missing, it might error. Ideally we migrate.)
         // Using 'main' as default.
         const rows = await conn.query(`
-            SELECT s.*, u.avatar, u.discord_id 
+            SELECT 
+                s.id, s.game_id, s.username, s.score, s.board_id, s.created_at,
+                COALESCE(u.discord_id, s.discord_id) as discord_id,
+                COALESCE(u.avatar, s.avatar) as avatar
             FROM scores s 
             LEFT JOIN users u ON s.username = u.username 
             WHERE s.game_id = ? AND s.board_id = ? 
