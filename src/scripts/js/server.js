@@ -45,14 +45,24 @@ app.use(express.static('.')); // Serve static files from root (process.cwd)
 // Request timeout middleware to prevent hanging requests
 app.use((req, res, next) => {
     // Set timeout to 30 seconds for all requests
-    req.setTimeout(30000, () => {
-        console.error(`[TIMEOUT] Request timeout: ${req.method} ${req.url}`);
+    const timeout = setTimeout(() => {
         if (!res.headersSent) {
+            console.error(`[TIMEOUT] Request timeout: ${req.method} ${req.url}`);
             res.status(504).json({ error: 'Request timeout' });
         }
+    }, 30000);
+    
+    // Clear timeout when response finishes
+    res.on('finish', () => {
+        clearTimeout(timeout);
     });
+    
     next();
 });
+
+// State
+let useInMemory = false;
+let memoryPosts = [];
 
 // Database Connection Pool
 const pool = mariadb.createPool({
@@ -69,6 +79,11 @@ const pool = mariadb.createPool({
 // Database pool error handling
 pool.on('error', (err) => {
     console.error('[DB POOL ERROR]', err);
+    // Switch to in-memory mode on pool errors
+    if (!useInMemory) {
+        console.warn('[DB] Switching to in-memory mode due to pool error');
+        useInMemory = true;
+    }
 });
 
 // Test database connection on startup and handle errors gracefully
@@ -82,10 +97,6 @@ pool.getConnection()
         console.warn('[DB] Server will use in-memory mode');
         useInMemory = true;
     });
-
-// State
-let useInMemory = false;
-let memoryPosts = [];
 
 // =============================================
 // Session Management - Secure Authentication
