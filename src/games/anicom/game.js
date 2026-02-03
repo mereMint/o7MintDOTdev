@@ -29,7 +29,9 @@ const CHALLENGE_TYPES = {
     HAS_GENRE: 'has_genre',
     HAS_TAG: 'has_tag',
     SCORE_RANGE: 'score_range',
-    MULTIPLE_GENRES: 'multiple_genres'
+    MULTIPLE_GENRES: 'multiple_genres',
+    MORE_EPISODES: 'more_episodes',
+    FEWER_EPISODES: 'fewer_episodes'
 };
 
 // User info
@@ -325,6 +327,25 @@ function generateChallenge() {
         }
     }
 
+    // Episode challenges (if anime has episode count)
+    if (anime.episodes && anime.episodes > 0) {
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.MORE_EPISODES,
+            text: `Choose an anime with MORE episodes than ${anime.episodes}`,
+            validator: (selectedAnime) => {
+                return selectedAnime.episodes && selectedAnime.episodes > anime.episodes;
+            }
+        });
+
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.FEWER_EPISODES,
+            text: `Choose an anime with FEWER episodes than ${anime.episodes}`,
+            validator: (selectedAnime) => {
+                return selectedAnime.episodes && selectedAnime.episodes < anime.episodes;
+            }
+        });
+    }
+
     // Select a random challenge from possible ones
     if (possibleChallenges.length === 0) {
         // Fallback: just pick any anime
@@ -524,6 +545,10 @@ function getFailureReason(selectedAnime) {
             return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'N/A'}, which is not after ${current.release_date}.`;
         case CHALLENGE_TYPES.WITHIN_YEAR_RANGE:
             return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'N/A'}, which is not in the required year range.`;
+        case CHALLENGE_TYPES.MORE_EPISODES:
+            return `${selectedAnime.title} has ${selectedAnime.episodes || 'N/A'} episodes, which is not more than ${current.episodes}.`;
+        case CHALLENGE_TYPES.FEWER_EPISODES:
+            return `${selectedAnime.title} has ${selectedAnime.episodes || 'N/A'} episodes, which is not fewer than ${current.episodes}.`;
         default:
             return 'The selected anime does not meet the challenge requirements.';
     }
@@ -587,7 +612,7 @@ async function checkAchievements() {
 
     for (const achievementId of achievementsToAward) {
         try {
-            await fetch('/api/achievements', {
+            await fetch('/api/achievements/unlock', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -609,43 +634,78 @@ function playAgain() {
     startGame();
 }
 
+// Search anime using API (similar to Anidle)
+async function searchAnime(query) {
+    try {
+        // Use Jikan API for anime search
+        const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=15&sfw`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        const results = data.data || [];
+
+        // Filter to only TV and Movie types
+        return results.filter(a => {
+            if (a.type !== 'TV' && a.type !== 'Movie') return false;
+            // Filter out already used anime
+            if (gameState.usedAnimeIds.has(a.mal_id)) return false;
+            return true;
+        });
+    } catch (err) {
+        console.error('Jikan API Error:', err);
+        // Fallback to cache search
+        return gameState.animeCache
+            .filter(anime => {
+                if (gameState.usedAnimeIds.has(anime.mal_id)) return false;
+                const title = (anime.title || '').toLowerCase();
+                const titleEng = (anime.title_english || '').toLowerCase();
+                return title.includes(query.toLowerCase()) || titleEng.includes(query.toLowerCase());
+            })
+            .slice(0, 10);
+    }
+}
+
 // Setup autocomplete
 function setupAutocomplete() {
     const input = document.getElementById('guess-input');
     const autocompleteList = document.getElementById('autocomplete-list');
+    let debounceTimer;
 
     input.addEventListener('input', function() {
-        const value = this.value.toLowerCase().trim();
+        const value = this.value.trim();
         
         // Close any already open lists
         autocompleteList.innerHTML = '';
         selectedAutocompleteIndex = -1;
 
+        clearTimeout(debounceTimer);
+
         if (!value || value.length < 2) {
             return;
         }
 
-        // Filter anime that match the input and haven't been used
-        const matches = gameState.animeCache
-            .filter(anime => {
-                if (gameState.usedAnimeIds.has(anime.mal_id)) return false;
-                
-                const title = (anime.title || '').toLowerCase();
-                const titleEng = (anime.title_english || '').toLowerCase();
-                return title.includes(value) || titleEng.includes(value);
-            })
-            .slice(0, 10); // Limit to 10 results
+        // Debounce search to avoid too many API calls
+        debounceTimer = setTimeout(async () => {
+            const matches = await searchAnime(value);
 
-        matches.forEach(anime => {
-            const div = document.createElement('div');
-            const displayTitle = anime.title_english || anime.title;
-            div.innerHTML = displayTitle;
-            div.addEventListener('click', function() {
-                input.value = displayTitle;
-                autocompleteList.innerHTML = '';
+            if (matches.length === 0) {
+                return;
+            }
+
+            matches.forEach(anime => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                
+                // Use title from API response or cache
+                const displayTitle = anime.title_english || anime.title;
+                div.textContent = displayTitle;
+                
+                div.addEventListener('click', function() {
+                    input.value = displayTitle;
+                    autocompleteList.innerHTML = '';
+                });
+                autocompleteList.appendChild(div);
             });
-            autocompleteList.appendChild(div);
-        });
+        }, 300); // 300ms debounce delay
     });
 
     // Handle keyboard navigation
