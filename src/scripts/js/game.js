@@ -372,7 +372,9 @@ async function loadScores(boardKey = 'main') {
             // Avatar Logic
             let avatarImg = '../assets/imgs/const.png';
             if (s.discord_id && s.avatar) {
-                avatarImg = `https://cdn.discordapp.com/avatars/${s.discord_id}/${s.avatar}.png`;
+                // Discord avatar hash can be animated (starts with a_) - use gif, otherwise png
+                const ext = s.avatar.startsWith('a_') ? 'gif' : 'png';
+                avatarImg = `https://cdn.discordapp.com/avatars/${s.discord_id}/${s.avatar}.${ext}`;
             }
 
             li.innerHTML = `

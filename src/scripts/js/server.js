@@ -236,6 +236,20 @@ pool.getConnection()
                 await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255)");
                 await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS avatar VARCHAR(255)");
 
+                // Migration: Make discord_id unique to prevent duplicate accounts
+                try {
+                    // Check if index exists
+                    const indexes = await conn.query("SHOW INDEX FROM users WHERE Key_name = 'unique_discord_id'");
+                    if (indexes.length === 0) {
+                        // Add unique constraint on discord_id
+                        await conn.query("ALTER TABLE users ADD UNIQUE KEY unique_discord_id (discord_id)");
+                        console.log("[OK] Added unique constraint on users.discord_id");
+                    }
+                } catch (idxErr) {
+                    // May fail if duplicate discord_ids exist - handle gracefully
+                    console.warn("Could not add unique constraint on discord_id:", idxErr.message);
+                }
+
                 // Migration for user_achievements: ensure id column exists
                 // Check if id column already exists before attempting migration
                 try {
@@ -655,12 +669,16 @@ app.get('/api/scores', async (req, res) => {
                 COALESCE(u.discord_id, s.discord_id) as discord_id,
                 COALESCE(u.avatar, s.avatar) as avatar
             FROM scores s 
-            LEFT JOIN users u ON s.username = u.username 
+            LEFT JOIN users u ON (u.discord_id = s.discord_id AND s.discord_id IS NOT NULL) 
+                OR (u.username = s.username AND s.discord_id IS NULL)
             WHERE s.game_id = ? AND s.board_id = ? 
             ORDER BY s.score DESC 
             LIMIT ?`,
             [gameId, boardId, limitInt]
         );
+        // Note: OR-based JOIN prevents optimal index usage but is necessary to support
+        // both discord_id-based matching (preferred) and username-based fallback (legacy).
+        // Performance is acceptable for limited result sets (LIMIT applied).
         res.json(rows);
     } catch (err) {
         // Fallback for missing column if schema isn't updated
@@ -748,6 +766,55 @@ app.post('/api/score', async (req, res) => {
                 if (userRes.length > 0) {
                     userDiscordId = userDiscordId || userRes[0].discord_id;
                     userAvatar = userAvatar || userRes[0].avatar;
+                }
+            }
+
+            // Special handling for daily boards - only keep best score per user per day
+            if (board === 'daily') {
+                const today = new Date().toISOString().split('T')[0];
+                
+                // Check if user already has a score for today
+                // Use discord_id if available to properly identify the user
+                let existingScores;
+                if (userDiscordId) {
+                    existingScores = await conn.query(
+                        "SELECT id, score FROM scores WHERE game_id = ? AND discord_id = ? AND board_id = 'daily' AND DATE(created_at) = ?",
+                        [game_id, userDiscordId, today]
+                    );
+                } else {
+                    // Fallback to username for users without discord_id (Anonymous users)
+                    existingScores = await conn.query(
+                        "SELECT id, score FROM scores WHERE game_id = ? AND username = ? AND discord_id IS NULL AND board_id = 'daily' AND DATE(created_at) = ?",
+                        [game_id, user, today]
+                    );
+                }
+                
+                if (existingScores.length > 0) {
+                    // Find best existing score using reduce to avoid stack overflow with large arrays
+                    const bestExisting = existingScores.reduce((max, s) => Math.max(max, s.score), -Infinity);
+                    
+                    // Only update if new score is strictly better (equal scores are ignored)
+                    if (score > bestExisting) {
+                        // New score is better, delete old scores and insert new one
+                        if (userDiscordId) {
+                            await conn.query(
+                                "DELETE FROM scores WHERE game_id = ? AND discord_id = ? AND board_id = 'daily' AND DATE(created_at) = ?",
+                                [game_id, userDiscordId, today]
+                            );
+                        } else {
+                            await conn.query(
+                                "DELETE FROM scores WHERE game_id = ? AND username = ? AND discord_id IS NULL AND board_id = 'daily' AND DATE(created_at) = ?",
+                                [game_id, user, today]
+                            );
+                        }
+                        await conn.query(
+                            "INSERT INTO scores (game_id, username, score, board_id, discord_id, avatar) VALUES (?, ?, ?, ?, ?, ?)",
+                            [game_id, user, score, board, userDiscordId || null, userAvatar || null]
+                        );
+                    }
+                    // If score is not better, don't insert (silently ignore)
+                    res.json({ success: true, note: "Daily score updated" });
+                    return;
                 }
             }
 
@@ -1156,14 +1223,27 @@ app.get('/api/auth/discord/callback', async (req, res) => {
             let conn;
             try {
                 conn = await pool.getConnection();
-                await conn.query(
-                    "INSERT INTO users (username, discord_id, avatar) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE discord_id = ?, avatar = ?",
-                    [username, id, avatar, id, avatar]
+                
+                // Check if user exists by discord_id first
+                const existingUser = await conn.query(
+                    "SELECT username, role FROM users WHERE discord_id = ?",
+                    [id]
                 );
-                // Fetch user role
-                const roleRes = await conn.query("SELECT role FROM users WHERE username = ?", [username]);
-                if (roleRes.length > 0 && roleRes[0].role) {
-                    userRole = roleRes[0].role;
+                
+                if (existingUser.length > 0) {
+                    // User exists, update their info (in case username or avatar changed)
+                    await conn.query(
+                        "UPDATE users SET username = ?, avatar = ? WHERE discord_id = ?",
+                        [username, avatar, id]
+                    );
+                    userRole = existingUser[0].role || 'user';
+                } else {
+                    // New user, insert
+                    await conn.query(
+                        "INSERT INTO users (username, discord_id, avatar) VALUES (?, ?, ?)",
+                        [username, id, avatar]
+                    );
+                    // userRole defaults to 'user'
                 }
             } catch (err) {
                 console.error("Failed to sync user to DB:", err);
@@ -1599,6 +1679,43 @@ app.delete('/api/admin/data/:table/:id', adminMiddleware, async (req, res) => {
         }
     } catch (err) {
         console.error(`Admin Delete Error (${tableName}/${id}):`, err);
+        res.status(500).json({ error: "Delete Error: " + err.message });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// DELETE /api/admin/daily-challenge/:date_id/:game_id - Delete a daily challenge
+app.delete('/api/admin/daily-challenge/:date_id/:game_id', adminMiddleware, async (req, res) => {
+    if (useInMemory) return res.status(400).json({ error: "Memory mode - no deletion" });
+
+    const { date_id, game_id } = req.params;
+
+    if (!date_id || !game_id) {
+        return res.status(400).json({ error: "Both date_id and game_id are required" });
+    }
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+
+        // Delete the daily challenge
+        const result = await conn.query(
+            "DELETE FROM daily_challenges WHERE date_id = ? AND game_id = ?",
+            [date_id, game_id]
+        );
+
+        if (result.affectedRows > 0) {
+            // Clear memory cache for this challenge
+            const cacheKey = `${date_id}_${game_id}`;
+            delete memoryDailyCache[cacheKey];
+            
+            res.json({ success: true, deleted: result.affectedRows });
+        } else {
+            res.status(404).json({ error: "Daily challenge not found" });
+        }
+    } catch (err) {
+        console.error(`Admin Delete Daily Challenge Error (${date_id}/${game_id}):`, err);
         res.status(500).json({ error: "Delete Error: " + err.message });
     } finally {
         if (conn) conn.release();
@@ -3982,9 +4099,12 @@ app.get('/api/anidle/daily-leaderboard', async (req, res) => {
     try {
         conn = await pool.getConnection();
         const rows = await conn.query(`
-            SELECT s.username, s.score, s.created_at, u.discord_id, u.avatar
+            SELECT s.username, s.score, s.created_at, 
+                COALESCE(u.discord_id, s.discord_id) as discord_id,
+                COALESCE(u.avatar, s.avatar) as avatar
             FROM scores s
-            LEFT JOIN users u ON s.username = u.username
+            LEFT JOIN users u ON (u.discord_id = s.discord_id AND s.discord_id IS NOT NULL) 
+                OR (u.username = s.username AND s.discord_id IS NULL)
             WHERE s.game_id = 'anidle' 
             AND s.board_id = 'daily'
             AND DATE(s.created_at) = ?
