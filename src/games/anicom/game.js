@@ -17,9 +17,7 @@ const CHALLENGE_TYPES = {
     LOWER_SCORE: 'lower_score',
     SAME_GENRE: 'same_genre',
     SAME_STUDIO: 'same_studio',
-    SAME_TAG: 'same_tag',
-    HIGHER_POPULARITY: 'higher_popularity',
-    LOWER_POPULARITY: 'lower_popularity'
+    SAME_TAG: 'same_tag'
 };
 
 // User info
@@ -67,16 +65,16 @@ async function startGame() {
     await startNewRound();
 }
 
-// Load anime list from server
+// Load anime list from server (full details for comparison)
 async function loadAnimeCache() {
     try {
         console.log('Loading anime cache...');
-        const response = await fetch('/api/anidle/anime-list');
+        const response = await fetch('/api/anidle/anime-full-list');
         if (!response.ok) throw new Error('Failed to load anime list');
         
         const data = await response.json();
         gameState.animeCache = data;
-        console.log(`Loaded ${gameState.animeCache.length} anime`);
+        console.log(`Loaded ${gameState.animeCache.length} anime with full details`);
     } catch (error) {
         console.error('Error loading anime cache:', error);
         alert('Failed to load anime data. Please refresh the page.');
@@ -112,25 +110,15 @@ async function startNewRound() {
         return;
     }
 
-    // Fetch full details for the anime
-    try {
-        const response = await fetch(`https://api.jikan.moe/v4/anime/${randomAnime.mal_id}/full`);
-        if (!response.ok) throw new Error('Failed to fetch anime details');
-        
-        const data = await response.json();
-        gameState.currentAnime = data.data;
-        gameState.usedAnimeIds.add(gameState.currentAnime.mal_id);
+    // Use the anime from cache (already has full details)
+    gameState.currentAnime = randomAnime;
+    gameState.usedAnimeIds.add(gameState.currentAnime.mal_id);
 
-        // Generate a random challenge
-        generateChallenge();
+    // Generate a random challenge
+    generateChallenge();
 
-        // Update UI
-        updateUI();
-    } catch (error) {
-        console.error('Error fetching anime details:', error);
-        // Try another anime
-        await startNewRound();
-    }
+    // Update UI
+    updateUI();
 }
 
 // Generate a random challenge based on current anime
@@ -143,13 +131,13 @@ function generateChallenge() {
         possibleChallenges.push({
             type: CHALLENGE_TYPES.HIGHER_SCORE,
             text: `Choose an anime with a HIGHER MAL score than ${anime.score.toFixed(2)}`,
-            validator: (selectedAnime) => selectedAnime.score > anime.score
+            validator: (selectedAnime) => selectedAnime.score && selectedAnime.score > anime.score
         });
         
         possibleChallenges.push({
             type: CHALLENGE_TYPES.LOWER_SCORE,
             text: `Choose an anime with a LOWER MAL score than ${anime.score.toFixed(2)}`,
-            validator: (selectedAnime) => selectedAnime.score < anime.score
+            validator: (selectedAnime) => selectedAnime.score && selectedAnime.score < anime.score
         });
     }
 
@@ -158,52 +146,36 @@ function generateChallenge() {
         const randomGenre = anime.genres[Math.floor(Math.random() * anime.genres.length)];
         possibleChallenges.push({
             type: CHALLENGE_TYPES.SAME_GENRE,
-            text: `Choose an anime with the genre: ${randomGenre.name}`,
+            text: `Choose an anime with the genre: ${randomGenre}`,
             validator: (selectedAnime) => {
-                return selectedAnime.genres && selectedAnime.genres.some(g => g.mal_id === randomGenre.mal_id);
+                return selectedAnime.genres && selectedAnime.genres.includes(randomGenre);
             },
             genre: randomGenre
         });
     }
 
-    // Studio challenge (if anime has studios)
-    if (anime.studios && anime.studios.length > 0) {
-        const randomStudio = anime.studios[Math.floor(Math.random() * anime.studios.length)];
+    // Studio challenge (if anime has studio)
+    if (anime.studio) {
         possibleChallenges.push({
             type: CHALLENGE_TYPES.SAME_STUDIO,
-            text: `Choose an anime made by: ${randomStudio.name}`,
+            text: `Choose an anime made by: ${anime.studio}`,
             validator: (selectedAnime) => {
-                return selectedAnime.studios && selectedAnime.studios.some(s => s.mal_id === randomStudio.mal_id);
+                return selectedAnime.studio === anime.studio;
             },
-            studio: randomStudio
+            studio: anime.studio
         });
     }
 
-    // Tag/Theme challenge (using themes array from full endpoint)
-    if (anime.themes && anime.themes.length > 0) {
-        const randomTheme = anime.themes[Math.floor(Math.random() * anime.themes.length)];
+    // Tag/Theme challenge (using tags array)
+    if (anime.tags && anime.tags.length > 0) {
+        const randomTag = anime.tags[Math.floor(Math.random() * anime.tags.length)];
         possibleChallenges.push({
             type: CHALLENGE_TYPES.SAME_TAG,
-            text: `Choose an anime with the theme: ${randomTheme.name}`,
+            text: `Choose an anime with the tag: ${randomTag.name}`,
             validator: (selectedAnime) => {
-                return selectedAnime.themes && selectedAnime.themes.some(t => t.mal_id === randomTheme.mal_id);
+                return selectedAnime.tags && selectedAnime.tags.some(t => t.name === randomTag.name);
             },
-            theme: randomTheme
-        });
-    }
-
-    // Popularity challenge (using members count as popularity metric)
-    if (anime.members) {
-        possibleChallenges.push({
-            type: CHALLENGE_TYPES.HIGHER_POPULARITY,
-            text: `Choose an anime that is MORE POPULAR (members: ${anime.members.toLocaleString()})`,
-            validator: (selectedAnime) => selectedAnime.members > anime.members
-        });
-        
-        possibleChallenges.push({
-            type: CHALLENGE_TYPES.LOWER_POPULARITY,
-            text: `Choose an anime that is LESS POPULAR (members: ${anime.members.toLocaleString()})`,
-            validator: (selectedAnime) => selectedAnime.members < anime.members
+            tag: randomTag
         });
     }
 
@@ -235,14 +207,15 @@ function updateUI() {
     // Build details string
     let details = [];
     if (anime.score) details.push(`<span class="detail-item"><span class="detail-label">Score:</span> <span class="detail-value">${anime.score.toFixed(2)}</span></span>`);
-    if (anime.members) details.push(`<span class="detail-item"><span class="detail-label">Members:</span> <span class="detail-value">${anime.members.toLocaleString()}</span></span>`);
     if (anime.genres && anime.genres.length > 0) {
-        const genreNames = anime.genres.map(g => g.name).join(', ');
+        const genreNames = anime.genres.join(', ');
         details.push(`<span class="detail-item"><span class="detail-label">Genres:</span> <span class="detail-value">${genreNames}</span></span>`);
     }
-    if (anime.studios && anime.studios.length > 0) {
-        const studioNames = anime.studios.map(s => s.name).join(', ');
-        details.push(`<span class="detail-item"><span class="detail-label">Studio:</span> <span class="detail-value">${studioNames}</span></span>`);
+    if (anime.studio) {
+        details.push(`<span class="detail-item"><span class="detail-label">Studio:</span> <span class="detail-value">${anime.studio}</span></span>`);
+    }
+    if (anime.release_date) {
+        details.push(`<span class="detail-item"><span class="detail-label">Year:</span> <span class="detail-value">${anime.release_date}</span></span>`);
     }
     
     document.getElementById('anime-details').innerHTML = details.join('');
@@ -315,55 +288,44 @@ async function submitGuess() {
     document.getElementById('submit-btn').disabled = true;
     input.disabled = true;
 
-    // Fetch full details for validation
-    try {
-        const response = await fetch(`https://api.jikan.moe/v4/anime/${guessedAnime.mal_id}/full`);
-        if (!response.ok) throw new Error('Failed to fetch anime details');
+    // Use cached data - the guessedAnime already has full details
+    const selectedAnime = guessedAnime;
+
+    // Validate the guess
+    const isValid = gameState.currentChallenge.validator(selectedAnime);
+
+    if (isValid) {
+        // Correct answer!
+        gameState.roundsCompleted++;
+        gameState.score += 100; // Base score per round
         
-        const data = await response.json();
-        const selectedAnime = data.data;
+        // Update stats immediately
+        document.getElementById('round-count').innerText = gameState.roundsCompleted;
+        document.getElementById('score-count').innerText = gameState.score;
 
-        // Validate the guess
-        const isValid = gameState.currentChallenge.validator(selectedAnime);
-
-        if (isValid) {
-            // Correct answer!
-            gameState.roundsCompleted++;
-            gameState.score += 100; // Base score per round
-            
-            // Update stats immediately
-            document.getElementById('round-count').innerText = gameState.roundsCompleted;
-            document.getElementById('score-count').innerText = gameState.score;
-
-            // Clear input
-            input.value = '';
-            input.disabled = false;
-            
-            // Use the selected anime as the next target
-            gameState.currentAnime = selectedAnime;
-            gameState.usedAnimeIds.add(selectedAnime.mal_id);
-
-            // Generate new challenge
-            generateChallenge();
-
-            // Update UI
-            updateUI();
-
-            // Re-enable button
-            document.getElementById('submit-btn').disabled = false;
-
-            // Check for achievements
-            checkAchievements();
-        } else {
-            // Wrong answer - game over
-            const reason = getFailureReason(selectedAnime);
-            endGame(`Incorrect! ${reason}`);
-        }
-    } catch (error) {
-        console.error('Error validating guess:', error);
-        alert('Error processing your guess. Please try again.');
-        document.getElementById('submit-btn').disabled = false;
+        // Clear input
+        input.value = '';
         input.disabled = false;
+        
+        // Use the selected anime as the next target
+        gameState.currentAnime = selectedAnime;
+        gameState.usedAnimeIds.add(selectedAnime.mal_id);
+
+        // Generate new challenge
+        generateChallenge();
+
+        // Update UI
+        updateUI();
+
+        // Re-enable button
+        document.getElementById('submit-btn').disabled = false;
+
+        // Check for achievements
+        checkAchievements();
+    } else {
+        // Wrong answer - game over
+        const reason = getFailureReason(selectedAnime);
+        endGame(`Incorrect! ${reason}`);
     }
 }
 
@@ -382,11 +344,7 @@ function getFailureReason(selectedAnime) {
         case CHALLENGE_TYPES.SAME_STUDIO:
             return `${selectedAnime.title} is not made by the required studio.`;
         case CHALLENGE_TYPES.SAME_TAG:
-            return `${selectedAnime.title} does not have the required theme/tag.`;
-        case CHALLENGE_TYPES.HIGHER_POPULARITY:
-            return `${selectedAnime.title} has ${selectedAnime.members?.toLocaleString() || 'N/A'} members, which is not more popular.`;
-        case CHALLENGE_TYPES.LOWER_POPULARITY:
-            return `${selectedAnime.title} has ${selectedAnime.members?.toLocaleString() || 'N/A'} members, which is not less popular.`;
+            return `${selectedAnime.title} does not have the required tag.`;
         default:
             return 'The selected anime does not meet the challenge requirements.';
     }

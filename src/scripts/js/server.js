@@ -3607,6 +3607,36 @@ app.get('/api/anidle/anime-list', async (req, res) => {
     }
 });
 
+// GET /api/anidle/anime-full-list - Get full anime list with all details for AniCom
+app.get('/api/anidle/anime-full-list', async (req, res) => {
+    try {
+        const animeList = await getAnidleValidAnime();
+        // Return full anime data
+        res.json(animeList);
+    } catch (err) {
+        console.error("Full anime list error:", err);
+        res.status(500).json({ error: "Failed to get full anime list" });
+    }
+});
+
+// GET /api/anidle/anime/:id - Get single anime by ID with full details
+app.get('/api/anidle/anime/:id', async (req, res) => {
+    try {
+        const animeId = parseInt(req.params.id);
+        const animeList = await getAnidleValidAnime();
+        const anime = animeList.find(a => a.mal_id === animeId);
+        
+        if (!anime) {
+            return res.status(404).json({ error: "Anime not found" });
+        }
+        
+        res.json(anime);
+    } catch (err) {
+        console.error("Anime details error:", err);
+        res.status(500).json({ error: "Failed to get anime details" });
+    }
+});
+
 // POST /api/anidle/guess - Check a guess
 app.post('/api/anidle/guess', async (req, res) => {
     const { guess, target_id, mode } = req.body;
