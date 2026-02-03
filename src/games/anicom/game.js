@@ -1040,18 +1040,41 @@ async function loadLeaderboard() {
             rankSpan.className = `leaderboard-rank ${rankClass}`;
             rankSpan.textContent = `#${rank}`;
             
-            // Create avatar element
-            let avatarImg = '../assets/imgs/const.png';
+            // Create avatar element - start with placeholder to prevent flash
+            const placeholderImg = '../assets/imgs/const.png';
+            const avatar = document.createElement('img');
+            avatar.className = 'leaderboard-avatar';
+            avatar.alt = score.username;
+            avatar.loading = 'lazy'; // Defer loading for performance
+            
             if (score.discord_id && score.avatar) {
                 // Discord avatar hash can be animated (starts with a_) - use gif, otherwise png
                 const ext = score.avatar.startsWith('a_') ? 'gif' : 'png';
-                avatarImg = `https://cdn.discordapp.com/avatars/${score.discord_id}/${score.avatar}.${ext}`;
+                const discordAvatarUrl = `https://cdn.discordapp.com/avatars/${score.discord_id}/${score.avatar}.${ext}`;
+                
+                // Set placeholder first, then try to load Discord avatar
+                avatar.src = placeholderImg;
+                
+                // Create a temporary image to preload the Discord avatar
+                const tempImg = new Image();
+                tempImg.onload = function() {
+                    avatar.src = discordAvatarUrl;
+                };
+                tempImg.onerror = function() {
+                    // Keep placeholder if Discord avatar fails
+                    avatar.src = placeholderImg;
+                };
+                tempImg.src = discordAvatarUrl;
+            } else {
+                avatar.src = placeholderImg;
             }
-            const avatar = document.createElement('img');
-            avatar.className = 'leaderboard-avatar';
-            avatar.src = avatarImg;
-            avatar.alt = score.username;
-            avatar.onerror = function() { this.src = '../assets/imgs/const.png'; };
+            
+            // Fallback error handler
+            avatar.onerror = function() { 
+                if (this.src !== placeholderImg) {
+                    this.src = placeholderImg; 
+                }
+            };
             
             // Create username element
             const usernameSpan = document.createElement('span');
