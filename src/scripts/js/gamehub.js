@@ -1,6 +1,6 @@
 const apiBase = ''; // Relative path for same-origin
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Check for file protocol
     if (window.location.protocol === 'file:') {
         alert("[WARNING] CRITICAL: You are opening this file directly!\n\nPlease access the site via the server:\nhttp://localhost:8000/src/html/GameHub.html");
@@ -10,15 +10,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadGames();
 
-    // Auth Check
+    // Auth Check - Handle session token from OAuth callback
     const params = new URLSearchParams(window.location.search);
-    if (params.get('login') === 'success') {
-        const user = {
-            username: params.get('username'),
-            discord_id: params.get('discord_id'),
-            avatar: params.get('avatar')
-        };
-        localStorage.setItem('discord_user', JSON.stringify(user));
+    const sessionToken = params.get('session_token');
+    
+    if (sessionToken) {
+        // Store the session token
+        localStorage.setItem('session_token', sessionToken);
+        
+        // Fetch user data using the session token
+        try {
+            const res = await fetch('/api/auth/me', {
+                headers: { 'Authorization': `Bearer ${sessionToken}` }
+            });
+            if (res.ok) {
+                const user = await res.json();
+                localStorage.setItem('discord_user', JSON.stringify(user));
+            } else {
+                // Invalid token
+                localStorage.removeItem('session_token');
+            }
+        } catch (err) {
+            console.error("Failed to fetch user data:", err);
+        }
+        
         // Clean URL
         window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -31,13 +46,51 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// --- Auth Helper Functions ---
+
+function getSessionToken() {
+    return localStorage.getItem('session_token');
+}
+
+function getAuthHeaders() {
+    const token = getSessionToken();
+    if (token) {
+        return { 'Authorization': `Bearer ${token}` };
+    }
+    return {};
+}
+
+function isLoggedIn() {
+    return !!getSessionToken() && !!localStorage.getItem('discord_user');
+}
+
+async function logout() {
+    const token = getSessionToken();
+    if (token) {
+        try {
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
+                }
+            });
+        } catch (err) {
+            console.error("Logout error:", err);
+        }
+    }
+    localStorage.removeItem('session_token');
+    localStorage.removeItem('discord_user');
+    location.reload();
+}
+
 // --- User Header ---
 
 function initUserHeader() {
     const container = document.getElementById('user-header');
     const storedUser = localStorage.getItem('discord_user');
 
-    if (storedUser) {
+    if (storedUser && getSessionToken()) {
         const user = JSON.parse(storedUser);
         const avatarUrl = user.discord_id && user.avatar && user.avatar !== '0'
             ? `https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png`
@@ -50,8 +103,14 @@ function initUserHeader() {
                      onerror="this.src='../assets/imgs/const.png'">
                 <span style="color: #1DCD9F; font-weight: bold;">${escapeHtml(user.username)}</span>
             </a>
+            <button onclick="logout()" style="margin-left: 10px; padding: 8px 12px; background: #333; color: #ff6b6b; border: 1px solid #ff6b6b; border-radius: 15px; cursor: pointer; font-size: 0.8rem;">Logout</button>
         `;
     } else {
+        // Clear any stale data
+        if (!getSessionToken()) {
+            localStorage.removeItem('discord_user');
+        }
+        
         // Show login button
         container.innerHTML = `
             <button onclick="loginDiscord()" class="pixel-btn" style="display: flex; align-items: center; gap: 8px; padding: 8px 15px; background: #222; border: 1px solid #1DCD9F; border-radius: 25px; color: #1DCD9F; cursor: pointer;">
@@ -77,13 +136,24 @@ function initUserHeader() {
             const devBtn = document.createElement('button');
             devBtn.innerText = "Dev Login";
             devBtn.style.cssText = "margin-left: 10px; padding: 8px 15px; background: #333; color: #1DCD9F; border: 1px dashed #1DCD9F; border-radius: 25px; cursor: pointer;";
-            devBtn.onclick = () => {
-                localStorage.setItem('discord_user', JSON.stringify({
-                    username: 'DevUser',
-                    discord_id: '000000000000000000',
-                    avatar: '0'
-                }));
-                location.reload();
+            devBtn.onclick = async () => {
+                try {
+                    const res = await fetch('/api/auth/dev-login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: 'DevUser' })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        localStorage.setItem('session_token', data.session_token);
+                        localStorage.setItem('discord_user', JSON.stringify(data.user));
+                        location.reload();
+                    } else {
+                        console.error("Dev login failed");
+                    }
+                } catch (err) {
+                    console.error("Dev login error:", err);
+                }
             };
             container.appendChild(devBtn);
         }

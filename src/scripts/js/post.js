@@ -4,6 +4,21 @@ let isLoading = false;
 let allLoaded = false;
 let currentUser = null;
 
+// Helper function to get session token
+function getSessionToken() {
+    return localStorage.getItem('session_token');
+}
+
+// Helper function to get auth headers
+function getAuthHeaders() {
+    const token = getSessionToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+}
+
 // Check authentication on load
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
@@ -29,8 +44,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function checkAuth() {
     const storedUser = localStorage.getItem('discord_user');
+    const sessionToken = getSessionToken();
     
-    if (storedUser) {
+    // Require both user data and session token
+    if (storedUser && sessionToken) {
         currentUser = JSON.parse(storedUser);
         
         // Show post form, hide login message
@@ -48,6 +65,11 @@ function checkAuth() {
         };
         document.getElementById('current-user-name').textContent = currentUser.username;
     } else {
+        // Clear any stale data if session is missing
+        if (!sessionToken) {
+            localStorage.removeItem('discord_user');
+        }
+        currentUser = null;
         // Show login message, hide post form
         document.getElementById('post-form').style.display = 'none';
         document.getElementById('login-required').style.display = 'block';
@@ -100,7 +122,7 @@ async function loadPosts() {
 }
 
 async function submitPost() {
-    if (!currentUser) {
+    if (!currentUser || !getSessionToken()) {
         alert("You must be logged in to post!");
         return;
     }
@@ -112,12 +134,10 @@ async function submitPost() {
     try {
         const res = await fetch('/api/post', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ 
-                username: currentUser.username, 
-                content: content,
-                discord_id: currentUser.discord_id,
-                avatar: currentUser.avatar
+                content: content
+                // Note: username is now taken from the session on the server side
             })
         });
 
@@ -132,7 +152,15 @@ async function submitPost() {
             allLoaded = false;
             loadPosts();
         } else {
-            alert('Error: ' + result.error);
+            if (res.status === 401) {
+                // Session expired, clear auth
+                localStorage.removeItem('session_token');
+                localStorage.removeItem('discord_user');
+                alert('Your session has expired. Please log in again.');
+                location.reload();
+            } else {
+                alert('Error: ' + result.error);
+            }
         }
     } catch (err) {
         alert("Failed to submit post.");

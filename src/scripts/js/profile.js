@@ -4,6 +4,24 @@ let currentUser = null;
 let profileData = null;
 let allGames = [];
 
+// --- Auth Helper Functions ---
+function getSessionToken() {
+    return localStorage.getItem('session_token');
+}
+
+function getAuthHeaders() {
+    const token = getSessionToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+}
+
+function isLoggedIn() {
+    return !!getSessionToken() && !!localStorage.getItem('discord_user');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Check for file protocol
     if (window.location.protocol === 'file:') {
@@ -17,13 +35,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function checkAuth() {
     const storedUser = localStorage.getItem('discord_user');
+    const sessionToken = getSessionToken();
     
-    if (storedUser) {
+    // Require both user data and session token
+    if (storedUser && sessionToken) {
         currentUser = JSON.parse(storedUser);
         document.getElementById('login-prompt').style.display = 'none';
         document.getElementById('profile-view').style.display = 'block';
         loadProfile();
     } else {
+        // Clear stale data if session missing
+        if (!sessionToken) {
+            localStorage.removeItem('discord_user');
+        }
         document.getElementById('login-prompt').style.display = 'block';
         document.getElementById('profile-view').style.display = 'none';
         showDevLogin();
@@ -55,20 +79,46 @@ function showDevLogin() {
         .catch(err => console.log("Auth status check failed"));
 }
 
-function devLogin() {
-    localStorage.setItem('discord_user', JSON.stringify({
-        username: 'DevUser',
-        discord_id: '000000000000000000',
-        avatar: '0'
-    }));
-    location.reload();
+async function devLogin() {
+    try {
+        const res = await fetch('/api/auth/dev-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: 'DevUser' })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            localStorage.setItem('session_token', data.session_token);
+            localStorage.setItem('discord_user', JSON.stringify(data.user));
+            location.reload();
+        } else {
+            console.error("Dev login failed");
+        }
+    } catch (err) {
+        console.error("Dev login error:", err);
+    }
 }
 
 function loginDiscord() {
     window.location.href = '/api/auth/discord';
 }
 
-function logout() {
+async function logout() {
+    const token = getSessionToken();
+    if (token) {
+        try {
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
+                }
+            });
+        } catch (err) {
+            console.error("Logout error:", err);
+        }
+    }
+    localStorage.removeItem('session_token');
     localStorage.removeItem('discord_user');
     location.reload();
 }
@@ -226,16 +276,24 @@ async function loadDecorationOverlay(decoId) {
 }
 
 async function selectDecoration(decoId) {
-    if (!currentUser) return;
+    if (!currentUser || !getSessionToken()) return;
 
     try {
         const res = await fetch(`/api/user/${currentUser.username}/decoration`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ decoration_id: decoId })
         });
 
         const data = await res.json();
+        if (res.status === 401) {
+            // Session expired
+            localStorage.removeItem('session_token');
+            localStorage.removeItem('discord_user');
+            alert('Your session has expired. Please log in again.');
+            location.reload();
+            return;
+        }
         if (data.success) {
             loadProfile(); // Refresh
         } else {
@@ -275,7 +333,7 @@ function hideSettings() {
 }
 
 async function saveSettings() {
-    if (!currentUser) return;
+    if (!currentUser || !getSessionToken()) return;
 
     const bio = document.getElementById('setting-bio').value;
     const favoriteGame = document.getElementById('setting-favorite-game').value;
@@ -292,7 +350,7 @@ async function saveSettings() {
     try {
         const res = await fetch(`/api/user/${currentUser.username}/settings`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
                 bio: bio,
                 favorite_game: favoriteGame || null,
@@ -301,6 +359,13 @@ async function saveSettings() {
         });
 
         const data = await res.json();
+        if (res.status === 401) {
+            localStorage.removeItem('session_token');
+            localStorage.removeItem('discord_user');
+            alert('Your session has expired. Please log in again.');
+            location.reload();
+            return;
+        }
         if (data.success) {
             hideSettings();
             loadProfile(); // Refresh
@@ -455,12 +520,12 @@ async function searchUsers() {
 }
 
 async function sendFriendRequest(toUser) {
-    if (!currentUser) return;
+    if (!currentUser || !getSessionToken()) return;
 
     try {
         const res = await fetch('/api/friends/request', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
                 from_user: currentUser.username,
                 to_user: toUser
@@ -468,6 +533,13 @@ async function sendFriendRequest(toUser) {
         });
 
         const data = await res.json();
+        if (res.status === 401) {
+            localStorage.removeItem('session_token');
+            localStorage.removeItem('discord_user');
+            alert('Your session has expired. Please log in again.');
+            location.reload();
+            return;
+        }
         if (data.success) {
             loadFriendRequests();
             document.getElementById('search-results').innerHTML = '<p class="muted">Friend request sent!</p>';
@@ -480,12 +552,12 @@ async function sendFriendRequest(toUser) {
 }
 
 async function acceptFriend(fromUser) {
-    if (!currentUser) return;
+    if (!currentUser || !getSessionToken()) return;
 
     try {
         await fetch('/api/friends/accept', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
                 from_user: fromUser,
                 to_user: currentUser.username
@@ -499,12 +571,12 @@ async function acceptFriend(fromUser) {
 }
 
 async function declineFriend(fromUser) {
-    if (!currentUser) return;
+    if (!currentUser || !getSessionToken()) return;
 
     try {
         await fetch('/api/friends/decline', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
                 user1: fromUser,
                 user2: currentUser.username
@@ -522,7 +594,7 @@ async function removeFriend(friendUsername) {
     try {
         await fetch('/api/friends/decline', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
                 user1: currentUser.username,
                 user2: friendUsername
@@ -544,10 +616,11 @@ async function loadModeratorPanel() {
     document.getElementById('moderator-panel').style.display = 'block';
 
     try {
-        // Fetch pending articles/revisions and pending posts
+        // Fetch pending articles/revisions and pending posts using session auth
+        const authHeaders = getAuthHeaders();
         const [res, postsRes] = await Promise.all([
-            fetch(`/api/moderator/pending?moderator_username=${currentUser.username}`),
-            fetch(`/api/moderator/posts/pending?moderator_username=${currentUser.username}`)
+            fetch(`/api/moderator/pending`, { headers: authHeaders }),
+            fetch(`/api/moderator/posts/pending`, { headers: authHeaders })
         ]);
         const data = await res.json();
         const pendingPosts = await postsRes.json();
@@ -625,8 +698,7 @@ async function approveArticle(id) {
     try {
         await fetch(`/api/moderator/article/${id}/approve`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ moderator_username: currentUser.username })
+            headers: getAuthHeaders()
         });
         loadModeratorPanel();
     } catch (err) {
@@ -638,8 +710,7 @@ async function rejectArticle(id) {
     try {
         await fetch(`/api/moderator/article/${id}/reject`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ moderator_username: currentUser.username })
+            headers: getAuthHeaders()
         });
         loadModeratorPanel();
     } catch (err) {
@@ -651,7 +722,7 @@ async function approveRevision(id) {
     try {
         await fetch(`/api/admin/explain/revision/${id}/approve`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ reviewer: currentUser.username })
         });
         loadModeratorPanel();
@@ -664,7 +735,7 @@ async function rejectRevision(id) {
     try {
         await fetch(`/api/admin/explain/revision/${id}/reject`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ reviewer: currentUser.username })
         });
         loadModeratorPanel();
@@ -678,8 +749,7 @@ async function approvePost(id) {
     try {
         await fetch(`/api/moderator/post/${id}/approve`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ moderator_username: currentUser.username })
+            headers: getAuthHeaders()
         });
         loadModeratorPanel();
     } catch (err) {
@@ -691,8 +761,7 @@ async function rejectPost(id) {
     try {
         await fetch(`/api/moderator/post/${id}/reject`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ moderator_username: currentUser.username })
+            headers: getAuthHeaders()
         });
         loadModeratorPanel();
     } catch (err) {
@@ -704,8 +773,9 @@ async function deletePost(id) {
     if (!confirm('Are you sure you want to permanently delete this post?')) return;
     
     try {
-        await fetch(`/api/moderator/post/${id}?moderator_username=${currentUser.username}`, {
-            method: 'DELETE'
+        await fetch(`/api/moderator/post/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
         });
         loadModeratorPanel();
     } catch (err) {
