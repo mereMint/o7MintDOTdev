@@ -200,7 +200,8 @@ function activateMenuOption(action) {
             window.location.href = 'editor/index.html';
             break;
         case 'quit':
-            window.history.back();
+            // Navigate to the game's hub page instead of browser history
+            window.location.href = '/src/html/Game.html?id=rhythm_circle';
             break;
     }
 }

@@ -578,7 +578,7 @@
                         <option value="8">1/8 Beat</option>
                         <option value="16">1/16 Beat</option>
                     </select>
-                    <input type="range" id="zoom-slider" min="1" max="10" value="5" style="width: 100px;">
+                    <input type="range" id="zoom-slider" min="1" max="20" value="5" style="width: 100px;">
                     <span style="color: #888; font-size: 0.85rem;">Zoom</span>
                 </div>
 
@@ -720,6 +720,7 @@
                 zoomLevel = parseInt(e.target.value);
                 pixelsPerMs = 0.05 * zoomLevel;
                 updateTimeline();
+                updatePlayheadPosition();
             });
 
             // Snap select change - update grid
@@ -786,6 +787,7 @@
                         pixelsPerMs = 0.05 * zoomLevel;
                         document.getElementById('zoom-slider').value = zoomLevel;
                         updateTimeline();
+                        updatePlayheadPosition();
                     }
                 } else {
                     // Scroll
@@ -811,24 +813,35 @@
                 const timelineScroll = document.getElementById('timeline-scroll');
                 const timeline = document.getElementById('timeline');
                 const rect = timeline.getBoundingClientRect();
+                
+                // Calculate x position relative to timeline, accounting for scroll
                 const x = e.clientX - rect.left + timelineScroll.scrollLeft;
-                const newTime = Math.max(0, x / pixelsPerMs);
+                
+                // Only handle playhead dragging here
+                if (isDraggingPlayhead) {
+                    // Clamp x to valid range
+                    const maxX = audio ? audio.duration * 1000 * pixelsPerMs : timeline.offsetWidth;
+                    const clampedX = Math.max(0, Math.min(x, maxX));
+                    const newTime = clampedX / pixelsPerMs;
 
-                // Update ALL selected notes if dragging one of them
-                if (isDraggingNote && draggedNoteIndex !== -1 && selectedNotes.has(draggedNoteIndex)) {
-                    const originalTime = notes[draggedNoteIndex].time;
-                    // Only calculate delta for the main dragged note? 
-                    // Wait, logic in mousemove handles absolute position.
-                    // Multi-drag needs logic update in mousemove.
+                    if (audio && audio.duration) {
+                        const clampedTime = Math.min(newTime, audio.duration * 1000);
+                        audio.currentTime = clampedTime / 1000;
+                    }
+
+                    // Update playhead position
+                    playhead.style.left = `${clampedX}px`;
+                    
+                    // Update time display
+                    const displayTime = newTime / 1000;
+                    const mins = Math.floor(displayTime / 60);
+                    const secs = Math.floor(displayTime % 60);
+                    const ms = Math.floor((displayTime % 1) * 1000);
+                    document.getElementById('time-display').textContent =
+                        `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+                    
+                    drawPreview(newTime);
                 }
-
-                if (audio && audio.duration) {
-                    const clampedTime = Math.min(newTime, audio.duration * 1000);
-                    audio.currentTime = clampedTime / 1000;
-                }
-
-                // Update playhead position manually while dragging
-                playhead.style.left = `${x}px`;
             });
 
             // Replaced by global handler
@@ -1098,6 +1111,14 @@
             }
 
             drawPreview(currentTime);
+        }
+
+        // Update playhead position based on current audio time (used when zooming)
+        function updatePlayheadPosition() {
+            if (!audio) return;
+            const currentTime = audio.currentTime * 1000;
+            const playhead = document.getElementById('playhead');
+            playhead.style.left = `${currentTime * pixelsPerMs}px`;
         }
 
         // ===== TIMELINE =====
