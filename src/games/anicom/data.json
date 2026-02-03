@@ -11,7 +11,8 @@
         "phone": true
     },
     "images": [
-        "logo.svg"
+        "logo.svg",
+        "play.png"
     ],
     "achievements": [
         {
