@@ -538,13 +538,13 @@ function getFailureReason(selectedAnime) {
         case CHALLENGE_TYPES.DIFFERENT_SOURCE:
             return `${selectedAnime.title} has the same source material (${current.source}).`;
         case CHALLENGE_TYPES.SAME_YEAR:
-            return `${selectedAnime.title} was not released in ${current.release_date}.`;
+            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'Unknown'}, not ${current.release_date}.`;
         case CHALLENGE_TYPES.EARLIER_YEAR:
-            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'N/A'}, which is not before ${current.release_date}.`;
+            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'Unknown'}, not before ${current.release_date}.`;
         case CHALLENGE_TYPES.LATER_YEAR:
-            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'N/A'}, which is not after ${current.release_date}.`;
+            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'Unknown'}, not after ${current.release_date}.`;
         case CHALLENGE_TYPES.WITHIN_YEAR_RANGE:
-            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'N/A'}, which is not in the required year range.`;
+            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'Unknown'}, not in the required year range.`;
         case CHALLENGE_TYPES.MORE_EPISODES:
             return `${selectedAnime.title} has ${selectedAnime.episodes || 'N/A'} episodes, which is not more than ${current.episodes}.`;
         case CHALLENGE_TYPES.FEWER_EPISODES:
