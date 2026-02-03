@@ -16,8 +16,20 @@ const CHALLENGE_TYPES = {
     HIGHER_SCORE: 'higher_score',
     LOWER_SCORE: 'lower_score',
     SAME_GENRE: 'same_genre',
+    DIFFERENT_GENRE: 'different_genre',
     SAME_STUDIO: 'same_studio',
-    SAME_TAG: 'same_tag'
+    DIFFERENT_STUDIO: 'different_studio',
+    SAME_TAG: 'same_tag',
+    SAME_SOURCE: 'same_source',
+    DIFFERENT_SOURCE: 'different_source',
+    SAME_YEAR: 'same_year',
+    EARLIER_YEAR: 'earlier_year',
+    LATER_YEAR: 'later_year',
+    WITHIN_YEAR_RANGE: 'within_year_range',
+    HAS_GENRE: 'has_genre',
+    HAS_TAG: 'has_tag',
+    SCORE_RANGE: 'score_range',
+    MULTIPLE_GENRES: 'multiple_genres'
 };
 
 // User info
@@ -139,10 +151,20 @@ function generateChallenge() {
             text: `Choose an anime with a LOWER MAL score than ${anime.score.toFixed(2)}`,
             validator: (selectedAnime) => selectedAnime.score && selectedAnime.score < anime.score
         });
+
+        // Score range challenge
+        const lowerBound = Math.max(1, anime.score - 0.5);
+        const upperBound = Math.min(10, anime.score + 0.5);
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.SCORE_RANGE,
+            text: `Choose an anime with a score between ${lowerBound.toFixed(2)} and ${upperBound.toFixed(2)}`,
+            validator: (selectedAnime) => selectedAnime.score && selectedAnime.score >= lowerBound && selectedAnime.score <= upperBound
+        });
     }
 
-    // Genre challenge (if anime has genres)
+    // Genre challenges (if anime has genres)
     if (anime.genres && anime.genres.length > 0) {
+        // Same genre challenge
         const randomGenre = anime.genres[Math.floor(Math.random() * anime.genres.length)];
         possibleChallenges.push({
             type: CHALLENGE_TYPES.SAME_GENRE,
@@ -152,9 +174,41 @@ function generateChallenge() {
             },
             genre: randomGenre
         });
+
+        // Different genre challenge (no genres in common)
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.DIFFERENT_GENRE,
+            text: `Choose an anime that does NOT have any of these genres: ${anime.genres.join(', ')}`,
+            validator: (selectedAnime) => {
+                if (!selectedAnime.genres) return false;
+                return !selectedAnime.genres.some(g => anime.genres.includes(g));
+            }
+        });
+
+        // Has specific genre challenge
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.HAS_GENRE,
+            text: `Choose an anime that HAS the genre: ${randomGenre}`,
+            validator: (selectedAnime) => {
+                return selectedAnime.genres && selectedAnime.genres.includes(randomGenre);
+            }
+        });
+
+        // Multiple genres challenge (has at least 2 matching genres)
+        if (anime.genres.length >= 2) {
+            possibleChallenges.push({
+                type: CHALLENGE_TYPES.MULTIPLE_GENRES,
+                text: `Choose an anime that shares at least TWO genres with ${anime.title}`,
+                validator: (selectedAnime) => {
+                    if (!selectedAnime.genres) return false;
+                    const matchingGenres = selectedAnime.genres.filter(g => anime.genres.includes(g));
+                    return matchingGenres.length >= 2;
+                }
+            });
+        }
     }
 
-    // Studio challenge (if anime has studio)
+    // Studio challenges (if anime has studio)
     if (anime.studio) {
         possibleChallenges.push({
             type: CHALLENGE_TYPES.SAME_STUDIO,
@@ -164,9 +218,17 @@ function generateChallenge() {
             },
             studio: anime.studio
         });
+
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.DIFFERENT_STUDIO,
+            text: `Choose an anime NOT made by: ${anime.studio}`,
+            validator: (selectedAnime) => {
+                return selectedAnime.studio && selectedAnime.studio !== anime.studio;
+            }
+        });
     }
 
-    // Tag/Theme challenge (using tags array)
+    // Tag/Theme challenges (using tags array)
     if (anime.tags && anime.tags.length > 0) {
         const randomTag = anime.tags[Math.floor(Math.random() * anime.tags.length)];
         possibleChallenges.push({
@@ -176,6 +238,75 @@ function generateChallenge() {
                 return selectedAnime.tags && selectedAnime.tags.some(t => t.name === randomTag.name);
             },
             tag: randomTag
+        });
+
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.HAS_TAG,
+            text: `Choose an anime that HAS the tag: ${randomTag.name}`,
+            validator: (selectedAnime) => {
+                return selectedAnime.tags && selectedAnime.tags.some(t => t.name === randomTag.name);
+            }
+        });
+    }
+
+    // Source challenges (if anime has source)
+    if (anime.source) {
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.SAME_SOURCE,
+            text: `Choose an anime with the same source material: ${anime.source}`,
+            validator: (selectedAnime) => {
+                return selectedAnime.source === anime.source;
+            }
+        });
+
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.DIFFERENT_SOURCE,
+            text: `Choose an anime with a DIFFERENT source than: ${anime.source}`,
+            validator: (selectedAnime) => {
+                return selectedAnime.source && selectedAnime.source !== anime.source;
+            }
+        });
+    }
+
+    // Release year challenges (if anime has release_date)
+    if (anime.release_date) {
+        const year = parseInt(anime.release_date);
+        
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.SAME_YEAR,
+            text: `Choose an anime released in the SAME YEAR: ${year}`,
+            validator: (selectedAnime) => {
+                return selectedAnime.release_date && parseInt(selectedAnime.release_date) === year;
+            }
+        });
+
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.EARLIER_YEAR,
+            text: `Choose an anime released BEFORE ${year}`,
+            validator: (selectedAnime) => {
+                return selectedAnime.release_date && parseInt(selectedAnime.release_date) < year;
+            }
+        });
+
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.LATER_YEAR,
+            text: `Choose an anime released AFTER ${year}`,
+            validator: (selectedAnime) => {
+                return selectedAnime.release_date && parseInt(selectedAnime.release_date) > year;
+            }
+        });
+
+        // Within year range challenge
+        const rangeLower = year - 2;
+        const rangeUpper = year + 2;
+        possibleChallenges.push({
+            type: CHALLENGE_TYPES.WITHIN_YEAR_RANGE,
+            text: `Choose an anime released between ${rangeLower} and ${rangeUpper}`,
+            validator: (selectedAnime) => {
+                if (!selectedAnime.release_date) return false;
+                const selectedYear = parseInt(selectedAnime.release_date);
+                return selectedYear >= rangeLower && selectedYear <= rangeUpper;
+            }
         });
     }
 
@@ -339,12 +470,34 @@ function getFailureReason(selectedAnime) {
             return `${selectedAnime.title} has a score of ${selectedAnime.score?.toFixed(2) || 'N/A'}, which is not higher than ${current.score.toFixed(2)}.`;
         case CHALLENGE_TYPES.LOWER_SCORE:
             return `${selectedAnime.title} has a score of ${selectedAnime.score?.toFixed(2) || 'N/A'}, which is not lower than ${current.score.toFixed(2)}.`;
+        case CHALLENGE_TYPES.SCORE_RANGE:
+            return `${selectedAnime.title} has a score of ${selectedAnime.score?.toFixed(2) || 'N/A'}, which is not in the required range.`;
         case CHALLENGE_TYPES.SAME_GENRE:
+        case CHALLENGE_TYPES.HAS_GENRE:
             return `${selectedAnime.title} does not have the required genre.`;
+        case CHALLENGE_TYPES.DIFFERENT_GENRE:
+            return `${selectedAnime.title} shares at least one genre with ${current.title}.`;
+        case CHALLENGE_TYPES.MULTIPLE_GENRES:
+            return `${selectedAnime.title} does not share at least two genres with ${current.title}.`;
         case CHALLENGE_TYPES.SAME_STUDIO:
             return `${selectedAnime.title} is not made by the required studio.`;
+        case CHALLENGE_TYPES.DIFFERENT_STUDIO:
+            return `${selectedAnime.title} is made by the same studio (${current.studio}).`;
         case CHALLENGE_TYPES.SAME_TAG:
+        case CHALLENGE_TYPES.HAS_TAG:
             return `${selectedAnime.title} does not have the required tag.`;
+        case CHALLENGE_TYPES.SAME_SOURCE:
+            return `${selectedAnime.title} does not have the same source material (${selectedAnime.source || 'N/A'} vs ${current.source}).`;
+        case CHALLENGE_TYPES.DIFFERENT_SOURCE:
+            return `${selectedAnime.title} has the same source material (${current.source}).`;
+        case CHALLENGE_TYPES.SAME_YEAR:
+            return `${selectedAnime.title} was not released in ${current.release_date}.`;
+        case CHALLENGE_TYPES.EARLIER_YEAR:
+            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'N/A'}, which is not before ${current.release_date}.`;
+        case CHALLENGE_TYPES.LATER_YEAR:
+            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'N/A'}, which is not after ${current.release_date}.`;
+        case CHALLENGE_TYPES.WITHIN_YEAR_RANGE:
+            return `${selectedAnime.title} was released in ${selectedAnime.release_date || 'N/A'}, which is not in the required year range.`;
         default:
             return 'The selected anime does not meet the challenge requirements.';
     }
@@ -460,7 +613,7 @@ function setupAutocomplete() {
             const displayTitle = anime.title_english || anime.title;
             div.innerHTML = displayTitle;
             div.addEventListener('click', function() {
-                input.value = anime.title;
+                input.value = displayTitle;
                 autocompleteList.innerHTML = '';
             });
             autocompleteList.appendChild(div);

@@ -40,7 +40,7 @@
         },
         {
             "id": "round_20",
-            "title": "Double Digits Master",
+            "title": "Chain Master",
             "description": "Reach 20 rounds in a single game.",
             "image": "logo.svg",
             "secret": false,
