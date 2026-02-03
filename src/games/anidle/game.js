@@ -18,6 +18,8 @@ let gameState = {
 // LocalStorage keys for game state persistence
 const ANIDLE_DAILY_STORAGE_KEY = 'anidle_daily_game_state';
 const ANIDLE_UNLIMITED_STORAGE_KEY = 'anidle_unlimited_game_state';
+// Expiry time for saved game state (2 hours in milliseconds) - only applies to unlimited mode
+const ANIDLE_SAVE_EXPIRY_MS = 2 * 60 * 60 * 1000;
 
 // Get storage key based on mode
 function getStorageKey(mode) {
@@ -71,8 +73,8 @@ function loadSavedAnidleState(mode) {
             }
         }
         
-        // For unlimited mode, check if save is too old (2 hours)
-        if (mode === 'unlimited' && Date.now() - state.savedAt > 2 * 60 * 60 * 1000) {
+        // For unlimited mode, check if save is too old
+        if (mode === 'unlimited' && Date.now() - state.savedAt > ANIDLE_SAVE_EXPIRY_MS) {
             localStorage.removeItem(getStorageKey(mode));
             return null;
         }
@@ -301,16 +303,31 @@ async function searchAnime(query) {
 }
 
 // Select game mode
-function selectMode(mode) {
+async function selectMode(mode) {
     document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(mode === 'daily' ? 'daily-btn' : 'unlimited-btn').classList.add('active');
 
+    // Check for saved game state for this mode
+    const savedState = loadSavedAnidleState(mode);
+    if (savedState && !savedState.gameOver) {
+        const resume = confirm(`You have a ${mode} game in progress. Would you like to resume?`);
+        if (resume) {
+            await resumeAnidleGame(savedState);
+            return;
+        } else {
+            clearSavedAnidleState(mode);
+        }
+    }
+
     gameState.mode = mode;
-    startGame(mode);
+    await startGame(mode);
 }
 
 // Start a new game
 async function startGame(mode) {
+    // Clear any old saved state for this mode
+    clearSavedAnidleState(mode);
+    
     // Reset state
     gameState = {
         mode: mode,
@@ -1109,6 +1126,9 @@ function skipToHint() {
         // Check game over
         if (gameState.tries <= 0) {
             endGame(false);
+        } else {
+            // Save state after skip
+            saveAnidleGameState();
         }
     }
 }

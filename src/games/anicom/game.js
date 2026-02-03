@@ -13,6 +13,8 @@ let gameState = {
 
 // LocalStorage key for game state persistence
 const ANICOM_STORAGE_KEY = 'anicom_game_state';
+// Expiry time for saved game state (2 hours in milliseconds)
+const ANICOM_SAVE_EXPIRY_MS = 2 * 60 * 60 * 1000;
 
 // Save game state to localStorage
 function saveGameState() {
@@ -47,8 +49,8 @@ function loadSavedGameState() {
         
         const state = JSON.parse(saved);
         
-        // Check if save is too old (2 hours)
-        if (Date.now() - state.savedAt > 2 * 60 * 60 * 1000) {
+        // Check if save is too old
+        if (Date.now() - state.savedAt > ANICOM_SAVE_EXPIRY_MS) {
             localStorage.removeItem(ANICOM_STORAGE_KEY);
             return null;
         }
@@ -681,16 +683,16 @@ function getFailureReason(selectedAnime) {
             const sharedGenresList = sharedGenres.length > 0 ? sharedGenres.join(', ') : 'unknown genres';
             return `${selectedAnime.title} shares genre(s): ${sharedGenresList} with ${current.title}.`;
         case CHALLENGE_TYPES.MULTIPLE_GENRES:
-            const animeGenresList = selectedAnime.genres && selectedAnime.genres.length > 0 
+            const multipleGenresDisplay = selectedAnime.genres && selectedAnime.genres.length > 0 
                 ? getGenreNames(selectedAnime.genres).join(', ') 
                 : 'no genres';
-            const currentGenreNamesArr2 = getGenreNames(current.genres || []);
-            const selectedGenreNamesArr2 = getGenreNames(selectedAnime.genres || []);
-            const matchingGenres = selectedGenreNamesArr2.filter(g => currentGenreNamesArr2.includes(g));
+            const targetGenreNamesForMultiple = getGenreNames(current.genres || []);
+            const guessedGenreNamesForMultiple = getGenreNames(selectedAnime.genres || []);
+            const matchingGenres = guessedGenreNamesForMultiple.filter(g => targetGenreNamesForMultiple.includes(g));
             if (matchingGenres.length === 0) {
-                return `${selectedAnime.title} has genres: ${animeGenresList}, but shares no genres with ${current.title} (required: at least 2).`;
+                return `${selectedAnime.title} has genres: ${multipleGenresDisplay}, but shares no genres with ${current.title} (required: at least 2).`;
             }
-            return `${selectedAnime.title} has genres: ${animeGenresList}, only ${matchingGenres.length} genre(s) match with ${current.title} (required: at least 2).`;
+            return `${selectedAnime.title} has genres: ${multipleGenresDisplay}, only ${matchingGenres.length} genre(s) match with ${current.title} (required: at least 2).`;
         case CHALLENGE_TYPES.SAME_STUDIO:
             const requiredStudio = challenge.studio || current.studio;
             const selectedStudio = selectedAnime.studio || 'unknown studio';
