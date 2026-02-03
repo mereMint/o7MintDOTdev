@@ -36,6 +36,12 @@ let gameStartTime = 0;
 let isPaused = false;
 let animationFrameId = null;
 
+// Input state tracking for visual feedback
+let keysPressed = {
+    red: false,
+    blue: false
+};
+
 // Gameplay
 let notes = [];
 let activeHolds = [];
@@ -605,6 +611,10 @@ function resetGameState() {
     accuracy = 100;
     judgmentCounts = { perfect: 0, great: 0, good: 0, miss: 0 };
     currentHealth = 100; // Reset Health
+    
+    // Reset key press state
+    keysPressed.red = false;
+    keysPressed.blue = false;
 
     // Load notes from map
     notes = currentMap.notes.map(n => ({
@@ -736,6 +746,54 @@ function drawCenterRing() {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 1;
     ctx.stroke();
+
+    // Draw key press indicators inside the center ring
+    drawKeyIndicators(cx, cy, pulsedRadius);
+}
+
+function drawKeyIndicators(cx, cy, ringRadius) {
+    const indicatorRadius = 15;
+    const spacing = 25;
+    
+    // Red key indicator (left side)
+    const redX = cx - spacing;
+    const redY = cy;
+    
+    ctx.beginPath();
+    ctx.arc(redX, redY, indicatorRadius, 0, Math.PI * 2);
+    if (keysPressed.red) {
+        ctx.fillStyle = '#ff3366';
+        ctx.fill();
+        ctx.shadowColor = '#ff3366';
+        ctx.shadowBlur = 15;
+    } else {
+        ctx.fillStyle = 'rgba(255, 51, 102, 0.3)';
+        ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#ff3366';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Blue key indicator (right side)
+    const blueX = cx + spacing;
+    const blueY = cy;
+    
+    ctx.beginPath();
+    ctx.arc(blueX, blueY, indicatorRadius, 0, Math.PI * 2);
+    if (keysPressed.blue) {
+        ctx.fillStyle = '#33ccff';
+        ctx.fill();
+        ctx.shadowColor = '#33ccff';
+        ctx.shadowBlur = 15;
+    } else {
+        ctx.fillStyle = 'rgba(51, 204, 255, 0.3)';
+        ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#33ccff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
 }
 
 function drawNotes(currentTime) {
@@ -774,22 +832,30 @@ function drawNotes(currentTime) {
             const progressEnd = 1 - (timeUntilEnd / APPROACH_TIME);
             endRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progressEnd);
 
+            // Calculate ring thickness based on hold duration and AR
+            // Formula: thickness = base_thickness * min(duration/1000, 3) * (max(1, AR) / 5)
+            const holdDuration = note.endTime - note.time;
+            const baseThickness = 8; // Same as normal note lineWidth
+            const arFactor = Math.max(1, AR) / 5; // Normalize AR (AR 5 = factor 1)
+            const durationFactor = Math.min(holdDuration / 1000, 3); // Cap at 3 seconds worth
+            const ringThickness = Math.max(8, baseThickness * durationFactor * arFactor);
+
             // Clamp for drawing
-            let drawStart = Math.max(0, startRadius);
+            let drawStart = Math.max(RING_RADIUS, startRadius);
             let drawEnd = Math.min(NOTE_SPAWN_RADIUS, endRadius);
 
             if (drawStart < drawEnd) {
-                // Draw the duration band
+                // Draw the duration band with calculated thickness
                 ctx.beginPath();
                 ctx.arc(cx, cy, (drawStart + drawEnd) / 2, 0, Math.PI * 2);
                 ctx.strokeStyle = color;
-                ctx.lineWidth = Math.abs(drawEnd - drawStart);
+                ctx.lineWidth = Math.min(Math.abs(drawEnd - drawStart), ringThickness);
                 ctx.globalAlpha = 0.4;
                 ctx.stroke();
                 ctx.globalAlpha = 1.0;
 
-                // Draw edges
-                ctx.lineWidth = 4;
+                // Draw edges with thickness based on duration
+                ctx.lineWidth = Math.min(ringThickness, 12);
                 ctx.beginPath();
                 ctx.arc(cx, cy, drawStart, 0, Math.PI * 2);
                 ctx.stroke();
@@ -889,14 +955,23 @@ function handleKeyDown(e) {
     if (currentState !== GameState.PLAYING || isPaused) return;
 
     if (e.code === settings.keyRed) {
+        keysPressed.red = true;
         hitNote('red');
     } else if (e.code === settings.keyBlue) {
+        keysPressed.blue = true;
         hitNote('blue');
     }
 }
 
 function handleKeyUp(e) {
     if (currentState !== GameState.PLAYING) return;
+
+    // Update key state
+    if (e.code === settings.keyRed) {
+        keysPressed.red = false;
+    } else if (e.code === settings.keyBlue) {
+        keysPressed.blue = false;
+    }
 
     // Release holds
     if (e.code === settings.keyRed || e.code === settings.keyBlue) {
@@ -909,6 +984,7 @@ function handleMouseDown(e) {
     if (settings.mouseKey === 'none') return;
 
     const type = settings.mouseKey; // 'red' or 'blue'
+    keysPressed[type] = true;
     hitNote(type);
 }
 
@@ -916,6 +992,7 @@ function handleMouseUp(e) {
     if (currentState !== GameState.PLAYING) return;
     if (settings.mouseKey === 'none') return;
 
+    keysPressed[settings.mouseKey] = false;
     releaseHold();
 }
 

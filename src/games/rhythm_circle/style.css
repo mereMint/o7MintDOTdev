@@ -208,6 +208,10 @@ body {
     font-size: 0.9rem;
 }
 
+.quit-btn {
+    margin-top: 30px;
+}
+
 /* ===== SONG SELECT ===== */
 .song-select-container {
     text-align: center;
