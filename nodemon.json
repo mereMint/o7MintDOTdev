@@ -1,0 +1,17 @@
+{
+  "watch": ["src/scripts/js/server.js"],
+  "ext": "js,json",
+  "ignore": ["node_modules/**", "*.log", ".git", "src/public/**"],
+  "delay": 2500,
+  "restartable": "rs",
+  "verbose": true,
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "events": {
+    "restart": "echo 'Server restarted due to changes...'",
+    "crash": "echo 'Server crashed - waiting before restart...'",
+    "exit": "echo 'Server process exited'"
+  },
+  "exitcrash": true
+}
