@@ -546,7 +546,8 @@ function getFailureReason(selectedAnime) {
                 ? selectedAnime.genres.filter(g => current.genres.includes(g))
                 : [];
             // Validator should ensure sharedGenres.length > 0 when this is called
-            return `${selectedAnime.title} shares genre(s): ${sharedGenres.join(', ') || 'genres'} with ${current.title}.`;
+            const sharedGenresList = sharedGenres.length > 0 ? sharedGenres.join(', ') : 'unknown genres';
+            return `${selectedAnime.title} shares genre(s): ${sharedGenresList} with ${current.title}.`;
         case CHALLENGE_TYPES.MULTIPLE_GENRES:
             const animeGenresList = selectedAnime.genres && selectedAnime.genres.length > 0 
                 ? selectedAnime.genres.join(', ') 
