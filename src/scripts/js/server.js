@@ -9,14 +9,17 @@ require('dotenv').config();
 const axios = require('axios');
 
 // Global error handlers to prevent 502 errors from unhandled rejections
+// Note: For a web server, continuing after errors is preferable to crashing.
+// The alternative would be to restart the entire server, losing all active connections.
+// Each route has its own error handling to maintain consistent state.
 process.on('uncaughtException', (error) => {
     console.error('[CRITICAL] Uncaught Exception:', error);
-    // Log but don't exit - let the process continue
+    // Log but don't exit - let the process continue serving other requests
 });
 
 process.on('unhandledRejection', (reason, promise) => {
     console.error('[CRITICAL] Unhandled Rejection at:', promise, 'reason:', reason);
-    // Log but don't exit - let the process continue
+    // Log but don't exit - let the process continue serving other requests
 });
 
 const app = express();
@@ -52,10 +55,10 @@ app.use((req, res, next) => {
         }
     }, 30000);
     
-    // Clear timeout when response finishes
-    res.on('finish', () => {
-        clearTimeout(timeout);
-    });
+    // Clear timeout when response finishes or connection closes
+    const clearTimeoutHandler = () => clearTimeout(timeout);
+    res.on('finish', clearTimeoutHandler);
+    res.on('close', clearTimeoutHandler);
     
     next();
 });
@@ -77,6 +80,8 @@ const pool = mariadb.createPool({
 });
 
 // Database pool error handling
+// Note: MariaDB primarily handles errors through promise rejections.
+// This event listener provides additional safety for edge cases.
 pool.on('error', (err) => {
     console.error('[DB POOL ERROR]', err);
     // Switch to in-memory mode on pool errors
