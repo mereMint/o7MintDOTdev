@@ -4244,12 +4244,12 @@ app.get('/api/anidle/check-daily', async (req, res) => {
                 AND DATE(created_at) = ?
             `, [discord_id, today]);
         } else {
+            // Fallback: check by username (will match any score with this username)
             result = await conn.query(`
                 SELECT COUNT(*) as count FROM scores 
                 WHERE game_id = 'anidle' 
                 AND board_id = 'daily'
                 AND username = ?
-                AND discord_id IS NULL
                 AND DATE(created_at) = ?
             `, [username, today]);
         }

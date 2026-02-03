@@ -336,7 +336,7 @@ async function startGame(mode) {
             if (response.ok) {
                 const data = await response.json();
                 if (data.completed) {
-                    alert('You have already completed today\'s daily challenge! Come back tomorrow or try unlimited mode.');
+                    alert("You have already completed today's daily challenge! Come back tomorrow or try unlimited mode.");
                     // Switch to unlimited mode
                     await selectMode('unlimited');
                     return;
