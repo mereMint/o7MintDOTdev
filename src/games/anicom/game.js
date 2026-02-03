@@ -545,19 +545,19 @@ function getFailureReason(selectedAnime) {
             const sharedGenres = selectedAnime.genres && current.genres
                 ? selectedAnime.genres.filter(g => current.genres.includes(g))
                 : [];
-            if (sharedGenres.length === 0) {
-                // This shouldn't happen if validator worked correctly, but handle gracefully
-                return `${selectedAnime.title} was not supposed to share any genres with ${current.title}.`;
-            }
-            return `${selectedAnime.title} shares genre(s): ${sharedGenres.join(', ')} with ${current.title}.`;
+            // Validator should ensure sharedGenres.length > 0 when this is called
+            return `${selectedAnime.title} shares genre(s): ${sharedGenres.join(', ') || 'genres'} with ${current.title}.`;
         case CHALLENGE_TYPES.MULTIPLE_GENRES:
-            const selectedGenresList = selectedAnime.genres && selectedAnime.genres.length > 0 
+            const animeGenresList = selectedAnime.genres && selectedAnime.genres.length > 0 
                 ? selectedAnime.genres.join(', ') 
                 : 'no genres';
             const matchingGenres = selectedAnime.genres && current.genres
                 ? selectedAnime.genres.filter(g => current.genres.includes(g))
                 : [];
-            return `${selectedAnime.title} has genres: ${selectedGenresList}, only ${matchingGenres.length} genre(s) match with ${current.title} (required: at least 2).`;
+            if (matchingGenres.length === 0) {
+                return `${selectedAnime.title} has genres: ${animeGenresList}, but shares no genres with ${current.title} (required: at least 2).`;
+            }
+            return `${selectedAnime.title} has genres: ${animeGenresList}, only ${matchingGenres.length} genre(s) match with ${current.title} (required: at least 2).`;
         case CHALLENGE_TYPES.SAME_STUDIO:
             const requiredStudio = challenge.studio || current.studio;
             const selectedStudio = selectedAnime.studio || 'unknown studio';
