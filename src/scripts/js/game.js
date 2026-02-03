@@ -369,8 +369,9 @@ async function loadScores(boardKey = 'main') {
             li.className = 'score-item';
             if (isMe) li.style.borderColor = '#1DCD9F'; // Highlight user
 
-            // Avatar Logic
-            let avatarImg = '../assets/imgs/const.png';
+            // Avatar Logic - use placeholder with background to prevent flash
+            const placeholderImg = '../assets/imgs/const.png';
+            let avatarImg = placeholderImg;
             if (s.discord_id && s.avatar) {
                 // Discord avatar hash can be animated (starts with a_) - use gif, otherwise png
                 const ext = s.avatar.startsWith('a_') ? 'gif' : 'png';
@@ -380,7 +381,7 @@ async function loadScores(boardKey = 'main') {
             li.innerHTML = `
                 <div style="display:flex; align-items:center; gap:8px;">
                     <span class="score-itm-rank">#${index + 1}</span>
-                    <img src="${avatarImg}" style="width:24px; height:24px; border-radius:50%;" onerror="this.src='../assets/imgs/const.png'">
+                    <img src="${avatarImg}" style="width:24px; height:24px; border-radius:50%; background-color:#2a2a2a; border:1px solid #3a3a3a;" onerror="this.src='${placeholderImg}'">
                     <span>${escapeHtml(s.username)}</span>
                 </div>
                 <span>${s.score}</span>

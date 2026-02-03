@@ -11,6 +11,68 @@ let gameState = {
     animeCache: []
 };
 
+// LocalStorage key for game state persistence
+const ANICOM_STORAGE_KEY = 'anicom_game_state';
+// Expiry time for saved game state (2 hours in milliseconds)
+const ANICOM_SAVE_EXPIRY_MS = 2 * 60 * 60 * 1000;
+// Minimum episode count required to create a "fewer episodes" challenge
+const MIN_EPISODES_FOR_FEWER_CHALLENGE = 2;
+
+// Save game state to localStorage
+function saveGameState() {
+    if (gameState.gameOver) {
+        // Don't save finished games
+        localStorage.removeItem(ANICOM_STORAGE_KEY);
+        return;
+    }
+    
+    const stateToSave = {
+        currentAnime: gameState.currentAnime,
+        currentChallenge: gameState.currentChallenge,
+        usedAnimeIds: Array.from(gameState.usedAnimeIds),
+        roundsCompleted: gameState.roundsCompleted,
+        score: gameState.score,
+        gameOver: gameState.gameOver,
+        savedAt: Date.now()
+    };
+    
+    try {
+        localStorage.setItem(ANICOM_STORAGE_KEY, JSON.stringify(stateToSave));
+    } catch (e) {
+        console.warn('Failed to save game state:', e);
+    }
+}
+
+// Load game state from localStorage
+function loadSavedGameState() {
+    try {
+        const saved = localStorage.getItem(ANICOM_STORAGE_KEY);
+        if (!saved) return null;
+        
+        const state = JSON.parse(saved);
+        
+        // Check if save is too old
+        if (Date.now() - state.savedAt > ANICOM_SAVE_EXPIRY_MS) {
+            localStorage.removeItem(ANICOM_STORAGE_KEY);
+            return null;
+        }
+        
+        // Restore Set from array
+        state.usedAnimeIds = new Set(state.usedAnimeIds);
+        
+        return state;
+    } catch (e) {
+        console.warn('Failed to load saved game state:', e);
+        localStorage.removeItem(ANICOM_STORAGE_KEY);
+        return null;
+    }
+}
+
+// Clear saved game state
+function clearSavedGameState() {
+    localStorage.removeItem(ANICOM_STORAGE_KEY);
+}
+
 // Challenge types
 const CHALLENGE_TYPES = {
     HIGHER_SCORE: 'higher_score',
@@ -48,16 +110,80 @@ function getYear(release_date) {
     return parseInt(release_date);
 }
 
+// Helper function to extract genre name from genre (handles both strings and objects)
+function getGenreName(genre) {
+    if (typeof genre === 'string') return genre;
+    if (genre && typeof genre === 'object' && genre.name) return genre.name;
+    return String(genre);
+}
+
+// Helper function to get array of genre names from genres array
+function getGenreNames(genres) {
+    if (!genres || !Array.isArray(genres)) return [];
+    return genres.map(g => getGenreName(g));
+}
+
+// Helper function to check if a genre exists in an array (handles both strings and objects)
+function hasGenre(genres, targetGenre) {
+    if (!genres || !Array.isArray(genres)) return false;
+    const targetName = getGenreName(targetGenre);
+    return genres.some(g => getGenreName(g) === targetName);
+}
+
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('user-display').innerText = `Player: ${user.username}`;
-    startGame();
+    
+    // Check for saved game state
+    const savedState = loadSavedGameState();
+    if (savedState && !savedState.gameOver) {
+        // Ask if user wants to resume
+        const resume = confirm('You have a game in progress. Would you like to resume?');
+        if (resume) {
+            await resumeGame(savedState);
+        } else {
+            clearSavedGameState();
+            await startGame();
+        }
+    } else {
+        await startGame();
+    }
+    
     setupAutocomplete();
 });
+
+// Resume a saved game
+async function resumeGame(savedState) {
+    console.log('Resuming saved game...');
+    
+    // Load anime cache first
+    await loadAnimeCache();
+    
+    // Restore game state
+    gameState.currentAnime = savedState.currentAnime;
+    gameState.currentChallenge = savedState.currentChallenge;
+    gameState.usedAnimeIds = savedState.usedAnimeIds;
+    gameState.roundsCompleted = savedState.roundsCompleted;
+    gameState.score = savedState.score;
+    gameState.gameOver = savedState.gameOver;
+    
+    // Reset UI to match saved state
+    document.getElementById('score-count').innerText = gameState.score.toString();
+    document.getElementById('used-count').innerText = gameState.usedAnimeIds.size.toString();
+    document.getElementById('guess-input').value = '';
+    document.getElementById('result-screen').style.display = 'none';
+    document.getElementById('submit-btn').disabled = false;
+    
+    // Update UI with current state
+    updateUI();
+}
 
 // Start new game
 async function startGame() {
     console.log('Starting new game...');
+    
+    // Clear any saved state
+    clearSavedGameState();
     
     // Reset game state
     gameState = {
@@ -179,12 +305,14 @@ function generateChallenge() {
     // Genre challenges (if anime has genres)
     if (anime.genres && anime.genres.length > 0) {
         // Same genre challenge
-        const randomGenre = anime.genres[Math.floor(Math.random() * anime.genres.length)];
+        const randomGenreRaw = anime.genres[Math.floor(Math.random() * anime.genres.length)];
+        const randomGenre = getGenreName(randomGenreRaw);
+        const animeGenreNames = getGenreNames(anime.genres);
         possibleChallenges.push({
             type: CHALLENGE_TYPES.SAME_GENRE,
             text: `Choose an anime with the genre: ${randomGenre}`,
             validator: (selectedAnime) => {
-                return selectedAnime.genres && selectedAnime.genres.includes(randomGenre);
+                return hasGenre(selectedAnime.genres, randomGenre);
             },
             genre: randomGenre
         });
@@ -192,10 +320,11 @@ function generateChallenge() {
         // Different genre challenge (no genres in common)
         possibleChallenges.push({
             type: CHALLENGE_TYPES.DIFFERENT_GENRE,
-            text: `Choose an anime that does NOT have any of these genres: ${anime.genres.join(', ')}`,
+            text: `Choose an anime that does NOT have any of these genres: ${animeGenreNames.join(', ')}`,
             validator: (selectedAnime) => {
                 if (!selectedAnime.genres) return false;
-                return !selectedAnime.genres.some(g => anime.genres.includes(g));
+                const selectedGenreNames = getGenreNames(selectedAnime.genres);
+                return !selectedGenreNames.some(g => animeGenreNames.includes(g));
             }
         });
 
@@ -204,7 +333,7 @@ function generateChallenge() {
             type: CHALLENGE_TYPES.HAS_GENRE,
             text: `Choose an anime that HAS the genre: ${randomGenre}`,
             validator: (selectedAnime) => {
-                return selectedAnime.genres && selectedAnime.genres.includes(randomGenre);
+                return hasGenre(selectedAnime.genres, randomGenre);
             }
         });
 
@@ -215,7 +344,8 @@ function generateChallenge() {
                 text: `Choose an anime that shares at least TWO genres with ${anime.title}`,
                 validator: (selectedAnime) => {
                     if (!selectedAnime.genres) return false;
-                    const matchingGenres = selectedAnime.genres.filter(g => anime.genres.includes(g));
+                    const selectedGenreNames = getGenreNames(selectedAnime.genres);
+                    const matchingGenres = selectedGenreNames.filter(g => animeGenreNames.includes(g));
                     return matchingGenres.length >= 2;
                 }
             });
@@ -337,13 +467,16 @@ function generateChallenge() {
             }
         });
 
-        possibleChallenges.push({
-            type: CHALLENGE_TYPES.FEWER_EPISODES,
-            text: `Choose an anime with FEWER episodes than ${anime.episodes}`,
-            validator: (selectedAnime) => {
-                return selectedAnime.episodes && selectedAnime.episodes < anime.episodes;
-            }
-        });
+        // Only add FEWER_EPISODES challenge if episodes >= MIN_EPISODES_FOR_FEWER_CHALLENGE (otherwise impossible)
+        if (anime.episodes >= MIN_EPISODES_FOR_FEWER_CHALLENGE) {
+            possibleChallenges.push({
+                type: CHALLENGE_TYPES.FEWER_EPISODES,
+                text: `Choose an anime with FEWER episodes than ${anime.episodes}`,
+                validator: (selectedAnime) => {
+                    return selectedAnime.episodes && selectedAnime.episodes < anime.episodes;
+                }
+            });
+        }
     }
 
     // Select a random challenge from possible ones
@@ -387,7 +520,7 @@ function updateUI() {
     let details = [];
     if (anime.score) details.push(`<span class="detail-item"><span class="detail-label">Score:</span> <span class="detail-value">${anime.score.toFixed(2)}</span></span>`);
     if (anime.genres && anime.genres.length > 0) {
-        const genreNames = anime.genres.join(', ');
+        const genreNames = getGenreNames(anime.genres).join(', ');
         details.push(`<span class="detail-item"><span class="detail-label">Genres:</span> <span class="detail-value">${genreNames}</span></span>`);
     }
     if (anime.studio) {
@@ -500,6 +633,9 @@ async function submitGuess() {
 
         // Check for achievements
         checkAchievements();
+        
+        // Save game state after successful guess
+        saveGameState();
     } else {
         // Wrong answer - game over
         const reason = getFailureReason(selectedAnime);
@@ -535,30 +671,30 @@ function getFailureReason(selectedAnime) {
         case CHALLENGE_TYPES.HAS_GENRE:
             const requiredGenre = challenge.genre || 'the required genre';
             const selectedGenres = selectedAnime.genres && selectedAnime.genres.length > 0 
-                ? selectedAnime.genres.join(', ') 
+                ? getGenreNames(selectedAnime.genres).join(', ') 
                 : 'no genres';
             return `${selectedAnime.title} has genres: ${selectedGenres}, not ${requiredGenre}.`;
         case CHALLENGE_TYPES.DIFFERENT_GENRE:
             const currentGenresStr = current.genres && current.genres.length > 0 
-                ? current.genres.join(', ') 
+                ? getGenreNames(current.genres).join(', ') 
                 : 'unknown';
-            const sharedGenres = selectedAnime.genres && current.genres
-                ? selectedAnime.genres.filter(g => current.genres.includes(g))
-                : [];
+            const currentGenreNamesArr = getGenreNames(current.genres || []);
+            const selectedGenreNamesArr = getGenreNames(selectedAnime.genres || []);
+            const sharedGenres = selectedGenreNamesArr.filter(g => currentGenreNamesArr.includes(g));
             // Validator should ensure sharedGenres.length > 0 when this is called
             const sharedGenresList = sharedGenres.length > 0 ? sharedGenres.join(', ') : 'unknown genres';
             return `${selectedAnime.title} shares genre(s): ${sharedGenresList} with ${current.title}.`;
         case CHALLENGE_TYPES.MULTIPLE_GENRES:
-            const animeGenresList = selectedAnime.genres && selectedAnime.genres.length > 0 
-                ? selectedAnime.genres.join(', ') 
+            const multipleGenresDisplay = selectedAnime.genres && selectedAnime.genres.length > 0 
+                ? getGenreNames(selectedAnime.genres).join(', ') 
                 : 'no genres';
-            const matchingGenres = selectedAnime.genres && current.genres
-                ? selectedAnime.genres.filter(g => current.genres.includes(g))
-                : [];
+            const targetGenreNamesForMultiple = getGenreNames(current.genres || []);
+            const guessedGenreNamesForMultiple = getGenreNames(selectedAnime.genres || []);
+            const matchingGenres = guessedGenreNamesForMultiple.filter(g => targetGenreNamesForMultiple.includes(g));
             if (matchingGenres.length === 0) {
-                return `${selectedAnime.title} has genres: ${animeGenresList}, but shares no genres with ${current.title} (required: at least 2).`;
+                return `${selectedAnime.title} has genres: ${multipleGenresDisplay}, but shares no genres with ${current.title} (required: at least 2).`;
             }
-            return `${selectedAnime.title} has genres: ${animeGenresList}, only ${matchingGenres.length} genre(s) match with ${current.title} (required: at least 2).`;
+            return `${selectedAnime.title} has genres: ${multipleGenresDisplay}, only ${matchingGenres.length} genre(s) match with ${current.title} (required: at least 2).`;
         case CHALLENGE_TYPES.SAME_STUDIO:
             const requiredStudio = challenge.studio || current.studio;
             const selectedStudio = selectedAnime.studio || 'unknown studio';
@@ -616,6 +752,9 @@ function getFailureReason(selectedAnime) {
 // End game
 function endGame(reason) {
     gameState.gameOver = true;
+    
+    // Clear saved game state
+    clearSavedGameState();
     
     // Show result screen
     document.getElementById('result-title').innerText = 'Game Over!';
@@ -711,6 +850,11 @@ async function searchAnime(query) {
             // Add to cache if not already present
             if (!gameState.animeCache.find(cached => cached.mal_id === a.mal_id)) {
                 // Normalize the API result format to match cache format
+                // Extract genre names from genre objects
+                const genreNames = (a.genres || []).map(g => g.name || g);
+                const studioName = (a.studios || []).map(s => s.name || s).join(', ') || 'Unknown';
+                const releaseDate = a.year || (a.aired && a.aired.from ? new Date(a.aired.from).getFullYear() : null);
+                
                 gameState.animeCache.push({
                     mal_id: a.mal_id,
                     title: a.title,
@@ -718,10 +862,11 @@ async function searchAnime(query) {
                     type: a.type,
                     episodes: a.episodes,
                     score: a.score,
-                    year: a.year || (a.aired && a.aired.from ? new Date(a.aired.from).getFullYear() : null),
-                    genres: a.genres || [],
-                    studios: a.studios || [],
-                    image_url: a.images?.jpg?.image_url || null
+                    release_date: releaseDate ? String(releaseDate) : null,
+                    genres: genreNames,
+                    studio: studioName,
+                    source: a.source || 'Unknown',
+                    image: a.images?.jpg?.image_url || null
                 });
             }
             
@@ -897,16 +1042,41 @@ async function loadLeaderboard() {
             rankSpan.className = `leaderboard-rank ${rankClass}`;
             rankSpan.textContent = `#${rank}`;
             
-            // Create avatar element
-            let avatarImg = '../assets/imgs/const.png';
-            if (score.discord_id && score.avatar) {
-                avatarImg = `https://cdn.discordapp.com/avatars/${score.discord_id}/${score.avatar}.png`;
-            }
+            // Create avatar element - start with placeholder to prevent flash
+            const placeholderImg = '../assets/imgs/const.png';
             const avatar = document.createElement('img');
             avatar.className = 'leaderboard-avatar';
-            avatar.src = avatarImg;
             avatar.alt = score.username;
-            avatar.onerror = function() { this.src = '../assets/imgs/const.png'; };
+            avatar.loading = 'lazy'; // Defer loading for performance
+            
+            if (score.discord_id && score.avatar) {
+                // Discord avatar hash can be animated (starts with a_) - use gif, otherwise png
+                const ext = score.avatar.startsWith('a_') ? 'gif' : 'png';
+                const discordAvatarUrl = `https://cdn.discordapp.com/avatars/${score.discord_id}/${score.avatar}.${ext}`;
+                
+                // Set placeholder first, then try to load Discord avatar
+                avatar.src = placeholderImg;
+                
+                // Create a temporary image to preload the Discord avatar
+                const tempImg = new Image();
+                tempImg.onload = function() {
+                    avatar.src = discordAvatarUrl;
+                };
+                tempImg.onerror = function() {
+                    // Keep placeholder if Discord avatar fails
+                    avatar.src = placeholderImg;
+                };
+                tempImg.src = discordAvatarUrl;
+            } else {
+                avatar.src = placeholderImg;
+            }
+            
+            // Fallback error handler
+            avatar.onerror = function() { 
+                if (this.src !== placeholderImg) {
+                    this.src = placeholderImg; 
+                }
+            };
             
             // Create username element
             const usernameSpan = document.createElement('span');

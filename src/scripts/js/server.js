@@ -2437,9 +2437,16 @@ app.get('/api/user/:username/full-profile', async (req, res) => {
         let privacy = { show_stats: true, show_achievements: true, show_activity: true };
         try {
             if (userData.privacy_settings) {
-                privacy = JSON.parse(userData.privacy_settings);
+                // Handle both JSON string and already-parsed object
+                if (typeof userData.privacy_settings === 'string') {
+                    privacy = JSON.parse(userData.privacy_settings);
+                } else if (typeof userData.privacy_settings === 'object') {
+                    privacy = userData.privacy_settings;
+                }
             }
-        } catch (e) { }
+        } catch (e) {
+            console.warn("Failed to parse privacy_settings:", e);
+        }
 
         // Check if viewer is the profile owner
         const isOwner = requestingUser === username;
@@ -3646,6 +3653,54 @@ let anidleCacheLastUpdate = null;
 const ANIDLE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const JIKAN_API_BASE = 'https://api.jikan.moe/v4';
 
+// File path for persistent anime cache - stored in game directory
+const ANIME_CACHE_FILE = path.join(__dirname, '../../games/anidle/cache/anime_cache.json');
+
+// Save anime cache to file for persistence across server restarts
+function saveAnimeCacheToFile() {
+    try {
+        const cacheData = {
+            anime: anidleAnimeCache,
+            lastUpdate: anidleCacheLastUpdate,
+            savedAt: Date.now()
+        };
+        
+        // Ensure config directory exists
+        const configDir = path.dirname(ANIME_CACHE_FILE);
+        if (!fs.existsSync(configDir)) {
+            fs.mkdirSync(configDir, { recursive: true });
+        }
+        
+        fs.writeFileSync(ANIME_CACHE_FILE, JSON.stringify(cacheData, null, 2), 'utf8');
+        console.log(`[Anidle] Saved ${anidleAnimeCache.length} anime to cache file`);
+    } catch (err) {
+        console.error('[Anidle] Failed to save anime cache to file:', err.message);
+    }
+}
+
+// Load anime cache from file
+function loadAnimeCacheFromFile() {
+    try {
+        if (fs.existsSync(ANIME_CACHE_FILE)) {
+            const data = fs.readFileSync(ANIME_CACHE_FILE, 'utf8');
+            const cacheData = JSON.parse(data);
+            
+            if (cacheData.anime && Array.isArray(cacheData.anime) && cacheData.anime.length > 0) {
+                anidleAnimeCache = cacheData.anime;
+                anidleCacheLastUpdate = cacheData.lastUpdate;
+                console.log(`[Anidle] Loaded ${anidleAnimeCache.length} anime from cache file`);
+                return true;
+            }
+        }
+    } catch (err) {
+        console.error('[Anidle] Failed to load anime cache from file:', err.message);
+    }
+    return false;
+}
+
+// Initialize cache from file on startup
+loadAnimeCacheFromFile();
+
 // Helper to delay between API calls (Jikan has rate limits)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -3754,29 +3809,51 @@ async function fetchMainCharacter(malId) {
 // Initialize or refresh the anime cache
 async function refreshAnidleCache() {
     console.log('[Anidle] Refreshing anime cache from Jikan API...');
-    const allAnime = [];
-
+    
+    // Get existing mal_ids to avoid re-fetching
+    const existingIds = new Set(anidleAnimeCache.map(a => a.mal_id));
+    const newAnime = [];
+    let foundNewAnime = false;
+    
     // Fetch first 4 pages (100 anime, after filtering should be ~50-70)
     for (let page = 1; page <= 4; page++) {
         const anime = await fetchAnimeFromJikan(page);
-        allAnime.push(...anime);
+        
+        // Filter out anime we already have cached
+        const newFromPage = anime.filter(a => !existingIds.has(a.mal_id));
+        if (newFromPage.length > 0) {
+            newAnime.push(...newFromPage);
+            foundNewAnime = true;
+            console.log(`[Anidle] Page ${page}: Found ${newFromPage.length} new anime`);
+        } else {
+            console.log(`[Anidle] Page ${page}: No new anime (${anime.length} already cached)`);
+        }
 
         // Respect Jikan rate limit (3 requests per second)
         if (page < 4) await delay(400);
     }
 
-    if (allAnime.length > 0) {
-        anidleAnimeCache = allAnime;
+    if (newAnime.length > 0 || anidleAnimeCache.length > 0) {
+        // Merge new anime with existing cache
+        if (newAnime.length > 0) {
+            anidleAnimeCache = [...anidleAnimeCache, ...newAnime];
+            console.log(`[Anidle] Added ${newAnime.length} new anime, total: ${anidleAnimeCache.length}`);
+        }
         anidleCacheLastUpdate = Date.now();
-        console.log(`[Anidle] Cache refreshed with ${allAnime.length} anime`);
+        
+        // Save to file for persistence
+        saveAnimeCacheToFile();
     } else if (anidleAnimeCache.length === 0) {
         // Use fallback data if API is unreachable and cache is empty
         console.warn('[Anidle] Failed to fetch from API, using fallback data');
         anidleAnimeCache = getAnidleFallbackData();
         anidleCacheLastUpdate = Date.now();
         console.log(`[Anidle] Loaded ${anidleAnimeCache.length} anime from fallback`);
+        
+        // Save fallback to file
+        saveAnimeCacheToFile();
     } else {
-        console.warn('[Anidle] Failed to fetch anime, using existing cache');
+        console.log('[Anidle] Using existing cache with', anidleAnimeCache.length, 'anime');
     }
 }
 

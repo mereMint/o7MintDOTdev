@@ -15,6 +15,85 @@ let gameState = {
     skippedTries: 0
 };
 
+// LocalStorage keys for game state persistence
+const ANIDLE_DAILY_STORAGE_KEY = 'anidle_daily_game_state';
+const ANIDLE_UNLIMITED_STORAGE_KEY = 'anidle_unlimited_game_state';
+// Expiry time for saved game state (2 hours in milliseconds) - only applies to unlimited mode
+const ANIDLE_SAVE_EXPIRY_MS = 2 * 60 * 60 * 1000;
+// Score comparison tolerance for floating point precision
+const SCORE_MATCH_TOLERANCE = 0.01;
+
+// Get storage key based on mode
+function getStorageKey(mode) {
+    return mode === 'daily' ? ANIDLE_DAILY_STORAGE_KEY : ANIDLE_UNLIMITED_STORAGE_KEY;
+}
+
+// Save game state to localStorage
+function saveAnidleGameState() {
+    if (gameState.gameOver) {
+        // Don't save finished games
+        localStorage.removeItem(getStorageKey(gameState.mode));
+        return;
+    }
+    
+    const stateToSave = {
+        mode: gameState.mode,
+        targetAnime: gameState.targetAnime,
+        tries: gameState.tries,
+        maxTries: gameState.maxTries,
+        guesses: gameState.guesses,
+        elapsedSeconds: gameState.elapsedSeconds,
+        gameOver: gameState.gameOver,
+        won: gameState.won,
+        skippedTries: gameState.skippedTries,
+        savedAt: Date.now(),
+        // For daily mode, save the date to verify it's still the same day
+        savedDate: new Date().toISOString().split('T')[0]
+    };
+    
+    try {
+        localStorage.setItem(getStorageKey(gameState.mode), JSON.stringify(stateToSave));
+    } catch (e) {
+        console.warn('Failed to save Anidle game state:', e);
+    }
+}
+
+// Load game state from localStorage
+function loadSavedAnidleState(mode) {
+    try {
+        const saved = localStorage.getItem(getStorageKey(mode));
+        if (!saved) return null;
+        
+        const state = JSON.parse(saved);
+        
+        // For daily mode, check if it's still the same day
+        if (mode === 'daily') {
+            const today = new Date().toISOString().split('T')[0];
+            if (state.savedDate !== today) {
+                localStorage.removeItem(getStorageKey(mode));
+                return null;
+            }
+        }
+        
+        // For unlimited mode, check if save is too old
+        if (mode === 'unlimited' && Date.now() - state.savedAt > ANIDLE_SAVE_EXPIRY_MS) {
+            localStorage.removeItem(getStorageKey(mode));
+            return null;
+        }
+        
+        return state;
+    } catch (e) {
+        console.warn('Failed to load saved Anidle game state:', e);
+        localStorage.removeItem(getStorageKey(mode));
+        return null;
+    }
+}
+
+// Clear saved game state
+function clearSavedAnidleState(mode) {
+    localStorage.removeItem(getStorageKey(mode));
+}
+
 // User info
 const storedUser = localStorage.getItem('discord_user');
 const user = storedUser ? JSON.parse(storedUser) : { username: "Anonymous" };
@@ -23,15 +102,98 @@ const user = storedUser ? JSON.parse(storedUser) : { username: "Anonymous" };
 let selectedAutocompleteIndex = -1;
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('user-display').innerText = `Player: ${user.username}`;
 
-    // Start game
-    startGame('daily');
+    // Check for saved daily game state
+    const savedDailyState = loadSavedAnidleState('daily');
+    if (savedDailyState && !savedDailyState.gameOver) {
+        const resume = confirm('You have a daily game in progress. Would you like to resume?');
+        if (resume) {
+            await resumeAnidleGame(savedDailyState);
+        } else {
+            clearSavedAnidleState('daily');
+            await startGame('daily');
+        }
+    } else {
+        // Start game
+        await startGame('daily');
+    }
 
     // Setup autocomplete (Jikan API)
     setupAutocomplete();
 });
+
+// Resume a saved Anidle game
+async function resumeAnidleGame(savedState) {
+    console.log('Resuming saved Anidle game...');
+    
+    // Restore game state
+    gameState.mode = savedState.mode;
+    gameState.targetAnime = savedState.targetAnime;
+    gameState.tries = savedState.tries;
+    gameState.maxTries = savedState.maxTries;
+    gameState.guesses = savedState.guesses;
+    gameState.elapsedSeconds = savedState.elapsedSeconds;
+    gameState.gameOver = savedState.gameOver;
+    gameState.won = savedState.won;
+    gameState.skippedTries = savedState.skippedTries;
+    gameState.startTime = Date.now() - (savedState.elapsedSeconds * 1000);
+    
+    // Update mode button UI
+    document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(gameState.mode === 'daily' ? 'daily-btn' : 'unlimited-btn').classList.add('active');
+    
+    // Show/hide play again button
+    document.getElementById('play-again-btn').style.display = gameState.mode === 'unlimited' ? 'inline-block' : 'none';
+    
+    // Enable inputs
+    document.getElementById('guess-input').disabled = false;
+    document.getElementById('guess-btn').disabled = false;
+    document.getElementById('tries-count').textContent = gameState.tries.toString();
+    
+    // Start timer
+    startTimer();
+    
+    // Restore guesses display
+    document.getElementById('guess-history').innerHTML = '';
+    for (const guess of gameState.guesses) {
+        // Recreate the history items
+        displayGuessResultFromSaved(guess);
+    }
+    
+    // Restore clues based on saved state
+    checkHints();
+    updateSkipCost();
+}
+
+// Display a saved guess result (simplified version for restoration)
+function displayGuessResultFromSaved(guess) {
+    const historyContainer = document.getElementById('guess-history');
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    if (guess.correct) item.classList.add('close');
+    
+    item.innerHTML = `
+        <div class="anime-name">${escapeHtml(guess.name)}</div>
+        <div class="comparison-tags">
+            <span class="comparison-tag ${guess.comparison.score_match ? 'match' : 'miss'}">
+                Score: ${guess.comparison.score_match ? '✓' : guess.comparison.score_direction || '?'}
+            </span>
+            <span class="comparison-tag ${guess.comparison.studio_match ? 'match' : 'miss'}">
+                Studio: ${guess.comparison.studio_match ? '✓' : '✗'}
+            </span>
+            <span class="comparison-tag ${guess.comparison.release_match ? 'match' : 'miss'}">
+                Release: ${guess.comparison.release_match ? '✓' : guess.comparison.release_direction || '?'}
+            </span>
+        </div>
+    `;
+    
+    historyContainer.insertBefore(item, historyContainer.firstChild);
+    
+    // Also update accumulated clues
+    updateAccumulatedClues(guess.comparison);
+}
 
 // Sleep helper
 const delay = ms => new Promise(res => setTimeout(res, ms));
@@ -143,16 +305,31 @@ async function searchAnime(query) {
 }
 
 // Select game mode
-function selectMode(mode) {
+async function selectMode(mode) {
     document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(mode === 'daily' ? 'daily-btn' : 'unlimited-btn').classList.add('active');
 
+    // Check for saved game state for this mode
+    const savedState = loadSavedAnidleState(mode);
+    if (savedState && !savedState.gameOver) {
+        const resume = confirm(`You have a ${mode} game in progress. Would you like to resume?`);
+        if (resume) {
+            await resumeAnidleGame(savedState);
+            return;
+        } else {
+            clearSavedAnidleState(mode);
+        }
+    }
+
     gameState.mode = mode;
-    startGame(mode);
+    await startGame(mode);
 }
 
 // Start a new game
 async function startGame(mode) {
+    // Clear any old saved state for this mode
+    clearSavedAnidleState(mode);
+    
     // Reset state
     gameState = {
         mode: mode,
@@ -429,7 +606,8 @@ function compareAnime(target, guess) {
     // Score
     if (target.score && guess.score) {
         const diff = target.score - guess.score;
-        if (Math.abs(diff) < 0.1) comparison.score_match = true;
+        // Score matches only if exactly equal (accounting for floating point precision)
+        if (Math.abs(diff) < SCORE_MATCH_TOLERANCE) comparison.score_match = true;
         else comparison.score_direction = diff > 0 ? '↑' : '↓';
     }
 
@@ -546,6 +724,9 @@ async function submitGuess() {
             input.disabled = false;
             document.getElementById('guess-btn').disabled = false;
             input.focus();
+            
+            // Save game state after guess
+            saveAnidleGameState();
         }
 
     } catch (err) {
@@ -610,9 +791,13 @@ function updateAccumulatedClues(comparison) {
     if (!gameState.targetAnime) return;
     const anime = gameState.targetAnime;
 
-    // Reveal Score if match
+    // Reveal Score if match, or show direction hint if not
+    const scoreEl = document.getElementById('clue-score');
     if (comparison.score_match) {
-        document.getElementById('clue-score').textContent = anime.score ? anime.score.toFixed(2) : 'N/A';
+        scoreEl.textContent = anime.score ? anime.score.toFixed(2) : 'N/A';
+    } else if (comparison.score_direction && scoreEl.textContent === '?') {
+        // Show direction hint (e.g., "↑" means target score is higher)
+        scoreEl.textContent = comparison.score_direction;
     }
 
     // Reveal Studio if match
@@ -621,10 +806,14 @@ function updateAccumulatedClues(comparison) {
         document.getElementById('clue-studio').textContent = studios || 'Unknown';
     }
 
-    // Reveal Release if match
+    // Reveal Release if match, or show direction hint if not
+    const releaseEl = document.getElementById('clue-release');
     if (comparison.release_match) {
         const year = anime.year || (anime.aired?.from ? new Date(anime.aired.from).getFullYear() : 'Unknown');
-        document.getElementById('clue-release').textContent = year;
+        releaseEl.textContent = year;
+    } else if (comparison.release_direction && releaseEl.textContent === '?') {
+        // Show direction hint (e.g., "↑" means target year is later)
+        releaseEl.textContent = comparison.release_direction;
     }
 
     // Reveal Source if match
@@ -753,6 +942,9 @@ function endGame(won) {
     gameState.gameOver = true;
     gameState.won = won;
     stopTimer();
+    
+    // Clear saved game state
+    clearSavedAnidleState(gameState.mode);
 
     // Reveal all clues
     revealAllClues();
@@ -936,6 +1128,9 @@ function skipToHint() {
         // Check game over
         if (gameState.tries <= 0) {
             endGame(false);
+        } else {
+            // Save state after skip
+            saveAnidleGameState();
         }
     }
 }
