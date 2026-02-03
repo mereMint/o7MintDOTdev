@@ -205,6 +205,8 @@
             width: 100%;
             background: #111;
             border-bottom: 1px solid #333;
+            cursor: pointer;
+            z-index: 5;
         }
 
         .timeline-tracks {
@@ -478,6 +480,7 @@
             <button class="btn primary" onclick="exportMap()">Export Map</button>
             <div style="width: 20px;"></div>
             <button id="record-btn" class="btn secondary" onclick="toggleRecordMode()">⏺ Record</button>
+            <button id="playtest-btn" class="btn primary" onclick="startPlaytest()" style="background: #33cc66;">▶ Playtest</button>
             <button class="btn secondary" onclick="window.location.href='../index.html'">Back to Game</button>
         </div>
     </header>
@@ -562,6 +565,7 @@
 
             <div class="timeline-container">
                 <div class="timeline-controls">
+                    <button class="play-btn" id="stop-btn" onclick="stopAndReset()" title="Stop and go to start">⏹</button>
                     <button class="play-btn" id="play-btn" onclick="togglePlay()">▶</button>
                     <button class="play-btn" id="timeline-record-btn" onclick="toggleRecordMode()" style="color: #ff5555;">●</button>
                     <span class="time-display" id="time-display">0:00.000</span>
@@ -575,7 +579,7 @@
                         <option value="8">1/8 Beat</option>
                         <option value="16">1/16 Beat</option>
                     </select>
-                    <input type="range" id="zoom-slider" min="1" max="10" value="5" style="width: 100px;">
+                    <input type="range" id="zoom-slider" min="1" max="20" value="5" style="width: 100px;">
                     <span style="color: #888; font-size: 0.85rem;">Zoom</span>
                 </div>
 
@@ -613,6 +617,29 @@
         <div class="menu-item" onclick="toggleNoteType(); hideContextMenu()">Switch Type</div>
     </div>
 
+    <!-- Playtest Overlay -->
+    <div id="playtest-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 10, 26, 0.95); z-index: 1000;">
+        <canvas id="playtest-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
+        <div id="playtest-hud" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; align-items: center; z-index: 1001;">
+            <div style="background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 10px; color: #fff; font-family: 'Orbitron', sans-serif;">
+                <span id="playtest-time">0:00</span>
+            </div>
+        </div>
+        <div id="playtest-controls" style="position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 1001;">
+            <button onclick="pausePlaytest()" style="padding: 15px 30px; background: #ff9933; color: #000; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">⏸ Pause</button>
+            <button onclick="endPlaytest()" style="padding: 15px 30px; background: #ff3366; color: #fff; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">✕ Exit</button>
+        </div>
+        <!-- Pause menu (hidden by default) -->
+        <div id="playtest-pause-menu" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 40, 0.95); padding: 40px; border-radius: 15px; border: 2px solid #33ccff; z-index: 1002;">
+            <h2 style="color: #33ccff; font-family: 'Orbitron', sans-serif; margin-bottom: 30px; text-align: center;">PAUSED</h2>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <button onclick="resumePlaytest()" style="padding: 15px 40px; background: #33cc66; color: #000; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">▶ Resume</button>
+                <button onclick="restartPlaytest()" style="padding: 15px 40px; background: #33ccff; color: #000; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">↺ Restart</button>
+                <button onclick="endPlaytest()" style="padding: 15px 40px; background: #ff3366; color: #fff; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">✕ Back to Editor</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // ===== STATE =====
         let notes = [];
@@ -620,11 +647,13 @@
         let copiedNotes = []; // Clipboard
         let currentTool = 'red';
         let audio = null;
+        let audioData = null; // Base64 audio data for drafts
         let isPlaying = false;
         let zoomLevel = 5;
         let pixelsPerMs = 0.1;
         let backgroundImage = null;
         let backgroundFilename = '';
+        let backgroundData = null; // Base64 background data for drafts
         let isDraggingPlayhead = false;
         let isDraggingNote = false;
         let isResizingHold = false;
@@ -634,6 +663,10 @@
 
         let isRecording = false;
         let recordingKeys = {};
+
+        // Playtest state
+        let isPlaytesting = false;
+        let playtestStartTime = 0;
 
         // Undo/Redo State
         const historyStack = [];
@@ -715,10 +748,50 @@
                 zoomLevel = parseInt(e.target.value);
                 pixelsPerMs = 0.05 * zoomLevel;
                 updateTimeline();
+                updatePlayheadPosition();
+            });
+
+            // Snap select change - update grid
+            document.getElementById('snap-select').addEventListener('change', () => {
+                updateTimeline();
+            });
+
+            // BPM change - update grid
+            document.getElementById('song-bpm').addEventListener('change', () => {
+                updateTimeline();
             });
 
             // Timeline click to add notes
             document.getElementById('timeline').addEventListener('click', handleTimelineClick);
+
+            // Ruler click to seek
+            document.getElementById('timeline-ruler').addEventListener('click', (e) => {
+                if (!audio) return;
+                e.stopPropagation(); // Prevent adding notes
+                
+                const timeline = document.getElementById('timeline');
+                const scroll = document.getElementById('timeline-scroll');
+                const rect = timeline.getBoundingClientRect();
+                const x = e.clientX - rect.left + scroll.scrollLeft;
+                const time = Math.max(0, x / pixelsPerMs);
+                
+                // Clamp to audio duration
+                const clampedTime = Math.min(time, audio.duration * 1000);
+                audio.currentTime = clampedTime / 1000;
+                
+                // Update playhead
+                const playhead = document.getElementById('playhead');
+                playhead.style.left = `${clampedTime * pixelsPerMs}px`;
+                
+                // Update time display
+                const mins = Math.floor(audio.currentTime / 60);
+                const secs = Math.floor(audio.currentTime % 60);
+                const ms = Math.floor((audio.currentTime % 1) * 1000);
+                document.getElementById('time-display').textContent =
+                    `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+                
+                drawPreview(clampedTime);
+            });
 
             // Timeline Right-Click (Context Menu)
             document.getElementById('timeline').addEventListener('contextmenu', (e) => {
@@ -742,6 +815,7 @@
                         pixelsPerMs = 0.05 * zoomLevel;
                         document.getElementById('zoom-slider').value = zoomLevel;
                         updateTimeline();
+                        updatePlayheadPosition();
                     }
                 } else {
                     // Scroll
@@ -767,24 +841,35 @@
                 const timelineScroll = document.getElementById('timeline-scroll');
                 const timeline = document.getElementById('timeline');
                 const rect = timeline.getBoundingClientRect();
+                
+                // Calculate x position relative to timeline, accounting for scroll
                 const x = e.clientX - rect.left + timelineScroll.scrollLeft;
-                const newTime = Math.max(0, x / pixelsPerMs);
+                
+                // Only handle playhead dragging here
+                if (isDraggingPlayhead) {
+                    // Clamp x to valid range
+                    const maxX = audio ? audio.duration * 1000 * pixelsPerMs : timeline.offsetWidth;
+                    const clampedX = Math.max(0, Math.min(x, maxX));
+                    const newTime = clampedX / pixelsPerMs;
 
-                // Update ALL selected notes if dragging one of them
-                if (isDraggingNote && draggedNoteIndex !== -1 && selectedNotes.has(draggedNoteIndex)) {
-                    const originalTime = notes[draggedNoteIndex].time;
-                    // Only calculate delta for the main dragged note? 
-                    // Wait, logic in mousemove handles absolute position.
-                    // Multi-drag needs logic update in mousemove.
+                    if (audio && audio.duration) {
+                        const clampedTime = Math.min(newTime, audio.duration * 1000);
+                        audio.currentTime = clampedTime / 1000;
+                    }
+
+                    // Update playhead position
+                    playhead.style.left = `${clampedX}px`;
+                    
+                    // Update time display
+                    const displayTime = newTime / 1000;
+                    const mins = Math.floor(displayTime / 60);
+                    const secs = Math.floor(displayTime % 60);
+                    const ms = Math.floor((displayTime % 1) * 1000);
+                    document.getElementById('time-display').textContent =
+                        `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+                    
+                    drawPreview(newTime);
                 }
-
-                if (audio && audio.duration) {
-                    const clampedTime = Math.min(newTime, audio.duration * 1000);
-                    audio.currentTime = clampedTime / 1000;
-                }
-
-                // Update playhead position manually while dragging
-                playhead.style.left = `${x}px`;
             });
 
             // Replaced by global handler
@@ -952,6 +1037,13 @@
             const file = e.target.files[0];
             if (!file) return;
 
+            // Warn about large audio files (> 5MB) as they may not save properly in drafts
+            const MAX_AUDIO_SIZE = 5 * 1024 * 1024; // 5MB
+            if (file.size > MAX_AUDIO_SIZE) {
+                const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                console.log(`Audio file is ${sizeMB}MB - may be too large for draft storage`);
+            }
+
             const url = URL.createObjectURL(file);
             audio = new Audio(url);
             audio.addEventListener('loadedmetadata', () => {
@@ -960,7 +1052,19 @@
             audio.addEventListener('ended', () => {
                 isPlaying = false;
                 document.getElementById('play-btn').textContent = '▶';
+                
+                // If in playtest mode, return to editor when song ends
+                if (isPlaytesting) {
+                    endPlaytest();
+                }
             });
+
+            // Store audio as base64 for draft saving
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                audioData = event.target.result;
+            };
+            reader.readAsDataURL(file);
         }
 
         function togglePlay() {
@@ -980,6 +1084,274 @@
             }
         }
 
+        function stopAndReset() {
+            if (!audio) return;
+            
+            // Stop playback and go to beginning
+            audio.pause();
+            audio.currentTime = 0;
+            isPlaying = false;
+            document.getElementById('play-btn').textContent = '▶';
+            
+            // Update playhead position
+            const playhead = document.getElementById('playhead');
+            playhead.style.left = '0px';
+            
+            // Update time display
+            document.getElementById('time-display').textContent = '0:00.000';
+            
+            // Scroll timeline to beginning
+            document.getElementById('timeline-scroll').scrollLeft = 0;
+            
+            // Update preview
+            drawPreview(0);
+        }
+
+        // ===== PLAYTEST MODE =====
+        let playtestCanvas, playtestCtx;
+        let playtestNotes = [];
+        let playtestAnimationId = null;
+        let playtestPaused = false;
+        
+        // Playtest visual constants (matching game.js)
+        const PT_RING_RADIUS = 80;
+        const PT_SPAWN_RADIUS = 400;
+        const PT_APPROACH_TIME = 1500;
+        const PT_HIT_ZONE = 20;
+        
+        function startPlaytest() {
+            if (!audio) {
+                alert('Please load an audio file first');
+                return;
+            }
+            if (notes.length === 0) {
+                alert('No notes to playtest. Add some notes first!');
+                return;
+            }
+            
+            // Show playtest overlay
+            document.getElementById('playtest-overlay').style.display = 'block';
+            document.getElementById('playtest-pause-menu').style.display = 'none';
+            
+            // Initialize canvas
+            playtestCanvas = document.getElementById('playtest-canvas');
+            playtestCtx = playtestCanvas.getContext('2d');
+            resizePlaytestCanvas();
+            window.addEventListener('resize', resizePlaytestCanvas);
+            
+            // Copy notes for playtest (so we can track hit/miss without affecting editor)
+            playtestNotes = notes.map(n => ({
+                ...n,
+                hit: false,
+                missed: false
+            }));
+            
+            // Start playtest
+            isPlaytesting = true;
+            playtestPaused = false;
+            audio.currentTime = 0;
+            audio.play();
+            
+            playtestLoop();
+        }
+        
+        function resizePlaytestCanvas() {
+            if (!playtestCanvas) return;
+            playtestCanvas.width = window.innerWidth;
+            playtestCanvas.height = window.innerHeight;
+        }
+        
+        function playtestLoop() {
+            if (!isPlaytesting) return;
+            if (playtestPaused) return;
+            
+            const currentTime = audio.currentTime * 1000;
+            
+            // Update time display
+            const mins = Math.floor(audio.currentTime / 60);
+            const secs = Math.floor(audio.currentTime % 60);
+            document.getElementById('playtest-time').textContent = 
+                `${mins}:${secs.toString().padStart(2, '0')}`;
+            
+            // Draw
+            drawPlaytest(currentTime);
+            
+            playtestAnimationId = requestAnimationFrame(playtestLoop);
+        }
+        
+        function drawPlaytest(currentTime) {
+            const ctx = playtestCtx;
+            const w = playtestCanvas.width;
+            const h = playtestCanvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+            
+            // Clear canvas
+            ctx.fillStyle = 'rgba(10, 10, 26, 1)';
+            ctx.fillRect(0, 0, w, h);
+            
+            // Draw background if available
+            if (backgroundImage) {
+                ctx.save();
+                ctx.filter = 'blur(8px)';
+                const imgRatio = backgroundImage.width / backgroundImage.height;
+                const canvasRatio = w / h;
+                let drawW, drawH, drawX, drawY;
+                if (imgRatio > canvasRatio) {
+                    drawH = h;
+                    drawW = h * imgRatio;
+                    drawX = (w - drawW) / 2;
+                    drawY = 0;
+                } else {
+                    drawW = w;
+                    drawH = w / imgRatio;
+                    drawX = 0;
+                    drawY = (h - drawH) / 2;
+                }
+                ctx.drawImage(backgroundImage, drawX, drawY, drawW, drawH);
+                ctx.filter = 'none';
+                ctx.fillStyle = 'rgba(10, 10, 26, 0.7)';
+                ctx.fillRect(0, 0, w, h);
+                ctx.restore();
+            }
+            
+            // Draw pulsing background circles
+            const pulse = Math.sin(performance.now() / 500) * 0.1 + 0.9;
+            for (let i = 5; i >= 1; i--) {
+                const radius = PT_SPAWN_RADIUS * (i / 5) * pulse;
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(50, 50, 80, ${0.1 / i})`;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+            
+            // Draw center ring
+            ctx.beginPath();
+            ctx.arc(cx, cy, PT_RING_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Draw notes
+            playtestNotes.forEach(note => {
+                if (note.hit || note.missed) return;
+                
+                const timeUntilHit = note.time - currentTime;
+                
+                if (timeUntilHit > PT_APPROACH_TIME) return;
+                if (timeUntilHit < -300) {
+                    note.missed = true;
+                    return;
+                }
+                
+                // Color based on type
+                let color = '#33ccff';
+                if (note.type === 'red') color = '#ff3366';
+                if (note.type === 'hold') color = '#ffcc00';
+                if (note.type === 'spam') color = '#33ff66';
+                
+                // Calculate radius
+                const progress = 1 - (timeUntilHit / PT_APPROACH_TIME);
+                let radius;
+                if (progress <= 1) {
+                    radius = PT_SPAWN_RADIUS - (PT_SPAWN_RADIUS - PT_RING_RADIUS) * progress;
+                } else {
+                    const overProgress = progress - 1;
+                    radius = PT_RING_RADIUS * (1 - overProgress);
+                }
+                
+                if (radius <= 0) return;
+                
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = note.type === 'spam' ? 2 : 8;
+                if (note.type === 'spam') ctx.setLineDash([10, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                // Hit zone indicator
+                if (radius <= PT_RING_RADIUS + PT_HIT_ZONE && radius >= PT_RING_RADIUS - PT_HIT_ZONE) {
+                    ctx.globalAlpha = 0.5;
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
+                }
+            });
+        }
+        
+        function pausePlaytest() {
+            if (!isPlaytesting) return;
+            playtestPaused = true;
+            audio.pause();
+            document.getElementById('playtest-pause-menu').style.display = 'block';
+            if (playtestAnimationId) {
+                cancelAnimationFrame(playtestAnimationId);
+            }
+        }
+        
+        function resumePlaytest() {
+            if (!isPlaytesting) return;
+            playtestPaused = false;
+            document.getElementById('playtest-pause-menu').style.display = 'none';
+            audio.play();
+            playtestLoop();
+        }
+        
+        function restartPlaytest() {
+            // Reset notes
+            playtestNotes = notes.map(n => ({
+                ...n,
+                hit: false,
+                missed: false
+            }));
+            playtestPaused = false;
+            document.getElementById('playtest-pause-menu').style.display = 'none';
+            audio.currentTime = 0;
+            audio.play();
+            playtestLoop();
+        }
+        
+        function endPlaytest() {
+            isPlaytesting = false;
+            playtestPaused = false;
+            
+            if (playtestAnimationId) {
+                cancelAnimationFrame(playtestAnimationId);
+            }
+            
+            audio.pause();
+            audio.currentTime = 0;
+            
+            // Hide overlay
+            document.getElementById('playtest-overlay').style.display = 'none';
+            document.getElementById('playtest-pause-menu').style.display = 'none';
+            
+            window.removeEventListener('resize', resizePlaytestCanvas);
+            
+            // Update editor state
+            isPlaying = false;
+            document.getElementById('play-btn').textContent = '▶';
+            updateTimeline();
+        }
+        
+        // Keyboard handler for playtest
+        document.addEventListener('keydown', (e) => {
+            if (!isPlaytesting) return;
+            
+            if (e.code === 'Escape') {
+                if (playtestPaused) {
+                    resumePlaytest();
+                } else {
+                    pausePlaytest();
+                }
+                e.preventDefault();
+            }
+        });
+
         // ===== BACKGROUND =====
         function loadBackground() {
             document.getElementById('bg-input').click();
@@ -989,11 +1361,21 @@
             const file = e.target.files[0];
             if (!file) return;
 
+            // Warn about large files (> 2MB) as they may not save properly
+            const MAX_BG_SIZE = 2 * 1024 * 1024; // 2MB
+            if (file.size > MAX_BG_SIZE) {
+                const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                if (!confirm(`The background image is ${sizeMB}MB which may be too large to save in drafts. Continue anyway?`)) {
+                    return;
+                }
+            }
+
             backgroundFilename = file.name;
             document.getElementById('bg-filename').textContent = backgroundFilename;
 
             const reader = new FileReader();
             reader.onload = (event) => {
+                backgroundData = event.target.result; // Store base64 data for drafts
                 const img = new Image();
                 img.onload = () => {
                     backgroundImage = img;
@@ -1032,44 +1414,103 @@
             drawPreview(currentTime);
         }
 
+        // Update playhead position based on current audio time (used when zooming)
+        function updatePlayheadPosition() {
+            if (!audio) return;
+            const currentTime = audio.currentTime * 1000;
+            const playhead = document.getElementById('playhead');
+            playhead.style.left = `${currentTime * pixelsPerMs}px`;
+        }
+
         // ===== TIMELINE =====
         function updateTimeline() {
             const timeline = document.getElementById('timeline');
             const ruler = document.getElementById('timeline-ruler');
+            const tracks = document.querySelector('.timeline-tracks');
 
             // Calculate timeline width
             const duration = audio ? audio.duration * 1000 : 60000;
             const width = duration * pixelsPerMs;
             timeline.style.width = `${Math.max(width, window.innerWidth)}px`;
 
-            // Draw ruler
-            ruler.innerHTML = '';
-            const beatInterval = 60000 / (parseInt(document.getElementById('song-bpm').value) || 120);
+            // Get snap settings
+            const snapDivisor = parseInt(document.getElementById('snap-select').value) || 0;
+            const bpm = parseInt(document.getElementById('song-bpm').value) || 120;
+            const beatInterval = 60000 / bpm;
 
+            // Draw ruler with beat markers
+            ruler.innerHTML = '';
+            
             for (let t = 0; t < duration; t += beatInterval) {
+                const isMeasureStart = t % (beatInterval * 4) === 0;
                 const marker = document.createElement('div');
                 marker.style.cssText = `
                     position: absolute;
                     left: ${t * pixelsPerMs}px;
                     top: 0;
                     height: 100%;
-                    width: 1px;
-                    background: ${t % (beatInterval * 4) === 0 ? '#555' : '#333'};
+                    width: ${isMeasureStart ? '2px' : '1px'};
+                    background: ${isMeasureStart ? '#666' : '#444'};
+                    pointer-events: none;
                 `;
                 ruler.appendChild(marker);
 
                 // Time labels every 4 beats
-                if (t % (beatInterval * 4) === 0) {
+                if (isMeasureStart) {
                     const label = document.createElement('span');
                     label.style.cssText = `
                         position: absolute;
                         left: ${t * pixelsPerMs + 5}px;
                         top: 5px;
                         font-size: 10px;
-                        color: #666;
+                        color: #888;
+                        pointer-events: none;
                     `;
                     label.textContent = `${Math.floor(t / 1000)}s`;
                     ruler.appendChild(label);
+                }
+            }
+
+            // Draw grid lines in tracks based on snap setting
+            // Remove old grid lines
+            document.querySelectorAll('.track-grid-line').forEach(el => el.remove());
+            
+            if (snapDivisor > 0) {
+                const msPerSnap = beatInterval / snapDivisor;
+                const trackElements = tracks.querySelectorAll('.track');
+                
+                for (let t = 0; t < duration; t += msPerSnap) {
+                    const isBeat = Math.abs(t % beatInterval) < 1;
+                    const isMeasureStart = Math.abs(t % (beatInterval * 4)) < 1;
+                    
+                    trackElements.forEach(track => {
+                        const gridLine = document.createElement('div');
+                        gridLine.className = 'track-grid-line';
+                        let lineColor, lineWidth;
+                        
+                        if (isMeasureStart) {
+                            lineColor = 'rgba(255, 255, 255, 0.3)';
+                            lineWidth = '2px';
+                        } else if (isBeat) {
+                            lineColor = 'rgba(255, 255, 255, 0.15)';
+                            lineWidth = '1px';
+                        } else {
+                            lineColor = 'rgba(255, 255, 255, 0.05)';
+                            lineWidth = '1px';
+                        }
+                        
+                        gridLine.style.cssText = `
+                            position: absolute;
+                            left: ${t * pixelsPerMs}px;
+                            top: 0;
+                            height: 100%;
+                            width: ${lineWidth};
+                            background: ${lineColor};
+                            pointer-events: none;
+                            z-index: 0;
+                        `;
+                        track.appendChild(gridLine);
+                    });
                 }
             }
 
@@ -1579,10 +2020,30 @@
                 difficultyLevel: document.getElementById('difficulty-level').value,
                 bpm: document.getElementById('song-bpm').value,
                 notes: notes,
-                backgroundFilename: backgroundFilename
+                backgroundFilename: backgroundFilename,
+                backgroundData: backgroundData, // Save background image data
+                audioData: audioData // Save audio data
             };
-            localStorage.setItem('rhythm_circle_draft', JSON.stringify(mapData));
-            alert('Draft saved to browser!');
+            
+            try {
+                localStorage.setItem('rhythm_circle_draft', JSON.stringify(mapData));
+                alert('Draft saved to browser!');
+            } catch (e) {
+                // localStorage might be full due to media data size
+                if (e.name === 'QuotaExceededError') {
+                    // Try saving without media data
+                    delete mapData.backgroundData;
+                    delete mapData.audioData;
+                    try {
+                        localStorage.setItem('rhythm_circle_draft', JSON.stringify(mapData));
+                        alert('Draft saved (media files too large to save)');
+                    } catch (e2) {
+                        alert('Failed to save draft: storage full');
+                    }
+                } else {
+                    alert('Failed to save draft: ' + e.message);
+                }
+            }
         }
 
         function loadDraft() {
@@ -1600,10 +2061,45 @@
                 document.getElementById('song-bpm').value = data.bpm || 120;
                 notes = data.notes || [];
                 backgroundFilename = data.backgroundFilename || '';
+                backgroundData = data.backgroundData || null;
                 document.getElementById('bg-filename').textContent = backgroundFilename || 'No background';
+                
+                // Load background image from saved data
+                if (backgroundData) {
+                    const img = new Image();
+                    img.onload = () => {
+                        backgroundImage = img;
+                        drawPreview();
+                    };
+                    img.src = backgroundData;
+                } else {
+                    backgroundImage = null;
+                }
+                
+                // Load audio from saved data
+                if (data.audioData) {
+                    audioData = data.audioData;
+                    audio = new Audio(audioData);
+                    audio.addEventListener('loadedmetadata', () => {
+                        updateTimeline();
+                    });
+                    audio.addEventListener('ended', () => {
+                        isPlaying = false;
+                        document.getElementById('play-btn').textContent = '▶';
+                        if (isPlaytesting) {
+                            endPlaytest();
+                        }
+                    });
+                }
+                
                 updateTimeline();
                 drawPreview();
-                alert('Draft loaded successfully!');
+                
+                let loadedItems = [];
+                if (data.backgroundData) loadedItems.push('background');
+                if (data.audioData) loadedItems.push('audio');
+                const extras = loadedItems.length > 0 ? ` (with ${loadedItems.join(' & ')})` : '';
+                alert(`Draft loaded successfully!${extras}`);
             } catch (e) {
                 alert('Failed to load draft.');
             }

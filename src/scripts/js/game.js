@@ -39,11 +39,14 @@ async function loadGameDetails() {
             document.getElementById('game-desc').innerText = game.description;
             document.title = `${game.name} - Play`;
 
-            // Prepare Images
+            // Prepare Images - use the images from data.json, don't hardcode logo.png
             const gallery = document.getElementById('game-gallery');
-            let images = ['logo.png'];
-            if (game.images) {
-                images = images.concat(game.images);
+            let images = [];
+            if (game.images && game.images.length > 0) {
+                images = game.images;
+            } else {
+                // Fallback: try common image names
+                images = ['logo.png', 'logo.svg'];
             }
             gameImages = [...new Set(images)];
             currentHeroIndex = 0;
