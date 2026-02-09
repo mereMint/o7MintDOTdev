@@ -51,12 +51,12 @@ app.use((req, res, next) => {
             res.status(504).json({ error: 'Request timeout' });
         }
     }, 30000);
-    
+
     // Clear timeout when response finishes
     res.on('finish', () => {
         clearTimeout(timeout);
     });
-    
+
     next();
 });
 
@@ -165,16 +165,16 @@ setInterval(() => {
 const authMiddleware = (req, res, next) => {
     // Get token from Authorization header or query param
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') 
-        ? authHeader.substring(7) 
+    const token = authHeader?.startsWith('Bearer ')
+        ? authHeader.substring(7)
         : req.query.session_token;
-    
+
     const session = getSession(token);
-    
+
     if (!session) {
         return res.status(401).json({ error: "Authentication required. Please log in." });
     }
-    
+
     // Attach session to request for use in handlers
     req.session = session;
     next();
@@ -184,13 +184,13 @@ const authMiddleware = (req, res, next) => {
 const ownerMiddleware = (usernameParam = 'username') => {
     return (req, res, next) => {
         const targetUsername = req.params[usernameParam] || req.body[usernameParam] || req.query[usernameParam];
-        
+
         if (!req.session) {
             return res.status(401).json({ error: "Authentication required" });
         }
-        
+
         // Allow if user is accessing their own data or is admin/owner
-        if (req.session.username === targetUsername || 
+        if (req.session.username === targetUsername ||
             ['admin', 'owner'].includes(req.session.role)) {
             next();
         } else {
@@ -280,6 +280,23 @@ pool.getConnection()
                     PRIMARY KEY (date_id, game_id)
                 )
             `);
+
+            // Ensure User Maps table exists (for Rhythm Circle custom maps)
+            await conn.query(`
+                CREATE TABLE IF NOT EXISTS user_maps (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(255) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    artist VARCHAR(255) DEFAULT 'Unknown',
+                    difficulty VARCHAR(50) DEFAULT 'Normal',
+                    difficulty_level INT DEFAULT 3,
+                    game_id VARCHAR(50) DEFAULT 'rhythm_circle',
+                    data LONGTEXT NOT NULL, 
+                    downloads INT DEFAULT 0,
+                    likes INT DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
             console.log("[OK] Tables verified/created.");
 
             // Migrations: Ensure columns exist (for existing tables)
@@ -293,6 +310,10 @@ pool.getConnection()
                 await conn.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(500) DEFAULT NULL");
                 await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS discord_id VARCHAR(255)");
                 await conn.query("ALTER TABLE scores ADD COLUMN IF NOT EXISTS avatar VARCHAR(255)");
+
+                // Rhythm Circle Maps Migration
+                await conn.query("ALTER TABLE user_maps ADD COLUMN IF NOT EXISTS difficulty VARCHAR(50) DEFAULT 'Normal'");
+                await conn.query("ALTER TABLE user_maps ADD COLUMN IF NOT EXISTS difficulty_level INT DEFAULT 3");
 
                 // Migration: Make discord_id unique to prevent duplicate accounts
                 try {
@@ -830,7 +851,7 @@ app.post('/api/score', async (req, res) => {
             // Special handling for daily boards - only keep best score per user per day
             if (board === 'daily') {
                 const today = new Date().toISOString().split('T')[0];
-                
+
                 // Check if user already has a score for today
                 // Use discord_id if available to properly identify the user
                 let existingScores;
@@ -846,11 +867,11 @@ app.post('/api/score', async (req, res) => {
                         [game_id, user, today]
                     );
                 }
-                
+
                 if (existingScores.length > 0) {
                     // Find best existing score using reduce to avoid stack overflow with large arrays
                     const bestExisting = existingScores.reduce((max, s) => Math.max(max, s.score), -Infinity);
-                    
+
                     // Only update if new score is strictly better (equal scores are ignored)
                     if (score > bestExisting) {
                         // New score is better, delete old scores and insert new one
@@ -1242,6 +1263,113 @@ app.get('/api/user/:username/achievements', async (req, res) => {
     }
 });
 
+
+// --- User Maps APIs (Rhythm Circle) ---
+
+// POST /api/rhythm/maps - Upload a new map
+app.post('/api/rhythm/maps', authMiddleware, async (req, res) => {
+    try {
+        const { title, artist, game_id, data } = req.body;
+        const username = req.session.username;
+
+        if (!title || !data) {
+            return res.status(400).json({ error: "Missing required fields" });
+        }
+
+        // Profanity Check
+        if (containsBadWord(title) || containsBadWord(artist || '') || containsBadWord(username)) {
+            return res.status(400).json({ error: "Profanity detected" });
+        }
+
+        if (useInMemory) {
+            // Memory storage not implemented for maps, warn user
+            return res.status(503).json({ error: "Map upload unavailable in Dev Mode" });
+        }
+
+        let conn;
+        try {
+            conn = await pool.getConnection();
+
+            const result = await conn.query(
+                "INSERT INTO user_maps (username, title, artist, game_id, data) VALUES (?, ?, ?, ?, ?)",
+                [username, title, artist || 'Unknown', game_id || 'rhythm_circle', JSON.stringify(data)]
+            );
+
+            res.json({ success: true, id: result.insertId });
+        } finally {
+            if (conn) conn.release();
+        }
+    } catch (err) {
+        console.error("Map Upload Error:", err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+// GET /api/rhythm/maps - List maps
+app.get('/api/rhythm/maps', async (req, res) => {
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = parseInt(req.query.offset) || 0;
+    const sort = req.query.sort || 'newest'; // newest, popular
+    const gameId = req.query.game_id || 'rhythm_circle';
+
+    if (useInMemory) return res.json([]);
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+
+        let orderBy = "created_at DESC";
+        if (sort === 'popular') orderBy = "downloads DESC";
+
+        const rows = await conn.query(`
+            SELECT id, username, title, artist, downloads, likes, created_at 
+            FROM user_maps 
+            WHERE game_id = ?
+            ORDER BY ${orderBy} 
+            LIMIT ? OFFSET ?`,
+            [gameId, limit, offset]
+        );
+
+        res.json(rows);
+    } catch (err) {
+        console.error("Map List Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// GET /api/rhythm/maps/:id - Get specific map data
+app.get('/api/rhythm/maps/:id', async (req, res) => {
+    const mapId = req.params.id;
+
+    if (useInMemory) return res.status(404).json({ error: "Not found" });
+
+    let conn;
+    try {
+        conn = await pool.getConnection();
+
+        // Count download
+        await conn.query("UPDATE user_maps SET downloads = downloads + 1 WHERE id = ?", [mapId]);
+
+        const rows = await conn.query("SELECT * FROM user_maps WHERE id = ?", [mapId]);
+        if (rows.length === 0) return res.status(404).json({ error: "Map not found" });
+
+        const map = rows[0];
+        // Parse data if stored as string
+        try {
+            if (typeof map.data === 'string') map.data = JSON.parse(map.data);
+        } catch (e) { }
+
+        res.json(map);
+    } catch (err) {
+        console.error("Map Fetch Error:", err);
+        res.status(500).json({ error: "Database error" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
 // --- Auth Routes ---
 
 // GET /api/auth/status
@@ -1298,16 +1426,16 @@ app.get('/api/auth/discord/callback', async (req, res) => {
             let conn;
             try {
                 conn = await pool.getConnection();
-                
+
                 // Ensure role column exists before querying
                 await ensureUserExtendedColumns(conn);
-                
+
                 // Check if user exists by discord_id first
                 const existingUser = await conn.query(
                     "SELECT username, role FROM users WHERE discord_id = ?",
                     [id]
                 );
-                
+
                 if (existingUser.length > 0) {
                     // User exists, update their info (in case username or avatar changed)
                     await conn.query(
@@ -1356,10 +1484,10 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 // POST /api/auth/logout - Destroy session
 app.post('/api/auth/logout', authMiddleware, (req, res) => {
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') 
-        ? authHeader.substring(7) 
+    const token = authHeader?.startsWith('Bearer ')
+        ? authHeader.substring(7)
         : req.body.session_token;
-    
+
     if (token) {
         destroySession(token);
     }
@@ -1381,16 +1509,16 @@ app.post('/api/auth/dev-login', (req, res) => {
     if (!isLocal) {
         return res.status(403).json({ error: "Forbidden: Dev login only available on localhost" });
     }
-    
+
     const { username } = req.body;
     if (!username) {
         return res.status(400).json({ error: "Username required" });
     }
-    
+
     // Create a dev session
     const sessionToken = createSession(username, DEV_DISCORD_ID, DEV_AVATAR, 'user');
-    res.json({ 
-        success: true, 
+    res.json({
+        success: true,
         session_token: sessionToken,
         user: {
             username,
@@ -1787,7 +1915,7 @@ app.delete('/api/admin/daily-challenge/:date_id/:game_id', adminMiddleware, asyn
             // Clear memory cache for this challenge
             const cacheKey = `${date_id}_${game_id}`;
             delete memoryDailyCache[cacheKey];
-            
+
             res.json({ success: true, deleted: result.affectedRows });
         } else {
             res.status(404).json({ error: "Daily challenge not found" });
@@ -3232,16 +3360,16 @@ app.post('/api/multiplayer/session/:sessionId/end', async (req, res) => {
 const moderatorMiddleware = async (req, res, next) => {
     // First, verify the session token
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') 
-        ? authHeader.substring(7) 
+    const token = authHeader?.startsWith('Bearer ')
+        ? authHeader.substring(7)
         : req.query.session_token;
-    
+
     const session = getSession(token);
-    
+
     if (!session) {
         return res.status(401).json({ error: "Authentication required. Please log in." });
     }
-    
+
     // Attach session to request
     req.session = session;
 
@@ -3735,13 +3863,13 @@ function saveAnimeCacheToFile() {
             lastUpdate: anidleCacheLastUpdate,
             savedAt: Date.now()
         };
-        
+
         // Ensure config directory exists
         const configDir = path.dirname(ANIME_CACHE_FILE);
         if (!fs.existsSync(configDir)) {
             fs.mkdirSync(configDir, { recursive: true });
         }
-        
+
         fs.writeFileSync(ANIME_CACHE_FILE, JSON.stringify(cacheData, null, 2), 'utf8');
         console.log(`[Anidle] Saved ${anidleAnimeCache.length} anime to cache file`);
     } catch (err) {
@@ -3755,7 +3883,7 @@ function loadAnimeCacheFromFile() {
         if (fs.existsSync(ANIME_CACHE_FILE)) {
             const data = fs.readFileSync(ANIME_CACHE_FILE, 'utf8');
             const cacheData = JSON.parse(data);
-            
+
             if (cacheData.anime && Array.isArray(cacheData.anime) && cacheData.anime.length > 0) {
                 anidleAnimeCache = cacheData.anime;
                 anidleCacheLastUpdate = cacheData.lastUpdate;
@@ -3880,16 +4008,16 @@ async function fetchMainCharacter(malId) {
 // Initialize or refresh the anime cache
 async function refreshAnidleCache() {
     console.log('[Anidle] Refreshing anime cache from Jikan API...');
-    
+
     // Get existing mal_ids to avoid re-fetching
     const existingIds = new Set(anidleAnimeCache.map(a => a.mal_id));
     const newAnime = [];
     let foundNewAnime = false;
-    
+
     // Fetch first 4 pages (100 anime, after filtering should be ~50-70)
     for (let page = 1; page <= 4; page++) {
         const anime = await fetchAnimeFromJikan(page);
-        
+
         // Filter out anime we already have cached
         const newFromPage = anime.filter(a => !existingIds.has(a.mal_id));
         if (newFromPage.length > 0) {
@@ -3911,7 +4039,7 @@ async function refreshAnidleCache() {
             console.log(`[Anidle] Added ${newAnime.length} new anime, total: ${anidleAnimeCache.length}`);
         }
         anidleCacheLastUpdate = Date.now();
-        
+
         // Save to file for persistence
         saveAnimeCacheToFile();
     } else if (anidleAnimeCache.length === 0) {
@@ -3920,7 +4048,7 @@ async function refreshAnidleCache() {
         anidleAnimeCache = getAnidleFallbackData();
         anidleCacheLastUpdate = Date.now();
         console.log(`[Anidle] Loaded ${anidleAnimeCache.length} anime from fallback`);
-        
+
         // Save fallback to file
         saveAnimeCacheToFile();
     } else {
@@ -4077,11 +4205,11 @@ app.get('/api/anidle/anime/:id', async (req, res) => {
         const animeId = parseInt(req.params.id);
         const animeList = await getAnidleValidAnime();
         const anime = animeList.find(a => a.mal_id === animeId);
-        
+
         if (!anime) {
             return res.status(404).json({ error: "Anime not found" });
         }
-        
+
         res.json(anime);
     } catch (err) {
         console.error("Anime details error:", err);
@@ -4303,12 +4431,12 @@ app.get('/api/anidle/cache-status', (req, res) => {
 // Global error handler middleware - must be defined after all routes
 app.use((err, req, res, next) => {
     console.error('[EXPRESS ERROR HANDLER]', err);
-    
+
     // If headers already sent, delegate to default Express error handler
     if (res.headersSent) {
         return next(err);
     }
-    
+
     // Send error response
     res.status(err.status || 500).json({
         error: err.message || 'Internal Server Error',

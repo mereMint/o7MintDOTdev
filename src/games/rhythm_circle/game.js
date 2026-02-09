@@ -47,6 +47,7 @@ let keysPressed = {
 // Gameplay
 let notes = [];
 let activeHolds = [];
+let activeSpams = [];
 let score = 0;
 let combo = 0;
 let maxCombo = 0;
@@ -57,7 +58,7 @@ let judgmentCounts = { perfect: 0, great: 0, good: 0, miss: 0 };
 // Visual settings
 const CENTER_X = () => canvas.width / 2;
 const CENTER_Y = () => canvas.height / 2;
-const RING_RADIUS = 80; // The target hit area radius
+const RING_RADIUS = 100; // The target hit area radius
 const NOTE_SPAWN_RADIUS = 400;
 const NOTE_SIZE = 20;
 const VISUAL_FADE_TIME = 200; // Extra time to show notes after miss window
@@ -65,12 +66,15 @@ const HIT_ZONE_THRESHOLD = 20; // Range for hit zone visual indicator
 let APPROACH_TIME = 1500; // MS to reach center (will be driven by AR)
 let AR = 5; // Approach Rate (0-10)
 
+// Particles
+let particles = [];
+
 // Timing windows (in ms)
 const TIMING = {
-    PERFECT: 50, // Slightly more lenient for readability
-    GREAT: 100,
-    GOOD: 150,
-    MISS: 200
+    PERFECT: 70, // Relaxed from 50
+    GREAT: 120,  // Relaxed from 100
+    GOOD: 200,   // Relaxed from 150
+    MISS: 250    // Relaxed from 200
 };
 
 // Health System
@@ -135,6 +139,7 @@ function showScreen(screenId) {
             break;
         case 'browse-screen':
             currentState = GameState.BROWSE;
+            availableMaps = []; // Reset
             loadAvailableMaps();
             break;
         case 'settings-screen':
@@ -209,6 +214,66 @@ function activateMenuOption(action) {
 
 // ===== SONG LOADING =====
 async function loadSongs() {
+    // Check for playtest mode
+    const urlParams = new URLSearchParams(window.location.search);
+    const isPlaytest = urlParams.get('playtest') === 'true';
+
+    if (isPlaytest) {
+        // Load from IndexedDB
+        const request = indexedDB.open('RhythmCircleDB', 2); // Use v2
+
+        request.onsuccess = function (event) {
+            const db = event.target.result;
+            // Check if store exists (might be fresh DB if upgrade didn't run here - but editor should have created it)
+            if (!db.objectStoreNames.contains('playtest')) {
+                alert("Playtest data not found (DB empty).");
+                return;
+            }
+
+            const transaction = db.transaction(['playtest'], 'readonly');
+            const store = transaction.objectStore('playtest');
+            const getRequest = store.get('current');
+
+            getRequest.onsuccess = function () {
+                if (getRequest.result) {
+                    const data = getRequest.result.data;
+                    // Create a temporary song entry for the playtest
+                    songs = [{
+                        id: 'playtest',
+                        title: (data.title || 'Playtest') + ' [TEST]',
+                        artist: data.artist || 'Unknown',
+                        difficulty: data.difficulty || 'Custom',
+                        difficultyLevel: data.difficultyLevel || 0,
+                        path: null,
+                        mapData: data
+                    }];
+                    // Auto-select and start
+                    selectedSongIndex = 0;
+                    updateSongSelect();
+
+                    // Auto-start
+                    setTimeout(() => {
+                        startGame();
+                    }, 500);
+                } else {
+                    alert("No playtest data found.");
+                }
+            };
+
+            getRequest.onerror = function () {
+                alert("Failed to read playtest data.");
+            }
+        };
+
+        request.onerror = function (e) {
+            console.error("IndexedDB error", e);
+            alert("Failed to open playtest database.");
+        };
+
+        // Return here - we wait for async DB callback to set songs
+        return;
+    }
+
     // Load songs from localStorage only (downloaded maps)
     const savedMaps = localStorage.getItem('rhythm_circle_maps');
     if (savedMaps) {
@@ -307,6 +372,21 @@ async function downloadMap(index) {
     try {
         // If mapData is not already included, fetch it
         let mapData = map.mapData;
+
+        // 1. Fetch from API if it's a remote map (has ID but no path/data)
+        if (!mapData && !map.path && map.id) {
+            try {
+                const res = await fetch(`/api/rhythm/maps/${map.id}`);
+                if (res.ok) {
+                    const fullMap = await res.json();
+                    mapData = fullMap.data; // The 'data' field contains the actual map JSON
+                }
+            } catch (e) {
+                console.error("API Fetch Error", e);
+            }
+        }
+
+        // 2. Fetch from local static path (fallback for demo songs)
         if (!mapData && map.path) {
             const res = await fetch(`${map.path}/map.json`);
             if (res.ok) {
@@ -566,7 +646,7 @@ async function startGame() {
             } else {
                 bgPath = `maps/${song.id}/${currentMap.backgroundFile}`;
             }
-            
+
             const img = new Image();
             img.src = bgPath;
             await new Promise((resolve, reject) => {
@@ -596,25 +676,39 @@ async function startGame() {
     }
 
     // Load audio - for localStorage maps, we need to handle audio differently
+    // Load audio - for localStorage maps, we need to handle audio differently
     try {
-        let audioPath;
-        if (song.path) {
-            audioPath = `${song.path}/${currentMap.audioFile || 'song.mp3'}`;
+        let audioSrc = null;
+
+        // Check for base64 audio data first (Playtest / Local Drafts)
+        if (currentMap.audioData) {
+            audioSrc = currentMap.audioData;
+        }
+        // Then check for file paths
+        else if (song.path) {
+            audioSrc = `${song.path}/${currentMap.audioFile || 'song.mp3'}`;
         } else if (currentMap.audioFile) {
             // Try to find audio in default maps location
-            audioPath = `maps/${song.id}/${currentMap.audioFile}`;
+            audioSrc = `maps/${song.id}/${currentMap.audioFile}`;
         } else {
-            // No audio available - use a silent fallback or notify user
+            // No audio available
             console.log('No audio file specified');
-            audioPath = null;
         }
 
-        if (audioPath) {
-            audio = new Audio(audioPath);
+        if (audioSrc) {
+            audio = new Audio(audioSrc);
             audio.volume = settings.volume;
             await new Promise((resolve, reject) => {
+                // Warning: loading base64 audio might be faster/diff than network
                 audio.addEventListener('canplaythrough', resolve, { once: true });
-                audio.addEventListener('error', reject, { once: true });
+                audio.addEventListener('error', (e) => {
+                    console.error("Audio error", e);
+                    reject(e);
+                }, { once: true });
+
+                // Timeout fallback for large base64 strings sometimes hanging events
+                setTimeout(resolve, 3000);
+
                 audio.load();
             });
         } else {
@@ -622,7 +716,7 @@ async function startGame() {
             audio = null;
         }
     } catch (e) {
-        console.log('Audio load failed, continuing without audio');
+        console.log('Audio load failed, continuing without audio', e);
         audio = null;
     }
 
@@ -635,11 +729,11 @@ async function startGame() {
     // Start after short delay (use startDelay setting for music)
     const baseDelay = 1000; // Base delay before game starts
     const musicDelay = settings.startDelay || 0; // Additional delay before music starts
-    
+
     setTimeout(() => {
         gameStartTime = performance.now();
         isPaused = false;
-        
+
         // Start music after the configured delay
         if (audio) {
             setTimeout(() => {
@@ -648,7 +742,7 @@ async function startGame() {
                 }
             }, musicDelay);
         }
-        
+
         gameLoop();
     }, baseDelay);
 }
@@ -672,7 +766,7 @@ function resetGameState() {
     accuracy = 100;
     judgmentCounts = { perfect: 0, great: 0, good: 0, miss: 0 };
     currentHealth = 100; // Reset Health
-    
+
     // Reset key press state
     keysPressed.red = false;
     keysPressed.blue = false;
@@ -699,6 +793,11 @@ function gameLoop() {
 
     const currentTime = getCurrentTime();
 
+    // Auto-Regen Check
+    if (Date.now() - lastMissTime > 4000 && currentHealth < maxHealth && !isPaused) {
+        currentHealth = Math.min(maxHealth, currentHealth + 0.2); // Regen 0.2 per frame -> ~12 HP/sec
+    }
+
     // Clear canvas
     ctx.fillStyle = 'rgba(10, 10, 26, 1)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -706,15 +805,19 @@ function gameLoop() {
     // Draw background effects
     drawBackground();
 
-    // Draw center ring (indicator)
-    drawCenterRing();
-
-    // Update and draw notes
+    // Update and draw notes (drawn BEHIND the center ring)
     updateNotes(currentTime);
     drawNotes(currentTime);
 
     // Draw hold effects
     drawHoldEffects();
+
+    // Update and draw particles
+    updateParticles();
+    drawParticles();
+
+    // Draw center ring (indicator) - NOW IN FRONT
+    drawCenterRing();
 
     // Check for song end
     if (audio && audio.ended) {
@@ -752,15 +855,15 @@ function drawBackground() {
     if (backgroundImage) {
         // Save context state
         ctx.save();
-        
+
         // Apply blur filter
         ctx.filter = 'blur(8px)';
-        
+
         // Calculate dimensions to cover the entire canvas (cover mode)
         const imgRatio = backgroundImage.width / backgroundImage.height;
         const canvasRatio = canvas.width / canvas.height;
         let drawW, drawH, drawX, drawY;
-        
+
         if (imgRatio > canvasRatio) {
             // Image is wider - fit by height
             drawH = canvas.height;
@@ -774,14 +877,14 @@ function drawBackground() {
             drawX = 0;
             drawY = (canvas.height - drawH) / 2;
         }
-        
+
         ctx.drawImage(backgroundImage, drawX, drawY, drawW, drawH);
-        
+
         // Reset filter and add dark overlay for visibility
         ctx.filter = 'none';
         ctx.fillStyle = 'rgba(10, 10, 26, 0.7)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
+
         // Restore context state
         ctx.restore();
     }
@@ -803,97 +906,21 @@ function drawCenterRing() {
     const cx = CENTER_X();
     const cy = CENTER_Y();
 
-    // Pulse Ring on Beat
-    // BPM = 120 (approx 500ms). Use audio time or perf time.
-    // Let's use performance.now() for visual pulse
-    const beatPulse = Math.sin(performance.now() / 200) * 2 + 0; // +/- 2px
-    const pulsedRadius = RING_RADIUS + beatPulse;
-
-    // Draw Health Bar (Fading Fill)
+    // Draw Center Ring (Target)
     ctx.beginPath();
-    ctx.arc(cx, cy, pulsedRadius - 2, 0, Math.PI * 2);
-    const healthOpacity = Math.max(0, currentHealth / maxHealth) * 0.5;
-    ctx.fillStyle = `rgba(255, 51, 102, ${healthOpacity})`;
+    ctx.arc(cx, cy, RING_RADIUS, 0, Math.PI * 2);
+
+    // Play Area Background (Subtle fill)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fill();
 
-    // Hit Area (Black Circle)
-    ctx.beginPath();
-    ctx.arc(cx, cy, pulsedRadius, 0, Math.PI * 2);
-    ctx.fillStyle = '#000000';
-    ctx.fill();
-
-    // Ring border
-    ctx.beginPath();
-    ctx.arc(cx, cy, pulsedRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = '#444';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Hit feedback (Inner glow)
-    if (combo > 0) {
-        const intensity = Math.min(combo / 50, 1);
-        ctx.beginPath();
-        ctx.arc(cx, cy, pulsedRadius - 5, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(51, 204, 255, ${intensity * 0.5})`;
-        ctx.lineWidth = 4;
-        ctx.stroke();
-    }
-
-    // Goal Line
-    ctx.beginPath();
-    ctx.arc(cx, cy, pulsedRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Draw key press indicators inside the center ring
-    drawKeyIndicators(cx, cy, pulsedRadius);
-}
-
-function drawKeyIndicators(cx, cy, ringRadius) {
-    const indicatorRadius = 15;
-    const spacing = 25;
-    
-    // Red key indicator (left side)
-    const redX = cx - spacing;
-    const redY = cy;
-    
-    ctx.beginPath();
-    ctx.arc(redX, redY, indicatorRadius, 0, Math.PI * 2);
-    if (keysPressed.red) {
-        ctx.fillStyle = '#ff3366';
-        ctx.fill();
-        ctx.shadowColor = '#ff3366';
-        ctx.shadowBlur = 15;
-    } else {
-        ctx.fillStyle = 'rgba(255, 51, 102, 0.3)';
-        ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = '#ff3366';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    
-    // Blue key indicator (right side)
-    const blueX = cx + spacing;
-    const blueY = cy;
-    
-    ctx.beginPath();
-    ctx.arc(blueX, blueY, indicatorRadius, 0, Math.PI * 2);
-    if (keysPressed.blue) {
-        ctx.fillStyle = '#33ccff';
-        ctx.fill();
-        ctx.shadowColor = '#33ccff';
-        ctx.shadowBlur = 15;
-    } else {
-        ctx.fillStyle = 'rgba(51, 204, 255, 0.3)';
-        ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = '#33ccff';
-    ctx.lineWidth = 2;
+    // Static Target Ring (The visual guide for timing)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 4;
     ctx.stroke();
 }
+
+
 
 function drawNotes(currentTime) {
     const cx = CENTER_X();
@@ -907,7 +934,7 @@ function drawNotes(currentTime) {
 
         // Don't draw if too far away
         if (timeUntilHit > APPROACH_TIME) return;
-        
+
         // Notes continue past the center (go through the circle)
         // Allow notes to be visible until they're well past the miss window
         const timePastHit = -timeUntilHit;
@@ -928,7 +955,7 @@ function drawNotes(currentTime) {
         // Radius logic - notes now continue through the center
         let startRadius;
         const progressStart = 1 - (timeUntilHit / APPROACH_TIME);
-        
+
         // Calculate radius - notes shrink from spawn radius through the center and past
         // At progress 0: radius = NOTE_SPAWN_RADIUS
         // At progress 1 (hit time): radius = RING_RADIUS (at the target ring)
@@ -942,12 +969,13 @@ function drawNotes(currentTime) {
             startRadius = RING_RADIUS * (1 - overProgress);
         }
 
-        if (note.type === 'hold' && note.endTime) {
-            // Hold notes: the outer edge (end time) shrinks from outside
-            // The inner edge (start time) stays at RING_RADIUS when held
+        if ((note.type === 'hold' || note.type === 'spam') && note.endTime) {
+            // Check if this hold/spam is currently active
+            const isHeld = activeHolds.includes(note) || activeSpams.includes(note);
+
             const timeUntilEnd = note.endTime - currentTime;
             const progressEnd = 1 - (timeUntilEnd / APPROACH_TIME);
-            
+
             let endRadius;
             if (progressEnd <= 1) {
                 endRadius = NOTE_SPAWN_RADIUS - (NOTE_SPAWN_RADIUS - RING_RADIUS) * progressEnd;
@@ -956,61 +984,71 @@ function drawNotes(currentTime) {
                 endRadius = RING_RADIUS * (1 - overProgress);
             }
 
-            // Calculate ring thickness based on hold duration and AR
-            const holdDuration = note.endTime - note.time;
-            const baseThickness = 8;
-            const arFactor = Math.max(1, AR) / 5;
-            const durationFactor = Math.min(holdDuration / 1000, 3);
-            const ringThickness = Math.max(8, baseThickness * durationFactor * arFactor);
-
-            // Clamp for drawing - allow drawing even when past center
+            // Clamp for drawing
             let drawStart = Math.max(0, startRadius);
             let drawEnd = Math.min(NOTE_SPAWN_RADIUS, endRadius);
 
-            // Ensure start < end for proper rendering
-            if (drawStart > drawEnd) {
-                [drawStart, drawEnd] = [drawEnd, drawStart];
-            }
+            if (drawStart > drawEnd) [drawStart, drawEnd] = [drawEnd, drawStart];
 
             if (drawEnd > 0 && drawEnd > drawStart) {
-                // Draw the duration band with calculated thickness
+                // Visual Color Override for Spam
+                const drawColor = note.type === 'spam' ? '#33ff66' : color;
+                const activeColor = isHeld ? '#ffffff' : drawColor;
+
+                // 1. Draw Fill (Duration)
                 ctx.beginPath();
                 ctx.arc(cx, cy, (drawStart + drawEnd) / 2, 0, Math.PI * 2);
-                ctx.strokeStyle = color;
-                ctx.lineWidth = Math.min(Math.abs(drawEnd - drawStart), ringThickness);
-                ctx.globalAlpha = 0.4;
+                ctx.strokeStyle = drawColor;
+                ctx.lineWidth = Math.abs(drawEnd - drawStart);
+                ctx.globalAlpha = isHeld ? 0.3 : 0.15; // Brighter if held
                 ctx.stroke();
                 ctx.globalAlpha = 1.0;
 
-                // Draw edges with thickness based on duration
-                ctx.lineWidth = Math.min(ringThickness, 12);
-                if (drawStart > 0) {
+                // 2. Draw Start Ring (The Head)
+                if (drawStart > 10) {
                     ctx.beginPath();
-                    ctx.arc(cx, cy, drawStart, 0, Math.PI * 2);
+                    const headRadius = isHeld ? RING_RADIUS : drawStart;
+                    ctx.arc(cx, cy, headRadius, 0, Math.PI * 2);
+                    ctx.strokeStyle = activeColor;
+                    ctx.lineWidth = isHeld ? 6 : 4;
                     ctx.stroke();
                 }
+
+                // 3. Draw End Ring (The Tail)
                 ctx.beginPath();
                 ctx.arc(cx, cy, drawEnd, 0, Math.PI * 2);
+                ctx.strokeStyle = drawColor;
+                ctx.lineWidth = 4;
                 ctx.stroke();
+
+                // Extra visual for Spam notes: Dashed inner ring to indicate "mash"
+                if (note.type === 'spam') {
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, (drawStart + drawEnd) / 2, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([5, 15]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
             }
         } else {
-            // Regular notes - continue through the center
+            // Regular Notes
             if (startRadius <= 0) return;
 
+            // Base Ring
             ctx.beginPath();
             ctx.arc(cx, cy, startRadius, 0, Math.PI * 2);
             ctx.strokeStyle = color;
-            ctx.lineWidth = (note.type === 'spam') ? 2 : 8;
-            if (note.type === 'spam') ctx.setLineDash([10, 5]);
+            ctx.lineWidth = 8;
+            ctx.shadowBlur = 0;
             ctx.stroke();
-            ctx.setLineDash([]);
-            
-            // Add a visual indicator when note is in the hit zone
+
+            // Hit zone visual guide
             if (startRadius <= RING_RADIUS + HIT_ZONE_THRESHOLD && startRadius >= RING_RADIUS - HIT_ZONE_THRESHOLD) {
-                ctx.globalAlpha = 0.5;
+                ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = 4;
                 ctx.stroke();
-                ctx.globalAlpha = 1.0;
             }
         }
     });
@@ -1055,8 +1093,16 @@ function updateNotes(currentTime) {
             // Hold completed successfully
             note.hit = true;
             processJudgment('perfect', note, true);
-            // Visual Flash for Hold End
-            // createHitEffect(0, 0, 'perfect'); // This function is not defined in the provided code
+            return false;
+        }
+        return true;
+    });
+
+    // Update active Spams (Drumrolls)
+    activeSpams = activeSpams.filter(note => {
+        if (getCurrentTime() >= note.endTime) {
+            // Drumroll complete
+            createHitEffect(CENTER_X(), CENTER_Y(), 'perfect');
             return false;
         }
         return true;
@@ -1103,8 +1149,10 @@ function handleKeyUp(e) {
     }
 
     // Release holds
-    if (e.code === settings.keyRed || e.code === settings.keyBlue) {
-        releaseHold();
+    if (e.code === settings.keyRed) {
+        releaseHold('red');
+    } else if (e.code === settings.keyBlue) {
+        releaseHold('blue');
     }
 }
 
@@ -1122,13 +1170,26 @@ function handleMouseUp(e) {
     if (settings.mouseKey === 'none') return;
 
     keysPressed[settings.mouseKey] = false;
-    releaseHold();
+    keysPressed[settings.mouseKey] = false;
+    releaseHold(settings.mouseKey);
 }
 
 function hitNote(inputType) {
     const currentTime = getCurrentTime();
 
-    // Find closest hittable note of matching type
+    // 1. Check for active spam drumrolls (priority)
+    let hitSpam = false;
+    activeSpams.forEach(note => {
+        if (currentTime <= note.endTime) {
+            note.spamHits = (note.spamHits || 0) + 1;
+            score += 50; // Bonus points for mashing
+            createHitEffect(CENTER_X(), CENTER_Y(), 'good'); // Visual feedback
+            hitSpam = true;
+        }
+    });
+    if (hitSpam) return; // Consumed input for spam
+
+    // 2. Find closest hittable note of matching type
     let closestNote = null;
     let closestDiff = Infinity;
 
@@ -1149,18 +1210,11 @@ function hitNote(inputType) {
     });
 
     if (closestNote) {
-        // Handle spam notes
+        // Handle spam notes (Activation)
         if (closestNote.type === 'spam') {
-            closestNote.spamCount = (closestNote.spamCount || 0) + 1;
-            if (closestNote.spamCount >= closestNote.spamRequired) {
-                closestNote.hit = true;
-                processJudgment('perfect', closestNote);
-            } else {
-                // Partial hit feedback
-                showJudgment('');
-                combo++;
-                score += 10;
-            }
+            activeSpams.push(closestNote);
+            closestNote.hit = true; // Mark as caught/active
+            processJudgment('perfect', closestNote); // Award initial points
             return;
         }
 
@@ -1192,27 +1246,72 @@ function hitNote(inputType) {
     }
 }
 
-function releaseHold() {
+function releaseHold(inputType) {
     // Early release of hold notes
     const currentTime = getCurrentTime();
 
+    // Filter holds that should be released
+    const remainingHolds = [];
+
     activeHolds.forEach(note => {
+        // If note type matches input type (or is generic/spam/hold which might need generic handling, 
+        // but typically 'hold' notes in this game seem to have specific types 'red'/'blue' assigned? 
+        // Wait, the note type is 'hold'. But hitNote checked against inputType.
+        // We need to know which key activated the hold.
+        // For now, let's assume 'hold' notes can be released by EITHER if we don't track which key hit them.
+        // BUT, usually a hold note is colored red/blue. 
+        // Let's check the note's intended type if it has one under the 'hold' wrapper or if 'hold' is the type.
+        // The game schema seems to be type='hold'. Color comes from... somewhere?
+        // Game logic says: if (note.type === 'hold') color='yellow'. 
+        // Just 'hold'. So ANY key releases it? That implies you can switch keys mid-hold?
+        // If so, releasing one key while holding the other should NOT kill it.
+        // But if I hold both keys, and release one, does it die?
+        // Let's rely on keysPressed check.
+
+        // Actually, if I release 'red', and 'blue' is still held, and the note accepts 'blue', keep it?
+        // But hitNote only adds to activeHolds.
+        // Simplest fix: If NO keys are pressed, release all. 
+        // If 'red' is released and 'blue' is pressed, keep holds?
+        // But valid inputs for 'hold' type notes are potentially BOTH.
+
+        let shouldRelease = false;
+        if (inputType === 'red' && !keysPressed.blue) shouldRelease = true; // If blue also not held
+        if (inputType === 'blue' && !keysPressed.red) shouldRelease = true;
+
+        // BETTER LOGIC: If the key released was the one maintaining the hold?
+        // Since we don't track which key started it, we check if *any* valid key is still held.
+        // For 'hold' type (yellow), both keys work. So if either is still down, keep it.
+        const activeKeys = (keysPressed.red ? 1 : 0) + (keysPressed.blue ? 1 : 0);
+
+        if (activeKeys === 0) {
+            shouldRelease = true;
+        }
+
+        if (!shouldRelease) {
+            remainingHolds.push(note);
+            return;
+        }
+
         const remaining = note.endTime - currentTime;
         const total = note.endTime - note.time;
         const progress = 1 - (remaining / total);
 
-        if (progress >= 0.8) {
+        if (progress >= 0.9) { // stricter release
+            // Completed
+            note.hit = true;
+            processJudgment('perfect', note, true);
+        } else if (progress >= 0.7) {
             // Good enough
             note.hit = true;
-            processJudgment('great', note, true);
+            processJudgment('good', note, true);
         } else {
-            // Too early
+            // Too early / Drop
             note.missed = true;
             processJudgment('miss', note, true);
         }
     });
 
-    activeHolds = [];
+    activeHolds = remainingHolds;
 }
 
 function processJudgment(judgment, note, isHold = false) {
@@ -1230,9 +1329,10 @@ function processJudgment(judgment, note, isHold = false) {
     // Health Logic
     if (judgment === 'miss') {
         currentHealth -= HEALTH_DRAIN;
+        lastMissTime = Date.now(); // Track miss time for regen
         combo = 0;
         if (currentHealth <= 0) {
-            failGame(); // This function is not defined in the provided code
+            failGame();
         }
     } else {
         currentHealth = Math.min(maxHealth, currentHealth + HEALTH_GAIN);
@@ -1242,6 +1342,9 @@ function processJudgment(judgment, note, isHold = false) {
         // Combo multiplier
         const multiplier = Math.min(1 + combo * 0.01, 2);
         score += Math.floor(baseScore[judgment] * multiplier);
+
+        // Visual Hit Effect
+        createHitEffect(CENTER_X(), CENTER_Y(), judgment);
     }
 
     // Update accuracy
@@ -1298,10 +1401,35 @@ function exitToMenu() {
         audio.pause();
         audio = null;
     }
+
+    // Auto-delete playtest data if in playtest mode
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('playtest') === 'true') {
+        const request = indexedDB.open('RhythmCircleDB', 2); // Open DB
+        request.onsuccess = function (e) {
+            const db = e.target.result;
+            if (db.objectStoreNames.contains('playtest')) {
+                const trans = db.transaction(['playtest'], 'readwrite');
+                trans.objectStore('playtest').delete('current');
+            }
+        };
+        // Redirect back to editor
+        window.location.href = 'editor/index.html';
+        return;
+    }
     cancelAnimationFrame(animationFrameId);
     document.getElementById('pause-overlay').classList.add('hidden');
     showScreen('song-select-screen');
 }
+
+// ===== FAIL GAME =====
+/*
+function failGame() {
+    cancelAnimationFrame(animationFrameId);
+    if (audio) audio.pause();
+    showScreen('game-over-screen');
+}
+*/
 
 // ===== END GAME =====
 function endGame() {
@@ -1327,8 +1455,15 @@ function endGame() {
     document.getElementById('count-good').textContent = judgmentCounts.good;
     document.getElementById('count-miss').textContent = judgmentCounts.miss;
 
-    // Submit score
-    submitScore(score, pp);
+    // Submit score (ONLY if not playtest)
+    const urlParams = new URLSearchParams(window.location.search);
+    const isPlaytest = urlParams.get('playtest') === 'true';
+
+    if (!isPlaytest) {
+        submitScore(score, pp);
+    } else {
+        console.log("Playtest mode: Score and PP not submitted.");
+    }
 
     showScreen('results-screen');
 }
@@ -1427,4 +1562,99 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ===== VISUALS & PARTICLES =====
+let lastHealth = 100;
+let lastMissTime = 0;
+
+function drawCenterRing() {
+    const cx = CENTER_X();
+    const cy = CENTER_Y();
+
+    // Health Arc
+    const healthPct = currentHealth / maxHealth;
+
+    // Base ring (Background)
+    ctx.beginPath();
+    ctx.arc(cx, cy, RING_RADIUS, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Health segment (Foreground)
+    if (healthPct > 0) {
+        ctx.beginPath();
+        // Draw health arc from -90 degrees (top)
+        ctx.arc(cx, cy, RING_RADIUS, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * healthPct), false);
+        ctx.strokeStyle = healthPct > 0.5 ? '#1DCD9F' : (healthPct > 0.2 ? '#ffcc00' : '#ff3366');
+        ctx.lineWidth = 6;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = ctx.strokeStyle;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+
+    // Inner subtle fill for contrast
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.fill();
+
+    // Pulse effect
+    const time = Date.now() / 1000;
+    const pulse = Math.sin(time * 10) * 2;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, RING_RADIUS + 5 + pulse, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(29, 205, 159, 0.4)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+}
+
+function createHitEffect(x, y, type) {
+    let color = '#ffffff';
+    if (type === 'perfect') color = '#ffcc00'; // Gold
+    else if (type === 'great') color = '#33ccff'; // Blue
+    else if (type === 'good') color = '#33ff66'; // Green
+    else color = '#ff3366'; // Red
+
+    // Create explosion of particles
+    for (let i = 0; i < 12; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2 + Math.random() * 4;
+        particles.push({
+            x: x,
+            y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1.0,
+            decay: 0.03 + Math.random() * 0.03,
+            color: color,
+            size: 2 + Math.random() * 3
+        });
+    }
+}
+
+function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= p.decay;
+
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+        }
+    }
+}
+
+function drawParticles() {
+    ctx.save();
+    particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.restore();
 }

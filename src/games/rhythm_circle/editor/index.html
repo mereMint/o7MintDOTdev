@@ -478,9 +478,14 @@
             <button class="btn secondary" onclick="loadDraft()">Load Draft</button>
             <button class="btn secondary" onclick="importMap()">Import Map</button>
             <button class="btn primary" onclick="exportMap()">Export Map</button>
+            <button class="btn secondary" style="background: #9933ff; color: #fff;" onclick="uploadMap()">Upload
+                Cloud</button>
+            <button class="btn secondary" style="background: #ffaa00; color: #000;" onclick="autoMap()">✨ Auto
+                Map</button>
             <div style="width: 20px;"></div>
             <button id="record-btn" class="btn secondary" onclick="toggleRecordMode()">⏺ Record</button>
-            <button id="playtest-btn" class="btn primary" onclick="startPlaytest()" style="background: #33cc66;">▶ Playtest</button>
+            <button id="playtest-btn" class="btn primary" onclick="startPlaytest()" style="background: #33cc66;">▶
+                Playtest</button>
             <button class="btn secondary" onclick="window.location.href='../index.html'">Back to Game</button>
         </div>
     </header>
@@ -565,9 +570,11 @@
 
             <div class="timeline-container">
                 <div class="timeline-controls">
-                    <button class="play-btn" id="stop-btn" onclick="stopAndReset()" title="Stop and go to start">⏹</button>
+                    <button class="play-btn" id="stop-btn" onclick="stopAndReset()"
+                        title="Stop and go to start">⏹</button>
                     <button class="play-btn" id="play-btn" onclick="togglePlay()">▶</button>
-                    <button class="play-btn" id="timeline-record-btn" onclick="toggleRecordMode()" style="color: #ff5555;">●</button>
+                    <button class="play-btn" id="timeline-record-btn" onclick="toggleRecordMode()"
+                        style="color: #ff5555;">●</button>
                     <span class="time-display" id="time-display">0:00.000</span>
                     <div style="width: 1px; height: 30px; background: #333; margin: 0 10px;"></div>
                     <select id="snap-select"
@@ -581,6 +588,7 @@
                     </select>
                     <input type="range" id="zoom-slider" min="1" max="20" value="5" style="width: 100px;">
                     <span style="color: #888; font-size: 0.85rem;">Zoom</span>
+                    <span id="last-saved" style="color: #666; font-size: 0.9em; margin-left: 20px;"></span>
                 </div>
 
                 <div class="timeline-scroll" id="timeline-scroll">
@@ -618,24 +626,40 @@
     </div>
 
     <!-- Playtest Overlay -->
-    <div id="playtest-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 10, 26, 0.95); z-index: 1000;">
+    <div id="playtest-overlay"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 10, 26, 0.95); z-index: 1000;">
         <canvas id="playtest-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
-        <div id="playtest-hud" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; align-items: center; z-index: 1001;">
-            <div style="background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 10px; color: #fff; font-family: 'Orbitron', sans-serif;">
+        <div id="playtest-hud"
+            style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; align-items: center; z-index: 1001;">
+            <div
+                style="background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 10px; color: #fff; font-family: 'Orbitron', sans-serif;">
                 <span id="playtest-time">0:00</span>
             </div>
         </div>
-        <div id="playtest-controls" style="position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 1001;">
-            <button onclick="pausePlaytest()" style="padding: 15px 30px; background: #ff9933; color: #000; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">⏸ Pause</button>
-            <button onclick="endPlaytest()" style="padding: 15px 30px; background: #ff3366; color: #fff; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">✕ Exit</button>
+        <div id="playtest-controls"
+            style="position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 1001;">
+            <button onclick="pausePlaytest()"
+                style="padding: 15px 30px; background: #ff9933; color: #000; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">⏸
+                Pause</button>
+            <button onclick="endPlaytest()"
+                style="padding: 15px 30px; background: #ff3366; color: #fff; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">✕
+                Exit</button>
         </div>
         <!-- Pause menu (hidden by default) -->
-        <div id="playtest-pause-menu" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 40, 0.95); padding: 40px; border-radius: 15px; border: 2px solid #33ccff; z-index: 1002;">
-            <h2 style="color: #33ccff; font-family: 'Orbitron', sans-serif; margin-bottom: 30px; text-align: center;">PAUSED</h2>
+        <div id="playtest-pause-menu"
+            style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 40, 0.95); padding: 40px; border-radius: 15px; border: 2px solid #33ccff; z-index: 1002;">
+            <h2 style="color: #33ccff; font-family: 'Orbitron', sans-serif; margin-bottom: 30px; text-align: center;">
+                PAUSED</h2>
             <div style="display: flex; flex-direction: column; gap: 15px;">
-                <button onclick="resumePlaytest()" style="padding: 15px 40px; background: #33cc66; color: #000; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">▶ Resume</button>
-                <button onclick="restartPlaytest()" style="padding: 15px 40px; background: #33ccff; color: #000; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">↺ Restart</button>
-                <button onclick="endPlaytest()" style="padding: 15px 40px; background: #ff3366; color: #fff; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">✕ Back to Editor</button>
+                <button onclick="resumePlaytest()"
+                    style="padding: 15px 40px; background: #33cc66; color: #000; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">▶
+                    Resume</button>
+                <button onclick="restartPlaytest()"
+                    style="padding: 15px 40px; background: #33ccff; color: #000; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">↺
+                    Restart</button>
+                <button onclick="endPlaytest()"
+                    style="padding: 15px 40px; background: #ff3366; color: #fff; border: none; border-radius: 8px; font-family: 'Orbitron', sans-serif; font-size: 1rem; cursor: pointer;">✕
+                    Back to Editor</button>
             </div>
         </div>
     </div>
@@ -719,6 +743,245 @@
             console.log('Redo performed');
         }
 
+        async function autoMap() {
+            if (!audio) {
+                alert('Please load an audio file first');
+                return;
+            }
+
+            const bpmInput = parseInt(prompt("Enter song BPM (Approximate is fine):", "120")) || 120;
+            const difficulty = prompt("Select Difficulty (Easy, Normal, Hard, Expert):", "Normal") || "Normal";
+
+            if (!confirm(`Generate ${difficulty} map at ${bpmInput} BPM? This will overwrite existing notes.`)) return;
+
+            try {
+                // Decode Audio
+                const offlineCtx = new OfflineAudioContext(1, audio.duration * 44100, 44100);
+                const source = offlineCtx.createBufferSource();
+                const response = await fetch(audio.src);
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await offlineCtx.decodeAudioData(arrayBuffer);
+
+                const rawData = audioBuffer.getChannelData(0);
+                const sampleRate = audioBuffer.sampleRate;
+
+                // ===== AUTO MAP V6 (HYBRID: ONSET + SECTION) =====
+
+                // --- Difficulty Settings ---
+                const diffSettings = {
+                    'Easy': { threshold: 1.6, grid: 2, minGap: 400, minHold: 400 },
+                    'Normal': { threshold: 1.4, grid: 4, minGap: 250, minHold: 300 },
+                    'Hard': { threshold: 1.2, grid: 4, minGap: 150, minHold: 200 },
+                    'Expert': { threshold: 1.0, grid: 8, minGap: 100, minHold: 150 }
+                };
+                const settings = diffSettings[difficulty] || diffSettings['Normal'];
+
+                // --- 1. Spectral Analysis (Bass/Treble Separation) ---
+                const windowSize = Math.floor(sampleRate / 60); // ~16ms windows
+                const bassProfile = [];
+                const trebleProfile = [];
+
+                // Simple IIR low-pass filter for bass separation
+                const alpha = 0.05;
+                let lastOut = 0;
+
+
+                for (let i = 0; i < rawData.length; i += windowSize) {
+                    let sumBass = 0;
+                    let sumTreble = 0;
+
+                    for (let j = 0; j < windowSize && (i + j) < rawData.length; j++) {
+                        const sample = rawData[i + j];
+                        const lp = lastOut + alpha * (sample - lastOut);
+                        lastOut = lp;
+                        const hp = sample - lp;
+
+                        sumBass += lp * lp;
+                        sumTreble += hp * hp;
+                    }
+                    bassProfile.push(Math.sqrt(sumBass / windowSize));
+                    trebleProfile.push(Math.sqrt(sumTreble / windowSize));
+                }
+
+                // --- 2. Dynamic Calibration (Fix "no chorus" issue) ---
+                const bassAvg = bassProfile.reduce((a, b) => a + b, 0) / bassProfile.length;
+                const trebleAvg = trebleProfile.reduce((a, b) => a + b, 0) / trebleProfile.length;
+
+                // --- 3. Section Analysis (4-bar chunks for density control) ---
+                const beatMs = 60000 / bpmInput;
+                const beatsPerChunk = 16;
+                const chunksData = [];
+
+                for (let beatIdx = 0; beatIdx < (audio.duration * 1000 / beatMs); beatIdx += beatsPerChunk) {
+                    const startFrame = Math.floor((beatIdx * beatMs / 1000) * (sampleRate / windowSize));
+                    const endFrame = Math.floor(((beatIdx + beatsPerChunk) * beatMs / 1000) * (sampleRate / windowSize));
+
+                    let chunkEnergy = 0;
+                    let count = 0;
+                    for (let f = startFrame; f < endFrame && f < bassProfile.length; f++) {
+                        chunkEnergy += bassProfile[f] + trebleProfile[f];
+                        count++;
+                    }
+                    const avgEnergy = count > 0 ? chunkEnergy / count : 0;
+
+                    // Classify section
+                    let sectionType = 'verse';
+                    if (avgEnergy > (bassAvg + trebleAvg) * 1.3) sectionType = 'chorus';
+                    else if (avgEnergy < (bassAvg + trebleAvg) * 0.6) sectionType = 'break';
+
+                    chunksData.push({ startBeat: beatIdx, type: sectionType, energy: avgEnergy });
+                }
+
+                // --- 4. Onset Detection (V4 Revival) ---
+                const generatedNotes = [];
+                let lastNoteTime = 0;
+                const localWindow = 50;
+
+                // Helper: Snap to Grid
+                const snapTime = (timeMs, gridDivisor) => {
+                    const snapInterval = beatMs / (gridDivisor / 4);
+                    return Math.round(timeMs / snapInterval) * snapInterval;
+                };
+
+                // Helper: Find current section
+                const getSectionAt = (timeMs) => {
+                    const beatIdx = timeMs / beatMs;
+                    for (let i = chunksData.length - 1; i >= 0; i--) {
+                        if (beatIdx >= chunksData[i].startBeat) return chunksData[i];
+                    }
+                    return { type: 'verse', energy: 0 };
+                };
+
+                for (let i = 0; i < bassProfile.length; i++) {
+                    const timeMs = (i * windowSize / sampleRate) * 1000;
+                    const section = getSectionAt(timeMs);
+
+                    // Section-based threshold adjustment
+                    let thresholdMult = settings.threshold;
+                    let gridDivisor = settings.grid;
+
+                    if (section.type === 'chorus') {
+                        thresholdMult *= 0.8; // More sensitive in chorus
+                        gridDivisor = Math.max(gridDivisor, 4); // Finer grid
+                    } else if (section.type === 'break') {
+                        thresholdMult *= 1.5; // Less sensitive in breaks
+                        gridDivisor = 2; // Coarser grid
+                    }
+
+                    // Local averages for adaptive thresholding
+                    let localBassSum = 0;
+                    let localTrebleSum = 0;
+                    let count = 0;
+                    for (let k = -localWindow / 2; k < localWindow / 2; k++) {
+                        if (i + k >= 0 && i + k < bassProfile.length) {
+                            localBassSum += bassProfile[i + k];
+                            localTrebleSum += trebleProfile[i + k];
+                            count++;
+                        }
+                    }
+                    const localBassAvg = localBassSum / count;
+                    const localTrebleAvg = localTrebleSum / count;
+
+                    const bassVal = bassProfile[i];
+                    const trebleVal = trebleProfile[i];
+
+                    // Peak Detection
+                    let isBassPeak = true;
+                    let isTreblePeak = true;
+                    for (let k = -3; k <= 3; k++) {
+                        if (i + k >= 0 && i + k < bassProfile.length) {
+                            if (bassProfile[i + k] > bassVal) isBassPeak = false;
+                            if (trebleProfile[i + k] > trebleVal) isTreblePeak = false;
+                        }
+                    }
+
+                    // Note candidates
+                    const isBassNote = isBassPeak && bassVal > localBassAvg * thresholdMult && bassVal > bassAvg * 0.5;
+                    const isTrebleNote = isTreblePeak && trebleVal > localTrebleAvg * thresholdMult && trebleVal > trebleAvg * 0.5;
+
+                    if ((isBassNote || isTrebleNote) && (timeMs - lastNoteTime > settings.minGap)) {
+                        const snap = snapTime(timeMs, gridDivisor);
+
+                        // Type: Bass = Red (Kick), Treble = Blue (Snare/Vocal)
+                        let type = isBassNote ? 'red' : 'blue';
+
+                        // --- Hold / Spam Detection ---
+                        let sustainLength = 0;
+                        if (isBassNote) {
+                            for (let k = 1; k < 100; k++) {
+                                if (i + k < bassProfile.length && bassProfile[i + k] > localBassAvg * 1.1) {
+                                    sustainLength++;
+                                } else break;
+                            }
+                        }
+
+                        const rawDuration = (sustainLength * windowSize / sampleRate) * 1000;
+
+                        // Spam (Drumroll) - Only in Hard/Expert
+                        if (difficulty === 'Hard' || difficulty === 'Expert') {
+                            if (sustainLength > 30 && bassVal > bassAvg * 2.0 && section.type === 'chorus') {
+                                generatedNotes.push({
+                                    time: snap,
+                                    type: 'spam',
+                                    endTime: snap + Math.max(rawDuration, 500),
+                                    spamRequired: Math.floor(rawDuration / 80)
+                                });
+                                lastNoteTime = snap + rawDuration;
+                                i += sustainLength;
+                                continue;
+                            }
+                        }
+
+                        // Hold (Sustained tones)
+                        if (rawDuration > settings.minHold) {
+                            generatedNotes.push({
+                                time: snap,
+                                type: 'hold',
+                                endTime: snap + rawDuration
+                            });
+                            lastNoteTime = snap + rawDuration * 0.5;
+                        } else {
+                            // Normal Tap
+                            generatedNotes.push({ time: snap, type: type });
+                            lastNoteTime = snap;
+                        }
+                    }
+                }
+
+                // Final Cleanup
+                generatedNotes.sort((a, b) => a.time - b.time);
+                const uniqueNotes = [];
+                if (generatedNotes.length > 0) uniqueNotes.push(generatedNotes[0]);
+
+                for (let i = 1; i < generatedNotes.length; i++) {
+                    const prev = uniqueNotes[uniqueNotes.length - 1];
+                    const curr = generatedNotes[i];
+                    if (curr.time - prev.time > 20) uniqueNotes.push(curr);
+                }
+
+                if (uniqueNotes.length === 0) {
+                    alert("No significant peaks found. Try adjusting BPM or difficulty.");
+                    return;
+                }
+
+                if (typeof saveState === 'function') saveState();
+                notes = uniqueNotes;
+
+                // Metadata
+                document.getElementById('song-bpm').value = bpmInput;
+                document.getElementById('song-difficulty').value = difficulty;
+                document.getElementById('difficulty-level').value = difficulty === 'Expert' ? 9 : (difficulty === 'Hard' ? 7 : (difficulty === 'Normal' ? 4 : 2));
+
+                updateTimeline();
+                drawPreview();
+                alert(`Generated ${notes.length} notes (V6 Hybrid)! Detected ${chunksData.filter(c => c.type === 'chorus').length} chorus sections.`);
+
+
+            } catch (e) {
+                console.error("Auto Map Failed", e);
+                alert("Failed to auto-generate map. Check console for details.");
+            }
+        }
         const previewCanvas = document.getElementById('preview-canvas');
         const previewCtx = previewCanvas.getContext('2d');
 
@@ -768,28 +1031,28 @@
             document.getElementById('timeline-ruler').addEventListener('click', (e) => {
                 if (!audio) return;
                 e.stopPropagation(); // Prevent adding notes
-                
+
                 const timeline = document.getElementById('timeline');
                 const scroll = document.getElementById('timeline-scroll');
                 const rect = timeline.getBoundingClientRect();
                 const x = e.clientX - rect.left + scroll.scrollLeft;
                 const time = Math.max(0, x / pixelsPerMs);
-                
+
                 // Clamp to audio duration
                 const clampedTime = Math.min(time, audio.duration * 1000);
                 audio.currentTime = clampedTime / 1000;
-                
+
                 // Update playhead
                 const playhead = document.getElementById('playhead');
                 playhead.style.left = `${clampedTime * pixelsPerMs}px`;
-                
+
                 // Update time display
                 const mins = Math.floor(audio.currentTime / 60);
                 const secs = Math.floor(audio.currentTime % 60);
                 const ms = Math.floor((audio.currentTime % 1) * 1000);
                 document.getElementById('time-display').textContent =
                     `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
-                
+
                 drawPreview(clampedTime);
             });
 
@@ -841,10 +1104,10 @@
                 const timelineScroll = document.getElementById('timeline-scroll');
                 const timeline = document.getElementById('timeline');
                 const rect = timeline.getBoundingClientRect();
-                
+
                 // Calculate x position relative to timeline, accounting for scroll
                 const x = e.clientX - rect.left + timelineScroll.scrollLeft;
-                
+
                 // Only handle playhead dragging here
                 if (isDraggingPlayhead) {
                     // Clamp x to valid range
@@ -859,7 +1122,7 @@
 
                     // Update playhead position
                     playhead.style.left = `${clampedX}px`;
-                    
+
                     // Update time display
                     const displayTime = newTime / 1000;
                     const mins = Math.floor(displayTime / 60);
@@ -867,7 +1130,7 @@
                     const ms = Math.floor((displayTime % 1) * 1000);
                     document.getElementById('time-display').textContent =
                         `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
-                    
+
                     drawPreview(newTime);
                 }
             });
@@ -1052,7 +1315,7 @@
             audio.addEventListener('ended', () => {
                 isPlaying = false;
                 document.getElementById('play-btn').textContent = '▶';
-                
+
                 // If in playtest mode, return to editor when song ends
                 if (isPlaytesting) {
                     endPlaytest();
@@ -1086,39 +1349,28 @@
 
         function stopAndReset() {
             if (!audio) return;
-            
+
             // Stop playback and go to beginning
             audio.pause();
             audio.currentTime = 0;
             isPlaying = false;
             document.getElementById('play-btn').textContent = '▶';
-            
+
             // Update playhead position
             const playhead = document.getElementById('playhead');
             playhead.style.left = '0px';
-            
+
             // Update time display
             document.getElementById('time-display').textContent = '0:00.000';
-            
+
             // Scroll timeline to beginning
             document.getElementById('timeline-scroll').scrollLeft = 0;
-            
+
             // Update preview
             drawPreview(0);
         }
 
         // ===== PLAYTEST MODE =====
-        let playtestCanvas, playtestCtx;
-        let playtestNotes = [];
-        let playtestAnimationId = null;
-        let playtestPaused = false;
-        
-        // Playtest visual constants (matching game.js)
-        const PT_RING_RADIUS = 80;
-        const PT_SPAWN_RADIUS = 400;
-        const PT_APPROACH_TIME = 1500;
-        const PT_HIT_ZONE = 20;
-        
         function startPlaytest() {
             if (!audio) {
                 alert('Please load an audio file first');
@@ -1128,220 +1380,72 @@
                 alert('No notes to playtest. Add some notes first!');
                 return;
             }
-            
-            // Show playtest overlay
-            document.getElementById('playtest-overlay').style.display = 'block';
-            document.getElementById('playtest-pause-menu').style.display = 'none';
-            
-            // Initialize canvas
-            playtestCanvas = document.getElementById('playtest-canvas');
-            playtestCtx = playtestCanvas.getContext('2d');
-            resizePlaytestCanvas();
-            window.addEventListener('resize', resizePlaytestCanvas);
-            
-            // Copy notes for playtest (so we can track hit/miss without affecting editor)
-            playtestNotes = notes.map(n => ({
-                ...n,
-                hit: false,
-                missed: false
-            }));
-            
-            // Start playtest
-            isPlaytesting = true;
-            playtestPaused = false;
-            audio.currentTime = 0;
-            audio.play();
-            
-            playtestLoop();
-        }
-        
-        function resizePlaytestCanvas() {
-            if (!playtestCanvas) return;
-            playtestCanvas.width = window.innerWidth;
-            playtestCanvas.height = window.innerHeight;
-        }
-        
-        function playtestLoop() {
-            if (!isPlaytesting) return;
-            if (playtestPaused) return;
-            
-            const currentTime = audio.currentTime * 1000;
-            
-            // Update time display
-            const mins = Math.floor(audio.currentTime / 60);
-            const secs = Math.floor(audio.currentTime % 60);
-            document.getElementById('playtest-time').textContent = 
-                `${mins}:${secs.toString().padStart(2, '0')}`;
-            
-            // Draw
-            drawPlaytest(currentTime);
-            
-            playtestAnimationId = requestAnimationFrame(playtestLoop);
-        }
-        
-        function drawPlaytest(currentTime) {
-            const ctx = playtestCtx;
-            const w = playtestCanvas.width;
-            const h = playtestCanvas.height;
-            const cx = w / 2;
-            const cy = h / 2;
-            
-            // Clear canvas
-            ctx.fillStyle = 'rgba(10, 10, 26, 1)';
-            ctx.fillRect(0, 0, w, h);
-            
-            // Draw background if available
-            if (backgroundImage) {
-                ctx.save();
-                ctx.filter = 'blur(8px)';
-                const imgRatio = backgroundImage.width / backgroundImage.height;
-                const canvasRatio = w / h;
-                let drawW, drawH, drawX, drawY;
-                if (imgRatio > canvasRatio) {
-                    drawH = h;
-                    drawW = h * imgRatio;
-                    drawX = (w - drawW) / 2;
-                    drawY = 0;
-                } else {
-                    drawW = w;
-                    drawH = w / imgRatio;
-                    drawX = 0;
-                    drawY = (h - drawH) / 2;
+
+            // Save current state as playtest data
+            const playtestData = {
+                title: document.getElementById('song-title').value,
+                artist: document.getElementById('song-artist').value,
+                difficulty: document.getElementById('song-difficulty').value,
+                difficultyLevel: document.getElementById('difficulty-level').value,
+                bpm: document.getElementById('song-bpm').value,
+                notes: notes,
+                backgroundFilename: backgroundFilename,
+                backgroundData: backgroundData, // Save background image data
+                audioData: audioData // Save audio data
+            };
+
+            // Use IndexedDB for storage (Bypasses localStorage 5MB limit)
+            const request = indexedDB.open('RhythmCircleDB', 2); // Use v2 to match saveDraft
+
+            request.onupgradeneeded = function (event) {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('playtest')) {
+                    db.createObjectStore('playtest', { keyPath: 'id' });
                 }
-                ctx.drawImage(backgroundImage, drawX, drawY, drawW, drawH);
-                ctx.filter = 'none';
-                ctx.fillStyle = 'rgba(10, 10, 26, 0.7)';
-                ctx.fillRect(0, 0, w, h);
-                ctx.restore();
-            }
-            
-            // Draw pulsing background circles
-            const pulse = Math.sin(performance.now() / 500) * 0.1 + 0.9;
-            for (let i = 5; i >= 1; i--) {
-                const radius = PT_SPAWN_RADIUS * (i / 5) * pulse;
-                ctx.beginPath();
-                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-                ctx.strokeStyle = `rgba(50, 50, 80, ${0.1 / i})`;
-                ctx.lineWidth = 1;
-                ctx.stroke();
-            }
-            
-            // Draw center ring
-            ctx.beginPath();
-            ctx.arc(cx, cy, PT_RING_RADIUS, 0, Math.PI * 2);
-            ctx.fillStyle = '#000';
-            ctx.fill();
-            ctx.strokeStyle = '#444';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            
-            // Draw notes
-            playtestNotes.forEach(note => {
-                if (note.hit || note.missed) return;
-                
-                const timeUntilHit = note.time - currentTime;
-                
-                if (timeUntilHit > PT_APPROACH_TIME) return;
-                if (timeUntilHit < -300) {
-                    note.missed = true;
-                    return;
+                if (!db.objectStoreNames.contains('drafts')) {
+                    db.createObjectStore('drafts', { keyPath: 'id' });
                 }
-                
-                // Color based on type
-                let color = '#33ccff';
-                if (note.type === 'red') color = '#ff3366';
-                if (note.type === 'hold') color = '#ffcc00';
-                if (note.type === 'spam') color = '#33ff66';
-                
-                // Calculate radius
-                const progress = 1 - (timeUntilHit / PT_APPROACH_TIME);
-                let radius;
-                if (progress <= 1) {
-                    radius = PT_SPAWN_RADIUS - (PT_SPAWN_RADIUS - PT_RING_RADIUS) * progress;
-                } else {
-                    const overProgress = progress - 1;
-                    radius = PT_RING_RADIUS * (1 - overProgress);
-                }
-                
-                if (radius <= 0) return;
-                
-                ctx.beginPath();
-                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-                ctx.strokeStyle = color;
-                ctx.lineWidth = note.type === 'spam' ? 2 : 8;
-                if (note.type === 'spam') ctx.setLineDash([10, 5]);
-                ctx.stroke();
-                ctx.setLineDash([]);
-                
-                // Hit zone indicator
-                if (radius <= PT_RING_RADIUS + PT_HIT_ZONE && radius >= PT_RING_RADIUS - PT_HIT_ZONE) {
-                    ctx.globalAlpha = 0.5;
-                    ctx.lineWidth = 4;
-                    ctx.stroke();
-                    ctx.globalAlpha = 1.0;
-                }
-            });
+            };
+
+            request.onsuccess = function (event) {
+                const db = event.target.result;
+                const transaction = db.transaction(['playtest'], 'readwrite');
+                const store = transaction.objectStore('playtest');
+
+                // Use a fixed ID 'current' for the playtest data
+                const putRequest = store.put({ id: 'current', data: playtestData });
+
+                putRequest.onsuccess = function () {
+                    console.log("Playtest data saved to IndexedDB");
+                    // Redirect to main game with playtest flag
+                    window.location.href = '../index.html?playtest=true';
+                };
+
+                putRequest.onerror = function (e) {
+                    console.error("IndexedDB Error", e);
+                    alert("Failed to save playtest data to IndexedDB: " + e.target.error);
+                };
+
+                transaction.oncomplete = function () {
+                    console.log("Transaction completed");
+                };
+
+                transaction.onerror = function (e) {
+                    console.error("Transaction error", e);
+                    alert("Transaction failed: " + e.target.error);
+                };
+            };
+
+            request.onerror = function (event) {
+                console.error("IndexedDB Open Error", event);
+                alert("Failed to open database for playtest");
+            };
         }
-        
-        function pausePlaytest() {
-            if (!isPlaytesting) return;
-            playtestPaused = true;
-            audio.pause();
-            document.getElementById('playtest-pause-menu').style.display = 'block';
-            if (playtestAnimationId) {
-                cancelAnimationFrame(playtestAnimationId);
-            }
-        }
-        
-        function resumePlaytest() {
-            if (!isPlaytesting) return;
-            playtestPaused = false;
-            document.getElementById('playtest-pause-menu').style.display = 'none';
-            audio.play();
-            playtestLoop();
-        }
-        
-        function restartPlaytest() {
-            // Reset notes
-            playtestNotes = notes.map(n => ({
-                ...n,
-                hit: false,
-                missed: false
-            }));
-            playtestPaused = false;
-            document.getElementById('playtest-pause-menu').style.display = 'none';
-            audio.currentTime = 0;
-            audio.play();
-            playtestLoop();
-        }
-        
-        function endPlaytest() {
-            isPlaytesting = false;
-            playtestPaused = false;
-            
-            if (playtestAnimationId) {
-                cancelAnimationFrame(playtestAnimationId);
-            }
-            
-            audio.pause();
-            audio.currentTime = 0;
-            
-            // Hide overlay
-            document.getElementById('playtest-overlay').style.display = 'none';
-            document.getElementById('playtest-pause-menu').style.display = 'none';
-            
-            window.removeEventListener('resize', resizePlaytestCanvas);
-            
-            // Update editor state
-            isPlaying = false;
-            document.getElementById('play-btn').textContent = '▶';
-            updateTimeline();
-        }
-        
+
         // Keyboard handler for playtest
         document.addEventListener('keydown', (e) => {
             if (!isPlaytesting) return;
-            
+
             if (e.code === 'Escape') {
                 if (playtestPaused) {
                     resumePlaytest();
@@ -1440,7 +1544,7 @@
 
             // Draw ruler with beat markers
             ruler.innerHTML = '';
-            
+
             for (let t = 0; t < duration; t += beatInterval) {
                 const isMeasureStart = t % (beatInterval * 4) === 0;
                 const marker = document.createElement('div');
@@ -1474,20 +1578,27 @@
             // Draw grid lines in tracks based on snap setting
             // Remove old grid lines
             document.querySelectorAll('.track-grid-line').forEach(el => el.remove());
-            
+
             if (snapDivisor > 0) {
                 const msPerSnap = beatInterval / snapDivisor;
                 const trackElements = tracks.querySelectorAll('.track');
-                
-                for (let t = 0; t < duration; t += msPerSnap) {
+
+                // Optimize: Only draw grid lines up to a reasonable limit
+                const maxGridLines = 1000;
+                const gridLineInterval = Math.max(msPerSnap, duration / maxGridLines);
+
+                // Use document fragment for better performance
+                const fragment = document.createDocumentFragment();
+
+                for (let t = 0; t < duration; t += gridLineInterval) {
                     const isBeat = Math.abs(t % beatInterval) < 1;
                     const isMeasureStart = Math.abs(t % (beatInterval * 4)) < 1;
-                    
+
                     trackElements.forEach(track => {
                         const gridLine = document.createElement('div');
                         gridLine.className = 'track-grid-line';
                         let lineColor, lineWidth;
-                        
+
                         if (isMeasureStart) {
                             lineColor = 'rgba(255, 255, 255, 0.3)';
                             lineWidth = '2px';
@@ -1498,7 +1609,7 @@
                             lineColor = 'rgba(255, 255, 255, 0.05)';
                             lineWidth = '1px';
                         }
-                        
+
                         gridLine.style.cssText = `
                             position: absolute;
                             left: ${t * pixelsPerMs}px;
@@ -1738,81 +1849,136 @@
             }
 
             // Draw center ring (Hit Area)
-            const ringRadius = 60; // Editor scale
+            const DISPLAY_RADIUS = 100; // Matched to Game's 100
+            const SPAWN_RADIUS = 400; // Matched to Game
+
             // Hit Area (Black Circle)
             ctx.beginPath();
-            ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+            ctx.arc(cx, cy, DISPLAY_RADIUS, 0, Math.PI * 2);
             ctx.fillStyle = '#000000';
             ctx.fill();
 
             // Ring border
             ctx.beginPath();
-            ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+            ctx.arc(cx, cy, DISPLAY_RADIUS, 0, Math.PI * 2);
             ctx.strokeStyle = '#444';
             ctx.lineWidth = 2;
             ctx.stroke();
 
             // Draw notes
             const approachTime = 1500;
-            const spawnRadius = 150;
-            const NOTE_SPAWN_RADIUS = 150;
-            const RING_RADIUS = 60;
 
             notes.forEach(note => {
                 const timeUntil = note.time - currentTime;
-                const isHoldDuration = note.type === 'hold' && note.endTime && currentTime >= note.time && currentTime <= note.endTime;
+                const isHoldActive = (note.type === 'hold' || note.type === 'spam') && note.endTime && currentTime >= note.time && currentTime <= note.endTime;
 
-                if (timeUntil > approachTime || (timeUntil < -100 && !isHoldDuration)) return;
+                if (timeUntil > approachTime || (timeUntil < -200 && !isHoldActive)) return;
 
                 // Color Selection
                 let color = '#33ccff'; // Blue default
                 if (note.type === 'red') color = '#ff3366';
-                if (note.type === 'hold') color = '#ffcc00';
-                if (note.type === 'spam') color = '#33ff66';
+                if (note.type === 'hold') color = '#ffcc00'; // Yellow
+                if (note.type === 'spam') color = '#33ff66'; // Green
 
-                // Radius logic
-                let startRadius, endRadius;
+                // Radius logic matching Game.js
                 const progressStart = 1 - (timeUntil / approachTime);
-                startRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progressStart);
+                let startRadius;
 
-                if (note.type === 'hold' && note.endTime) {
+                if (progressStart <= 1) {
+                    startRadius = SPAWN_RADIUS - (SPAWN_RADIUS - DISPLAY_RADIUS) * progressStart;
+                } else {
+                    const overProgress = progressStart - 1;
+                    startRadius = DISPLAY_RADIUS * (1 - overProgress);
+                }
+
+                if ((note.type === 'hold' || note.type === 'spam') && note.endTime) {
                     const timeUntilEnd = note.endTime - currentTime;
                     const progressEnd = 1 - (timeUntilEnd / approachTime);
-                    endRadius = RING_RADIUS + (NOTE_SPAWN_RADIUS - RING_RADIUS) * (1 - progressEnd);
+                    let endRadius;
 
-                    // Clamping
-                    if (startRadius < 0) startRadius = 0;
-                    if (endRadius > NOTE_SPAWN_RADIUS) endRadius = NOTE_SPAWN_RADIUS;
+                    if (progressEnd <= 1) {
+                        endRadius = SPAWN_RADIUS - (SPAWN_RADIUS - DISPLAY_RADIUS) * progressEnd;
+                    } else {
+                        const overProgress = progressEnd - 1;
+                        endRadius = DISPLAY_RADIUS * (1 - overProgress);
+                    }
 
-                    // Draw Hold Duration as a thick band
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, (startRadius + endRadius) / 2, 0, Math.PI * 2);
-                    ctx.strokeStyle = color;
-                    ctx.lineWidth = Math.abs(endRadius - startRadius);
-                    ctx.globalAlpha = 0.4;
-                    ctx.stroke();
-                    ctx.globalAlpha = 1.0;
+                    // Clamping for draw
+                    let drawStart = Math.max(0, startRadius);
+                    let drawEnd = Math.min(SPAWN_RADIUS, endRadius);
 
-                    // Draw edges for clarity
-                    ctx.lineWidth = 4;
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, startRadius, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, endRadius, 0, Math.PI * 2);
-                    ctx.stroke();
+                    if (drawStart > drawEnd) [drawStart, drawEnd] = [drawEnd, drawStart];
+
+                    if (drawEnd > 0 && drawEnd > drawStart) {
+                        // Draw Hold Duration as a thick band
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, (drawStart + drawEnd) / 2, 0, Math.PI * 2);
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = Math.abs(drawEnd - drawStart);
+                        ctx.globalAlpha = 0.4;
+                        ctx.stroke();
+                        ctx.globalAlpha = 1.0;
+
+                        // Draw edges - Head
+                        if (drawStart > 10) {
+                            ctx.beginPath();
+                            ctx.arc(cx, cy, drawStart, 0, Math.PI * 2);
+                            ctx.strokeStyle = color;
+                            ctx.lineWidth = 4;
+                            ctx.stroke();
+                        }
+
+                        // Tail
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, drawEnd, 0, Math.PI * 2);
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 4;
+                        ctx.stroke();
+
+                        // Extra visual for Spam notes: Dashed inner ring
+                        if (note.type === 'spam') {
+                            ctx.beginPath();
+                            ctx.arc(cx, cy, (drawStart + drawEnd) / 2, 0, Math.PI * 2);
+                            ctx.strokeStyle = '#ffffff';
+                            ctx.lineWidth = 2;
+                            ctx.setLineDash([5, 15]);
+                            ctx.stroke();
+                            ctx.setLineDash([]);
+                        }
+                    }
                 } else {
-                    if (startRadius < 0) return;
+                    // Regular Note
+                    if (startRadius <= 0) return;
                     ctx.beginPath();
                     ctx.arc(cx, cy, startRadius, 0, Math.PI * 2);
+
                     ctx.strokeStyle = color;
-                    ctx.lineWidth = (note.type === 'spam') ? 2 : 4;
-                    if (note.type === 'spam') ctx.setLineDash([5, 5]);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
+                    ctx.lineWidth = 8;
+
+                    if (note.type === 'spam') { // Instant spam note (shouldn't happen often if auto-map makes them long)
+                        ctx.setLineDash([10, 5]);
+                        ctx.stroke();
+
+                        // Inner ring
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, Math.max(0, startRadius - 12), 0, Math.PI * 2);
+                        ctx.lineWidth = 3;
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    } else {
+                        ctx.stroke();
+                    }
+
+                    // Hit zone visual guide (Flash)
+                    if (startRadius <= 100 + 20 && startRadius >= 100 - 20) {
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 4;
+                        ctx.stroke();
+                    }
                 }
             });
         }
+
 
         // ===== KEYBOARD =====
         function handleKeyboard(e) {
@@ -1909,10 +2075,75 @@
             URL.revokeObjectURL(url);
         }
 
+        async function uploadMap() {
+            const title = document.getElementById('song-title').value;
+            if (!title) {
+                alert("Please enter a Song Title before uploading.");
+                return;
+            }
+
+            if (!confirm(`Upload "${title}" to the global map list?`)) return;
+
+            const mapData = {
+                title: title,
+                artist: document.getElementById('song-artist').value || 'Unknown',
+                difficulty: document.getElementById('song-difficulty').value,
+                difficultyLevel: parseInt(document.getElementById('difficulty-level').value) || 3,
+                bpm: parseInt(document.getElementById('song-bpm').value) || 120,
+                // We don't upload the audio file itself to keep it simple/light
+                // Users must have the audio locally or we could implement audio upload later
+                // For now, we just save the map metadata and notes.
+                // NOTE: To make it playable for others, we really SHOULD upload audio...
+                // But for this MVP, let's assume standard assets or just code logic.
+                // WAIT: If we don't upload audio, others can't play it.
+                // Let's include audioData (base64) IF it's small enough, otherwise warn.
+                audioData: audioData,
+                backgroundData: backgroundData,
+                notes: notes
+            };
+
+            // Size check
+            const json = JSON.stringify(mapData);
+            const sizeMB = (json.length / (1024 * 1024)).toFixed(2);
+            if (sizeMB > 10) {
+                if (!confirm(`Map size is ${sizeMB}MB (due to audio/bg). Upload might be slow or fail. Continue?`)) return;
+            }
+
+            // Get session token for auth
+            const sessionToken = new URLSearchParams(window.location.search).get('session_token') || localStorage.getItem('rhythm_circle_session');
+
+            try {
+                const response = await fetch('/api/rhythm/maps', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${sessionToken}`
+                    },
+                    body: JSON.stringify({
+                        title: mapData.title,
+                        artist: mapData.artist,
+                        game_id: 'rhythm_circle',
+                        data: mapData
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert('Map uploaded successfully!');
+                } else {
+                    alert('Upload failed: ' + (result.error || 'Unknown error'));
+                }
+            } catch (e) {
+                console.error("Upload error", e);
+                alert("Network error during upload.");
+            }
+        }
+
         // ===== LIVE RECORDING =====
         function toggleRecordMode() {
             isRecording = !isRecording;
-            
+
             // Update header record button
             const headerBtn = document.getElementById('record-btn');
             if (headerBtn) {
@@ -1926,7 +2157,7 @@
                     headerBtn.textContent = '⏺ Record';
                 }
             }
-            
+
             // Update timeline record button
             const timelineBtn = document.getElementById('timeline-record-btn');
             if (timelineBtn) {
@@ -1938,7 +2169,7 @@
                     timelineBtn.style.color = '#ff5555';
                 }
             }
-            
+
             // Auto-start playback when recording starts
             if (isRecording && !isPlaying && audio) {
                 togglePlay();
@@ -1949,10 +2180,10 @@
         function handleRecordingKeyDown(e) {
             if (!isRecording || !isPlaying || !audio) return;
             if (e.target.tagName === 'INPUT') return;
-            
+
             // Ignore if key currently held
             if (recordingKeys[e.code]) return;
-            
+
             // Record the start time for this key
             recordingKeys[e.code] = audio.currentTime * 1000;
         }
@@ -2006,14 +2237,12 @@
                 saveState(); // Save before adding recorded note
                 notes.push(finalNote);
                 notes.sort((a, b) => a.time - b.time);
-                updateTimeline();
-                drawPreview(finalNote.time);
             }
         });
 
-        // ===== LOCAL DRAFTS =====
+        // ===== SAVING =====
         function saveDraft() {
-            const mapData = {
+            const data = {
                 title: document.getElementById('song-title').value,
                 artist: document.getElementById('song-artist').value,
                 difficulty: document.getElementById('song-difficulty').value,
@@ -2021,88 +2250,164 @@
                 bpm: document.getElementById('song-bpm').value,
                 notes: notes,
                 backgroundFilename: backgroundFilename,
-                backgroundData: backgroundData, // Save background image data
-                audioData: audioData // Save audio data
+                backgroundData: backgroundData, // Include large data
+                audioData: audioData // Include large data
             };
-            
-            try {
-                localStorage.setItem('rhythm_circle_draft', JSON.stringify(mapData));
-                alert('Draft saved to browser!');
-            } catch (e) {
-                // localStorage might be full due to media data size
-                if (e.name === 'QuotaExceededError') {
-                    // Try saving without media data
-                    delete mapData.backgroundData;
-                    delete mapData.audioData;
-                    try {
-                        localStorage.setItem('rhythm_circle_draft', JSON.stringify(mapData));
-                        alert('Draft saved (media files too large to save)');
-                    } catch (e2) {
-                        alert('Failed to save draft: storage full');
-                    }
-                } else {
-                    alert('Failed to save draft: ' + e.message);
+
+            // Use IndexedDB for drafts (Bypasses localStorage limit)
+            const request = indexedDB.open('RhythmCircleDB', 2); // Ensure v2 for drafts store
+
+            request.onupgradeneeded = function (event) {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('playtest')) {
+                    db.createObjectStore('playtest', { keyPath: 'id' });
                 }
-            }
+                if (!db.objectStoreNames.contains('drafts')) {
+                    db.createObjectStore('drafts', { keyPath: 'id' });
+                }
+            };
+
+            request.onsuccess = function (event) {
+                const db = event.target.result;
+
+                // If drafts store is missing (older version opened), we must upgrade
+                if (!db.objectStoreNames.contains('drafts')) {
+                    db.close();
+                    const upgradeReq = indexedDB.open('RhythmCircleDB', 2);
+                    upgradeReq.onupgradeneeded = function (ev) {
+                        const d = ev.target.result;
+                        if (!d.objectStoreNames.contains('drafts')) {
+                            d.createObjectStore('drafts', { keyPath: 'id' });
+                        }
+                    };
+                    upgradeReq.onsuccess = function (ev) {
+                        saveDraft(); // Retry
+                    };
+                    return;
+                }
+
+                const transaction = db.transaction(['drafts'], 'readwrite');
+                const store = transaction.objectStore('drafts');
+
+                const putRequest = store.put({ id: 'autosave', data: data });
+
+                putRequest.onsuccess = function () {
+                    const now = new Date();
+                    const el = document.getElementById('last-saved');
+                    if (el) el.textContent = 'Last saved: ' + now.toLocaleTimeString();
+                };
+
+                putRequest.onerror = function (e) {
+                    console.error("Draft Save Error", e);
+                    alert("Failed to save draft to DB: " + e.target.error);
+                };
+            };
+
+            request.onerror = function (e) {
+                console.error("IDB Open Error", e);
+                // Fallback to localStorage logic if DB fails completely
+                try {
+                    localStorage.setItem('rhythm_circle_draft', JSON.stringify(data));
+                } catch (err) {
+                    // ignore
+                }
+            };
         }
 
         function loadDraft() {
+            // Try loading from IndexedDB first (v2)
+            const request = indexedDB.open('RhythmCircleDB', 2);
+
+            request.onsuccess = function (event) {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('drafts')) {
+                    loadDraftFromLocalStorage(); // Fallback
+                    return;
+                }
+
+                const transaction = db.transaction(['drafts'], 'readonly');
+                const store = transaction.objectStore('drafts');
+                const getRequest = store.get('autosave');
+
+                getRequest.onsuccess = function (e) {
+                    const result = e.target.result;
+                    if (result && result.data) {
+                        loadDataIntoEditor(result.data);
+                        console.log("Draft loaded from IndexedDB");
+                    } else {
+                        loadDraftFromLocalStorage();
+                    }
+                };
+
+                getRequest.onerror = function () {
+                    loadDraftFromLocalStorage();
+                };
+            };
+
+            request.onerror = function () {
+                loadDraftFromLocalStorage();
+            };
+        }
+
+        function loadDraftFromLocalStorage() {
             const draft = localStorage.getItem('rhythm_circle_draft');
             if (!draft) {
-                alert('No draft found in this browser.');
+                // Silent fail or console log, autosave load is usually silent unless manual
+                // But if manual load button:
+                // alert('No draft found.'); 
                 return;
             }
             try {
-                const data = JSON.parse(draft);
-                document.getElementById('song-title').value = data.title || '';
-                document.getElementById('song-artist').value = data.artist || '';
-                document.getElementById('song-difficulty').value = data.difficulty || 'Normal';
-                document.getElementById('difficulty-level').value = data.difficultyLevel || 3;
-                document.getElementById('song-bpm').value = data.bpm || 120;
-                notes = data.notes || [];
-                backgroundFilename = data.backgroundFilename || '';
-                backgroundData = data.backgroundData || null;
-                document.getElementById('bg-filename').textContent = backgroundFilename || 'No background';
-                
-                // Load background image from saved data
-                if (backgroundData) {
-                    const img = new Image();
-                    img.onload = () => {
-                        backgroundImage = img;
-                        drawPreview();
-                    };
-                    img.src = backgroundData;
-                } else {
-                    backgroundImage = null;
-                }
-                
-                // Load audio from saved data
-                if (data.audioData) {
-                    audioData = data.audioData;
-                    audio = new Audio(audioData);
-                    audio.addEventListener('loadedmetadata', () => {
-                        updateTimeline();
-                    });
-                    audio.addEventListener('ended', () => {
-                        isPlaying = false;
-                        document.getElementById('play-btn').textContent = '▶';
-                        if (isPlaytesting) {
-                            endPlaytest();
-                        }
-                    });
-                }
-                
-                updateTimeline();
-                drawPreview();
-                
-                let loadedItems = [];
-                if (data.backgroundData) loadedItems.push('background');
-                if (data.audioData) loadedItems.push('audio');
-                const extras = loadedItems.length > 0 ? ` (with ${loadedItems.join(' & ')})` : '';
-                alert(`Draft loaded successfully!${extras}`);
+                loadDataIntoEditor(JSON.parse(draft));
             } catch (e) {
-                alert('Failed to load draft.');
+                console.error("Failed to parse local draft", e);
             }
+        }
+
+        function loadDataIntoEditor(data) {
+            document.getElementById('song-title').value = data.title || '';
+            document.getElementById('song-artist').value = data.artist || '';
+            document.getElementById('song-difficulty').value = data.difficulty || 'Normal';
+            document.getElementById('difficulty-level').value = data.difficultyLevel || 3;
+            document.getElementById('song-bpm').value = data.bpm || 120;
+            notes = data.notes || [];
+            backgroundFilename = data.backgroundFilename || '';
+            backgroundData = data.backgroundData || null;
+            document.getElementById('bg-filename').textContent = backgroundFilename || 'No background';
+
+            // Load background image from saved data
+            if (backgroundData) {
+                const img = new Image();
+                img.onload = () => {
+                    backgroundImage = img;
+                    drawPreview();
+                };
+                img.src = backgroundData;
+            } else {
+                backgroundImage = null;
+            }
+
+            // Load audio from saved data
+            if (data.audioData) {
+                audioData = data.audioData;
+                audio = new Audio(audioData);
+                audio.addEventListener('loadedmetadata', () => {
+                    updateTimeline();
+                });
+                audio.addEventListener('ended', () => {
+                    isPlaying = false;
+                    document.getElementById('play-btn').textContent = '▶';
+                    if (isPlaytesting) {
+                        endPlaytest();
+                    }
+                });
+            }
+
+            updateTimeline();
+            drawPreview();
+
+            const lastSavedEl = document.getElementById('last-saved');
+            if (lastSavedEl) lastSavedEl.textContent = 'Draft loaded';
         }
 
         // ===== CONTEXT MENU & SHORTCUTS =====
