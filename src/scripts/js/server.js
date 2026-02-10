@@ -3470,7 +3470,10 @@ app.get('/api/moderator/posts/pending', moderatorMiddleware, async (req, res) =>
         conn = await pool.getConnection();
 
         const posts = await conn.query(`
-            SELECT p.*, u.discord_id, u.avatar
+            SELECT 
+                p.id, p.username, p.content, p.status, p.created_at,
+                COALESCE(u.discord_id, p.discord_id) as discord_id,
+                COALESCE(u.avatar, p.avatar) as avatar
             FROM posts p
             LEFT JOIN users u ON p.username = u.username
             WHERE p.status = 'pending'
@@ -3557,7 +3560,10 @@ app.get('/api/moderator/posts/all', moderatorMiddleware, async (req, res) => {
         conn = await pool.getConnection();
 
         let query = `
-            SELECT p.*, u.discord_id, u.avatar
+            SELECT 
+                p.id, p.username, p.content, p.status, p.created_at,
+                COALESCE(u.discord_id, p.discord_id) as discord_id,
+                COALESCE(u.avatar, p.avatar) as avatar
             FROM posts p
             LEFT JOIN users u ON p.username = u.username
         `;
@@ -4322,7 +4328,7 @@ app.post('/api/anidle/guess', async (req, res) => {
 
 // GET /api/anidle/check-daily - Check if user has completed today's daily
 app.get('/api/anidle/check-daily', async (req, res) => {
-    const { username } = req.query;
+    const { username, discord_id } = req.query;
 
     if (!username) {
         return res.status(400).json({ error: "Username required" });
@@ -4332,25 +4338,49 @@ app.get('/api/anidle/check-daily', async (req, res) => {
 
     if (useInMemory) {
         // Check memory scores for today
-        const todayScores = memoryScores.filter(s =>
-            s.game_id === 'anidle' &&
-            s.board_id === 'daily' &&
-            s.username === username &&
-            s.created_at.toISOString().split('T')[0] === today
-        );
+        let todayScores;
+        if (discord_id) {
+            todayScores = memoryScores.filter(s =>
+                s.game_id === 'anidle' &&
+                s.board_id === 'daily' &&
+                s.discord_id === discord_id &&
+                s.created_at.toISOString().split('T')[0] === today
+            );
+        } else {
+            todayScores = memoryScores.filter(s =>
+                s.game_id === 'anidle' &&
+                s.board_id === 'daily' &&
+                s.username === username &&
+                s.created_at.toISOString().split('T')[0] === today
+            );
+        }
         return res.json({ completed: todayScores.length > 0 });
     }
 
     let conn;
     try {
         conn = await pool.getConnection();
-        const result = await conn.query(`
-            SELECT COUNT(*) as count FROM scores 
-            WHERE game_id = 'anidle' 
-            AND board_id = 'daily'
-            AND username = ?
-            AND DATE(created_at) = ?
-        `, [username, today]);
+        let result;
+        
+        // Prefer discord_id for user identification if available
+        if (discord_id) {
+            result = await conn.query(`
+                SELECT COUNT(*) as count FROM scores 
+                WHERE game_id = 'anidle' 
+                AND board_id = 'daily'
+                AND discord_id = ?
+                AND DATE(created_at) = ?
+            `, [discord_id, today]);
+        } else {
+            // Fallback: check by username (will match any score with this username)
+            result = await conn.query(`
+                SELECT COUNT(*) as count FROM scores 
+                WHERE game_id = 'anidle' 
+                AND board_id = 'daily'
+                AND username = ?
+                AND DATE(created_at) = ?
+            `, [username, today]);
+        }
 
         res.json({ completed: Number(result[0].count) > 0 });
     } catch (err) {
